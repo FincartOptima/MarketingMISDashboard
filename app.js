@@ -372,6 +372,15 @@ function initFilters(){
   sel.value = STATE.months.includes(STATE.filterMonth) || STATE.filterMonth==='All' ? STATE.filterMonth : 'All';
   STATE.filterMonth = sel.value;
 }
+function isPeriodNewOrModern(period){
+  const s = String(period||'').trim();
+  if(s==='NEW') return true;
+  return /^[A-Za-z]{3}-\d{4}$/.test(s);
+}
+function periodLabel(period){
+  const s = String(period||'').trim();
+  return isPeriodNewOrModern(s) ? s : s + ' (old)';
+}
 function initRevFilters(){
   const tm = $('#rev-team-filter');
   const teams = ['All', ...Array.from(new Set(STATE.empref.slice(1).map(r=>r[1]).filter(Boolean))).sort()];
@@ -384,7 +393,7 @@ function initRevFilters(){
     if(v && v!=='' && v!==0) revMonths.add(String(v));
   }
   const mm = $('#rev-month-filter');
-  mm.innerHTML = '<option value="All">All</option>' + Array.from(revMonths).sort().map(m=>`<option value="${m}">${m}</option>`).join('');
+  mm.innerHTML = '<option value="All">All</option>' + Array.from(revMonths).sort().map(m=>`<option value="${m}">${periodLabel(m)}</option>`).join('');
   mm.value = STATE.revMonth;
 }
 
@@ -891,6 +900,39 @@ function processedStatus(){
 }
 
 // ---- RM Revenue ----
+function revenueAggregatedByTeam(){
+  let rows = STATE.rev;
+  if(STATE.revMonth !== 'All'){
+    rows = rows.filter(r => String(r['OLD CHECK']||r['Old Check']||r['old check']||'') === STATE.revMonth);
+  }
+  const lpMode = STATE.revLPFilter;
+  if(lpMode === 'Exclude'){
+    rows = rows.filter(r => {
+      const lp = (r.LP||r.lp||r['Campaign Category']||'').toString().trim();
+      return lp !== 'Referral' && lp !== 'Cold Data';
+    });
+  } else if(lpMode === 'Only Referral'){
+    rows = rows.filter(r => {
+      const lp = (r.LP||r.lp||r['Campaign Category']||'').toString().trim();
+      return lp === 'Referral';
+    });
+  }
+  const teamMap = {};
+  for(const r of rows){
+    const rm = (r.RM||r.rm||r['Curren RM']||'').toString().trim();
+    if(!rm) continue;
+    const key = rm.toLowerCase();
+    const team = STATE.teamMap[key] || '';
+    if(!teamMap[team]) teamMap[team] = {Team: team||'(unassigned)', RevBased:0, NotEligible:0, Total:0};
+    const ct = (r['CLIENT TYPE']||r['client type']||'').toString().toUpperCase();
+    if(ct==='REVENUE BASED') teamMap[team].RevBased++;
+    if(ct==='NOT ELIGIBLE') teamMap[team].NotEligible++;
+    teamMap[team].Total += Number(r.Total||r.TOTAL||r.total||0) || 0;
+  }
+  let arr = Object.values(teamMap);
+  arr.sort((a,b) => b.Total - a.Total);
+  return arr;
+}
 function revenueAggregated(){
   let rows = STATE.rev;
   if(STATE.revMonth !== 'All'){
@@ -927,14 +969,14 @@ function revenueAggregated(){
 
 function drawRevChart(){
   if(!window.Chart) return;
-  const data = revenueAggregated().slice(0, 20);
+  const data = STATE.revTeam === 'All' ? revenueAggregatedByTeam().slice(0, 20) : revenueAggregated().slice(0, 20);
   const ctx = $('#rev-chart').getContext('2d');
   if(STATE.revChart) STATE.revChart.destroy();
   STATE.revChart = new Chart(ctx, {
     type:'bar',
     plugins: [ChartDataLabels],
     data: {
-      labels: data.map(d => d.RM),
+      labels: data.map(d => STATE.revTeam==='All' ? d.Team : d.RM),
       datasets: [{
         label: 'Total Revenue (₹)',
         data: data.map(d => d.Total),
@@ -1624,22 +1666,18 @@ function renderMissing(){
 
 function renderRMRev(){
   if(!STATE.filesLoaded.rev){ setNotUploaded('#tbl-rmrev','rev'); const cw=$('#rev-chart-wrap'); if(cw) cw.innerHTML=notUploadedHTML('rev'); return; }
-  const data = revenueAggregated();
-  const headers = ['RM','Team','# Revenue-Based','# Not Eligible','Total Revenue (₹)'];
-  const rows = data.map(r => ({
-    RM: r.RM, Team: r.Team,
-    '# Revenue-Based': fmtIN(r.RevBased),
-    '# Not Eligible': fmtIN(r.NotEligible),
-    'Total Revenue (₹)': fmtINR(r.Total),
-  }));
+  const isTeamView = STATE.revTeam === 'All';
+  const data = isTeamView ? revenueAggregatedByTeam() : revenueAggregated();
+  const headers = isTeamView ? ['Team','# Revenue-Based','# Not Eligible','Total Revenue (₹)'] : ['RM','Team','# Revenue-Based','# Not Eligible','Total Revenue (₹)'];
+  const rows = data.map(r => isTeamView
+    ? { Team: r.Team, '# Revenue-Based': fmtIN(r.RevBased), '# Not Eligible': fmtIN(r.NotEligible), 'Total Revenue (₹)': fmtINR(r.Total) }
+    : { RM: r.RM, Team: r.Team, '# Revenue-Based': fmtIN(r.RevBased), '# Not Eligible': fmtIN(r.NotEligible), 'Total Revenue (₹)': fmtINR(r.Total) }
+  );
   const tot = data.reduce((s,r)=>s+r.Total,0);
-  rows.push({
-    RM:'Grand Total', Team:'',
-    '# Revenue-Based': fmtIN(data.reduce((s,r)=>s+r.RevBased,0)),
-    '# Not Eligible': fmtIN(data.reduce((s,r)=>s+r.NotEligible,0)),
-    'Total Revenue (₹)': fmtINR(tot),
-    _tot:true,
-  });
+  const gtRow = isTeamView
+    ? { Team:'Grand Total', '# Revenue-Based': fmtIN(data.reduce((s,r)=>s+r.RevBased,0)), '# Not Eligible': fmtIN(data.reduce((s,r)=>s+r.NotEligible,0)), 'Total Revenue (₹)': fmtINR(tot), _tot:true }
+    : { RM:'Grand Total', Team:'', '# Revenue-Based': fmtIN(data.reduce((s,r)=>s+r.RevBased,0)), '# Not Eligible': fmtIN(data.reduce((s,r)=>s+r.NotEligible,0)), 'Total Revenue (₹)': fmtINR(tot), _tot:true };
+  rows.push(gtRow);
   renderTable('#tbl-rmrev', headers, rows);
   drawRevChart();
 }
