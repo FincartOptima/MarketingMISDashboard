@@ -146,6 +146,28 @@ header.app .spacer{flex:1}
 .tab-not-uploaded{padding:40px 24px;}
 .tab-not-uploaded .file-not-uploaded{max-width:520px;}
 
+/* ===== RM Performance in-tab uploads ===== */
+.rmperf-banner{display:flex;flex-wrap:wrap;gap:16px;align-items:center;margin-bottom:12px;font-size:12px}
+.rmperf-banner .rmperf-ok{color:var(--green);font-weight:600}
+.rmperf-banner .rmperf-miss{color:var(--red);font-weight:600}
+.rmperf-banner .rmperf-hint{color:var(--muted)}
+.rmperf-uploads{display:flex;flex-wrap:wrap;gap:20px}
+.rmperf-upload-row{display:flex;flex-direction:column;gap:6px}
+.rmperf-upload-row label{font-size:12px;font-weight:600;color:var(--text)}
+
+/* ===== Conversion Funnel ===== */
+.funnel{display:flex;flex-direction:column;gap:6px;padding:6px 0}
+.funnel-stage{display:flex;flex-direction:column;align-items:center}
+.funnel-bar{
+  display:flex;align-items:center;justify-content:space-between;gap:14px;
+  height:48px;min-width:160px;max-width:100%;padding:0 18px;box-sizing:border-box;
+  color:#fff;transition:width .35s ease;
+}
+.funnel-bar .funnel-label{font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.3px;white-space:nowrap}
+.funnel-bar .funnel-value{font-size:20px;font-weight:900;letter-spacing:-.5px;white-space:nowrap}
+.funnel-conv{font-size:11px;color:var(--muted);margin:1px 0 3px;font-weight:600}
+.funnel-arrow{color:var(--muted);font-size:11px;line-height:1}
+
 /* ============ GRID ============ */
 .grid{display:grid;gap:16px}
 .grid.cols-2{grid-template-columns:1fr 1fr}
@@ -415,6 +437,56 @@ table.data.editable td input:focus{outline:2px solid var(--orange);background:#f
       <div class="hint">Upload the <strong>B2B Corporate Lead File</strong> on the upload screen to populate this table.</div>
     </div>
 
+  </div>
+
+  <!-- ===== RM PERFORMANCE ===== -->
+  <div class="tab-panel" id="tab-rmperf">
+    <div class="section bar-orange">
+      <h2>RM Performance — Lead → Revenue Tracker
+        <span style="float:right;font-weight:400;text-transform:none">
+          <label style="font-size:11px;color:var(--muted);margin-right:6px">Month</label>
+          <select id="rmperf-month"><option value="All">All</option></select>
+          <label style="font-size:11px;color:var(--muted);margin:0 6px 0 12px">Ref+Cold</label>
+          <select id="rmperf-refcold">
+            <option value="Include">Include</option>
+            <option value="Exclude">Exclude</option>
+          </select>
+        </span>
+      </h2>
+      <div class="meta">Total Leads &amp; Quality Leads from RAW_DATA · Financial Plans from FY 2026-2027 + Plan Approval · Revenue metrics from Revenue Input. RM names mapped via RM Master Mapping.</div>
+      <div id="rmperf-kpis" class="kpis" style="margin:14px 0 0"></div>
+    </div>
+
+    <!-- In-tab upload prompt for FY + Plan Approval -->
+    <div class="section bar-yellow">
+      <h2>Financial Plan Sources <span style="font-weight:400;font-size:13px;color:var(--muted)">(upload if needed)</span></h2>
+      <div id="rmperf-upload-banner" class="rmperf-banner"></div>
+      <div class="rmperf-uploads">
+        <div class="rmperf-upload-row">
+          <label>FY 2026-2027 (Financial Plan tickets)</label>
+          <input type="file" id="rmperf-fy-file" accept=".xlsx,.xls,.csv">
+        </div>
+        <div class="rmperf-upload-row">
+          <label>Plan Approval Sheet</label>
+          <input type="file" id="rmperf-pa-file" accept=".xlsx,.xls,.csv">
+        </div>
+      </div>
+    </div>
+
+    <div class="section bar-violet">
+      <h2>Conversion Funnel <span id="rmperf-funnel-sub" style="font-weight:400;font-size:13px;color:var(--muted)"></span></h2>
+      <div id="rmperf-funnel" class="funnel"></div>
+    </div>
+
+    <div class="section bar-green">
+      <h2>RM Performance Summary — by Team</h2>
+      <div class="table-wrap" id="rmperf-summary"></div>
+    </div>
+
+    <div class="section bar-blue">
+      <h2>Team × RM Detailed Breakdown</h2>
+      <div class="table-wrap" id="rmperf-detail"></div>
+    </div>
   </div>
 
   <!-- ===== MTD PERFORMANCE ===== -->
