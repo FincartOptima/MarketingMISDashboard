@@ -1,0 +1,1659 @@
+/* Marketing MIS Web Dashboard
+   Uploads:  FIN23 raw + Revenue Input
+   Team map: EMPLOYEE_REF (bundled snapshot, editable, persisted in localStorage)
+   Months:   detected dynamically from RAW_DATA — Dashboard/MTD/Processed/Cost auto-extend.
+*/
+
+const MONTHS_3 = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const STATUSES = ['CONVERTED','IN PROCESS','ASSIGNED','RE-ASSIGNED','FOLLOW UP','ON HOLD','DEAD'];
+const FIXED_TEAMS = ['Akanksha','Ankit S','Anmol G','Ratan P','Ravi S','Vidhi','Vivek S','Yash T','SV','Ambika S'];
+const RAW_COLUMNS = ['currentRmName','Team','clientName','landingPage','platformName','Campaign Name','userId','createdDate','CTM','lastStatusDate','LSM','leadInProcessDate','LPM','leadHead','leadStatus','convertedDate','CM','firstRmName','convertedByName','annualIncome','clientCategory','FMONTH'];
+
+const $  = sel => document.querySelector(sel);
+const $$ = sel => Array.from(document.querySelectorAll(sel));
+
+const pad2  = n => String(n).padStart(2,'0');
+const fmtIN = n => (n==null||isNaN(n))?'':Number(n).toLocaleString('en-IN');
+const fmtINR= n => (n==null||isNaN(n))?'₹0':'₹'+Math.round(n).toLocaleString('en-IN');
+const fmtPct= n => (n==null||isNaN(n))?'0%':(n*100).toFixed(2)+'%';
+const escHtml = v => String(v ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+
+// ---- date parsing ----
+function parseDateAny(v){
+  if(v==null||v===''||v==='N/A') return null;
+  if(v instanceof Date && !isNaN(v)) return v;
+  if(typeof v==='number'){ const d=new Date(Date.UTC(1899,11,30)+v*86400000); return isNaN(d)?null:d; }
+  if(typeof v==='string'){
+    const s = v.trim(); if(!s||s.toUpperCase()==='N/A') return null;
+    let m = s.match(/^(\d{1,2})-(\d{1,2})-(\d{4})$/);
+    if(m){ const d=new Date(+m[3], +m[2]-1, +m[1]); return isNaN(d)?null:d; }
+    m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+    if(m){ const d=new Date(+m[1], +m[2]-1, +m[3]); return isNaN(d)?null:d; }
+    const d = new Date(s.replace(' ','T')); return isNaN(d)?null:d;
+  }
+  return null;
+}
+const toMmmYyyy  = v => { const norm = normalizeMonthLabel(v); if(norm) return norm; const d=parseDateAny(v); return d ? MONTHS_3[d.getMonth()]+'-'+d.getFullYear() : 'N/A'; };
+const toIsoDate  = v => { const d=parseDateAny(v); return d ? d.getFullYear()+'-'+pad2(d.getMonth()+1)+'-'+pad2(d.getDate()) : ''; };
+const monthKey   = mmm => {
+  const norm = normalizeMonthLabel(mmm);
+  if(!norm) return -1;
+  const [m,y]=norm.split('-');
+  return +y*100 + MONTHS_3.indexOf(m);
+};
+const sortMonths = arr => arr.filter(m=>m && m!=='N/A').sort((a,b)=>monthKey(a)-monthKey(b));
+const pickField = (row, ...names) => {
+  for(const name of names){
+    if(row[name] != null && row[name] !== '') return row[name];
+  }
+  return '';
+};
+function normalizeMonthLabel(v){
+  if(v==null || v==='' || v==='N/A') return '';
+  if(v instanceof Date && !isNaN(v)) return MONTHS_3[v.getMonth()]+'-'+v.getFullYear();
+  const s = String(v).trim();
+  const m = s.match(/^([A-Za-z]{3})-(\d{2}|\d{4})$/);
+  if(m){
+    const mon = m[1].slice(0,1).toUpperCase()+m[1].slice(1,3).toLowerCase();
+    const yr = m[2].length===2 ? '20'+m[2] : m[2];
+    return MONTHS_3.includes(mon) ? mon+'-'+yr : '';
+  }
+  const d = parseDateAny(v);
+  return d ? MONTHS_3[d.getMonth()]+'-'+d.getFullYear() : '';
+}
+function statusMonthCol(status){
+  if(status === 'CONVERTED') return 'CM';
+  if(status === 'IN PROCESS') return 'LPM';
+  return 'CTM';
+}
+function dashboardStatusMonthCol(status){
+  if(status === 'CONVERTED') return 'CM';
+  if(status === 'IN PROCESS') return 'LPM';
+  return 'FMONTH';
+}
+
+// ---- state ----
+const STATE = {
+  raw: [],
+  b2b: [],
+  rev: [],
+  months: [],
+  empref: [],
+  teamMap: {},
+  cost: [],
+  filesLoaded: { fin23: false, rev: false, b2b: false },
+  filterMonth: 'All',
+  filterRefCold: 'Include',
+  filterTable: 'All',
+  mtdStart: 1,
+  mtdEnd: 11,
+  revTeam: 'All',
+  revMonth: 'All',
+  revChart: null,
+  statusChart: null,
+  rawFilters: {},
+};
+
+const FILE_LABELS = {
+  fin23: 'FIN23 Lead Management file',
+  rev:   'Revenue Input file',
+  b2b:   'B2B Corporate Lead file',
+};
+function notUploadedHTML(key){
+  return `<div class="file-not-uploaded"><span class="fnu-icon">&#9888;</span><strong>${FILE_LABELS[key]}</strong> has not been uploaded.<br>Re-upload from the upload screen to load this data.</div>`;
+}
+function setNotUploaded(selector, key){
+  const el = $(selector);
+  if(el) el.innerHTML = notUploadedHTML(key);
+}
+function tabNotUploaded(contentSelector, key){
+  const el = $(contentSelector);
+  if(el) el.innerHTML = `<div class="tab-not-uploaded">${notUploadedHTML(key)}</div>`;
+}
+
+// ---- bootstrap ----
+function loadEmployeeFromStorage(){
+  try{
+    const saved = localStorage.getItem('empref_override');
+    if(saved){ STATE.empref = JSON.parse(saved); return; }
+  }catch(e){}
+  STATE.empref = (window.SNAPSHOT && window.SNAPSHOT.EMPLOYEE_REF) ? JSON.parse(JSON.stringify(window.SNAPSHOT.EMPLOYEE_REF)) : [['Emp Code','Team','Name']];
+}
+function rebuildTeamMap(){
+  STATE.teamMap = {};
+  for(let i=1;i<STATE.empref.length;i++){
+    const r = STATE.empref[i]; if(!r) continue;
+    const name = (r[2]||'').toString().trim().toLowerCase();
+    const team = (r[1]||'').toString().trim();
+    if(name) STATE.teamMap[name] = team;
+  }
+  for(const row of STATE.raw){
+    const key = (row.currentRmName||'').toString().trim().toLowerCase();
+    const existingTeam = (row.Team||'').toString().trim();
+    if(row._hasSourceTeam){
+      row.Team = existingTeam || 'SV';
+    } else {
+      row.Team = STATE.teamMap[key] || existingTeam || 'SV';
+    }
+  }
+}
+
+function loadCostFromStorage(){
+  try{
+    const saved = localStorage.getItem('cpc_override');
+    if(saved){ STATE.cost = JSON.parse(saved); return; }
+  }catch(e){}
+  const c = window.SNAPSHOT && window.SNAPSHOT['Cost Per Campaign'];
+  STATE.cost = c ? JSON.parse(JSON.stringify(c)) : [['Campaign Name']];
+}
+
+function reconcileCostMonths(){
+  if(!STATE.cost.length) STATE.cost = [['Campaign Name']];
+  const header = STATE.cost[0];
+  const existingMonths = header.slice(1).map(toMmmYyyy);
+  for(const m of STATE.months){
+    if(!existingMonths.includes(m)){
+      const [mon,yr] = m.split('-');
+      const monIdx = MONTHS_3.indexOf(mon);
+      const dateStr = new Date(+yr, monIdx, 1).toISOString();
+      header.push(dateStr);
+      for(let i=1;i<STATE.cost.length;i++) STATE.cost[i].push(0);
+      existingMonths.push(m);
+    }
+  }
+  const order = header.slice(1).map((h,idx)=>({h, m: toMmmYyyy(h), idx:idx+1}))
+                .sort((a,b)=>monthKey(a.m)-monthKey(b.m));
+  const newHeader = ['Campaign Name', ...order.map(o=>o.h)];
+  const newRows = [newHeader];
+  for(let i=1;i<STATE.cost.length;i++){
+    const row = STATE.cost[i];
+    newRows.push([row[0], ...order.map(o=>row[o.idx])]);
+  }
+  STATE.cost = newRows;
+}
+
+// ---- file load ----
+async function readWb(file){
+  const buf = await file.arrayBuffer();
+  return XLSX.read(buf, {type:'array', cellDates:true});
+}
+function findSheetName(wb, ...names){
+  const targets = names.map(n => n.toLowerCase());
+  return wb.SheetNames.find(n => targets.includes(n.toLowerCase())) || wb.SheetNames[0];
+}
+
+function buildRawData(finRows){
+  return finRows.map(r => {
+    const rm = (pickField(r,'currentRmName','Current RM Name','RM','Curren RM')||'').toString().trim();
+    const cd = pickField(r,'createdDate','Created Date','created date');
+    const lsd = pickField(r,'lastStatusDate','Last Status Date','last status date');
+    const lpd = pickField(r,'leadInProcessDate','LeadProcessDate','Lead In Process Date','lead in process date');
+    const cvd = pickField(r,'convertedDate','Converted Date','converted date');
+    const createdMmm = normalizeMonthLabel(pickField(r,'CTM','Created Month')) || toMmmYyyy(cd);
+    const lpm = normalizeMonthLabel(pickField(r,'LPM','LeadProcessMonth')) || toMmmYyyy(lpd);
+    const convertedMmm = normalizeMonthLabel(pickField(r,'CM','Converted Month','ConvertedMonth')) ||
+      ((cvd && cvd!=='' && cvd!=='N/A') ? toMmmYyyy(cvd) : '');
+    const fmonth = normalizeMonthLabel(pickField(r,'FMONTH','FMonth')) ||
+      ((convertedMmm && convertedMmm!=='N/A') ? convertedMmm : createdMmm);
+    const sourceTeam = pickField(r,'Team');
+    return {
+      currentRmName: rm,
+      Team: sourceTeam||'SV',
+      _hasSourceTeam: sourceTeam !== '',
+      clientName: pickField(r,'clientName','Client Name')||'',
+      landingPage: pickField(r,'landingPage','Landing Page')||'',
+      platformName: pickField(r,'platformName','Platform Name')||'',
+      'Campaign Name': pickField(r,'Campaign Name','categoryName','campaignName','Category Name')||'',
+      userId: pickField(r,'userId','User ID')||'',
+      createdDate: toIsoDate(cd) || (cd||''),
+      CTM: createdMmm,
+      lastStatusDate: toIsoDate(lsd) || (lsd||''),
+      LSM: toMmmYyyy(lsd),
+      leadInProcessDate: (lpd==='N/A'||!lpd) ? 'N/A' : (toIsoDate(lpd) || lpd),
+      LPM: lpm,
+      leadHead: pickField(r,'leadHead','Lead Head')||'',
+      leadStatus: (pickField(r,'leadStatus','Lead Status')||'').toString().trim().toUpperCase(),
+      convertedDate: (cvd==='N/A'||!cvd) ? '' : (toIsoDate(cvd) || cvd),
+      CM: convertedMmm || 'N/A',
+      firstRmName: pickField(r,'firstRmName','First RM Name')||'',
+      convertedByName: pickField(r,'convertedByName','Converted By Name')||'',
+      annualIncome: pickField(r,'annualIncome','Annual Income')||'',
+      clientCategory: pickField(r,'clientCategory','Client Category')||'',
+      FMONTH: fmonth,
+    };
+  });
+}
+
+function detectMonths(){
+  const set = new Set();
+  for(const r of STATE.raw){
+    if(r.FMONTH && r.FMONTH!=='N/A') set.add(r.FMONTH);
+  }
+  STATE.months = sortMonths(Array.from(set));
+}
+
+function parseRevenueInput(wb){
+  const sh = wb.Sheets[wb.SheetNames[0]];
+  const rows = XLSX.utils.sheet_to_json(sh, {header:1, defval:'', raw:true, blankrows:false});
+  let headerIdx = 0;
+  for(let i=0;i<Math.min(rows.length,5);i++){
+    const r = rows[i].map(x => (x||'').toString().toLowerCase());
+    if(r.includes('clientname') && r.includes('rm') && r.includes('total')){ headerIdx = i; break; }
+  }
+  const headers = rows[headerIdx].map(h => (h||'').toString().trim());
+  const data = [];
+  for(let i=headerIdx+1;i<rows.length;i++){
+    const row = rows[i];
+    const obj = {}; let any = false;
+    for(let c=0;c<headers.length;c++){
+      const v = row[c]; obj[headers[c]] = (v==null?'':v);
+      if(v!=null && v!=='') any = true;
+    }
+    if(any) data.push(obj);
+  }
+  return data;
+}
+
+function buildB2BData(rows){
+  return rows.map(r => ({
+    name: (r.name||r.Name||'').toString().trim(),
+    companyName: (r.companyName||r.CompanyName||'').toString().trim(),
+    currentRmName: (r.currentRmName||r.CurrentRmName||r.RM||'').toString().trim(),
+    CreateMonth: normalizeMonthLabel(r.CreateMonth||r.createMonth) || toMmmYyyy(r.createdDate||r.CreatedDate),
+    status: (r.lea||r.status||r.Status||r.leadStatus||'').toString().trim().toUpperCase(),
+    enquiryType: (r.enquiryType||'').toString().trim(),
+    platformName: (r.platformName||'').toString().trim(),
+  }));
+}
+
+async function handleLoad(){
+  const fin    = $('#fin23-file').files[0];
+  const rev    = $('#rev-file').files[0];
+  const b2bFile= $('#b2b-file').files[0];
+  if(!fin && !rev && !b2bFile){ alert('Please upload at least one file.'); return; }
+
+  $('#load-btn').disabled = true;
+  $('#load-btn').textContent = 'Loading…';
+  STATE.filesLoaded = { fin23: false, rev: false, b2b: false };
+
+  try{
+    loadEmployeeFromStorage();
+    loadCostFromStorage();
+
+    if(fin){
+      const finWb = await readWb(fin);
+      const finSheet = findSheetName(finWb, 'RAW_DATA', 'RawData');
+      const finRows = XLSX.utils.sheet_to_json(finWb.Sheets[finSheet], {defval:'', raw:true});
+      STATE.raw = buildRawData(finRows);
+      STATE.rawFilters = {};
+      STATE.filesLoaded.fin23 = true;
+    } else {
+      STATE.raw = [];
+      STATE.rawFilters = {};
+    }
+
+    rebuildTeamMap();
+
+    if(rev){
+      const revWb = await readWb(rev);
+      STATE.rev = parseRevenueInput(revWb);
+      STATE.filesLoaded.rev = true;
+    } else {
+      STATE.rev = [];
+    }
+
+    if(b2bFile){
+      const b2bWb = await readWb(b2bFile);
+      const b2bRows = XLSX.utils.sheet_to_json(b2bWb.Sheets[b2bWb.SheetNames[0]], {defval:'', raw:true});
+      STATE.b2b = buildB2BData(b2bRows);
+      STATE.filesLoaded.b2b = true;
+    } else {
+      STATE.b2b = [];
+    }
+
+    detectMonths();
+    reconcileCostMonths();
+    initFilters();
+    initRevFilters();
+    renderAll();
+    showApp();
+  }catch(e){
+    console.error(e); alert('Failed to load: ' + e.message);
+  }finally{
+    $('#load-btn').disabled = false;
+    $('#load-btn').textContent = 'Load Dashboard';
+  }
+}
+
+function showUpload(){ $('#upload-screen').style.display='flex'; $('#app').style.display='none'; }
+function showApp()   { $('#upload-screen').style.display='none'; $('#app').style.display='block'; }
+
+// ---- filters / tabs ----
+function initFilters(){
+  const sel = $('#filter-month'); sel.innerHTML='';
+  ['All', ...STATE.months].forEach(m => { const o=document.createElement('option'); o.value=m; o.textContent=m; sel.appendChild(o); });
+  sel.value = STATE.months.includes(STATE.filterMonth) || STATE.filterMonth==='All' ? STATE.filterMonth : 'All';
+  STATE.filterMonth = sel.value;
+}
+function initRevFilters(){
+  const tm = $('#rev-team-filter');
+  const teams = ['All', ...Array.from(new Set(STATE.empref.slice(1).map(r=>r[1]).filter(Boolean))).sort()];
+  tm.innerHTML = teams.map(t=>`<option value="${t}">${t}</option>`).join('');
+  tm.value = STATE.revTeam;
+
+  const revMonths = new Set();
+  for(const r of STATE.rev){
+    const v = r['OLD CHECK'] || r['Old Check'] || r['old check'];
+    if(v && v!=='' && v!==0) revMonths.add(String(v));
+  }
+  const mm = $('#rev-month-filter');
+  mm.innerHTML = '<option value="All">All</option>' + Array.from(revMonths).sort().map(m=>`<option value="${m}">${m}</option>`).join('');
+  mm.value = STATE.revMonth;
+}
+
+function tabBar(){
+  const tabs = [
+    {id:'dashboard', label:'Dashboard',        primary:true},
+    {id:'mtd',       label:'MTD Performance',  primary:true},
+    {id:'rmrev',     label:'RM Revenue',       primary:true},
+    {id:'cpc',       label:'Cost Per Campaign'},
+    {id:'processed', label:'PROCESSED'},
+    {id:'rawdata',   label:'RAW_DATA'},
+    {id:'employee',  label:'EMPLOYEE_REF'},
+    {id:'missing',   label:'MISSING_LEADS'},
+  ];
+  const bar = $('#tabs'); bar.innerHTML='';
+  tabs.forEach((t,i) => {
+    const b = document.createElement('button');
+    b.className = 'tab' + (t.primary?' primary':'');
+    b.dataset.tab = t.id; b.textContent = t.label;
+    b.onclick = () => activateTab(t.id);
+    bar.appendChild(b);
+  });
+  activateTab('dashboard');
+}
+function activateTab(id){
+  $$('.tab').forEach(b => b.classList.toggle('active', b.dataset.tab===id));
+  $$('.tab-panel').forEach(p => p.classList.toggle('active', p.id==='tab-'+id));
+  if(id==='rmrev') drawRevChart();
+  requestAnimationFrame(() => {
+    const panel = $('#tab-'+id);
+    if(panel) panel.querySelectorAll('.table-wrap').forEach(attachMirrorScroll);
+  });
+}
+
+// ---- aggregators ----
+function applyRefColdFilter(rows){
+  if(STATE.filterRefCold === 'Exclude')
+    return rows.filter(r => r['Campaign Name']!=='Referral' && r['Campaign Name']!=='Cold Data');
+  return rows;
+}
+
+function topKPIs(){
+  const month = STATE.filterMonth;
+  let rows = applyRefColdFilter(STATE.raw);
+  const ytd = rows.length;
+  const generated = month==='All' ? rows.length : rows.filter(r=>r.CTM===month).length;
+  const sc = st => {
+    if(month==='All') return rows.filter(r=>r.leadStatus===st).length;
+    return rows.filter(r => r.leadStatus===st && r[statusMonthCol(st)]===month).length;
+  };
+  const converted = sc('CONVERTED'), inProcess = sc('IN PROCESS');
+  return {
+    ytd, generated, assigned: sc('ASSIGNED'), converted, inProcess,
+    followUp: sc('FOLLOW UP'), onHold: sc('ON HOLD'), dead: sc('DEAD'),
+    qlRate: generated>0 ? (converted+inProcess)/generated : 0,
+  };
+}
+
+function liveDataKPIs(){
+  const month = STATE.filterMonth;
+  let rows = applyRefColdFilter(STATE.raw);
+  const assigned = month==='All'
+    ? rows.filter(r=>r.leadStatus==='ASSIGNED').length
+    : rows.filter(r=>r.leadStatus==='ASSIGNED' && r.CTM===month).length;
+
+  let anyConv = null, anyIP = null, sameConv, sameIP;
+  if(month==='All'){
+    sameConv = rows.length;
+    sameIP = rows.filter(r=>r.leadStatus==='IN PROCESS').length;
+  } else {
+    anyConv = rows.filter(r =>
+      r.leadStatus==='CONVERTED' && r.CM===month && monthKey(r.CTM) < monthKey(month)
+    ).length;
+    anyIP = rows.filter(r =>
+      r.leadStatus==='IN PROCESS' && r.LPM===month && monthKey(r.CTM) < monthKey(month)
+    ).length;
+    sameConv = rows.filter(r => r.leadStatus==='CONVERTED' && r.CM===month && r.CTM===month).length;
+    sameIP = rows.filter(r => r.leadStatus==='IN PROCESS' && r.LPM===month && r.CTM===month).length;
+  }
+  return { assigned, anyConv, anyIP, sameConv, sameIP };
+}
+
+function platformsForLeadsTable(){
+  return [
+    {label:'Google Adwords', match: r => r.platformName==='Google Adwords' || r['Campaign Name']==='Google'},
+    {label:'Social Media',   match: r => r['Campaign Name']==='Social Media'},
+    {label:'Workshop',       match: r => r.platformName==='BTL Marketing'},
+    {label:'Brand Marketing',match: r => r.platformName==='Brand Marketing'},
+    {label:'Referral',       match: r => r.platformName==='Referral'},
+    {label:'Cold Leads',     match: r => r.platformName==='Cold Leads'},
+  ];
+}
+
+function leadsByPlatformMonth(){
+  const buckets = platformsForLeadsTable();
+  const rows = STATE.raw;
+  const months = STATE.months;
+  const refMode = STATE.filterRefCold;
+  const out = buckets.map(b => {
+    const o = {Platform: b.label, total:0};
+    months.forEach(m => {
+      let c = rows.filter(x => b.match(x) && x.CTM===m).length;
+      if(refMode==='Exclude' && (b.label==='Referral' || b.label==='Cold Leads')) c = 0;
+      o[m] = c; o.total += c;
+    });
+    return o;
+  });
+  const gt = {Platform:'Grand Total', total:0, _tot:true};
+  months.forEach(m => gt[m] = out.reduce((s,r)=>s+r[m],0));
+  gt.total = out.reduce((s,r)=>s+r.total,0);
+  out.push(gt);
+  return out;
+}
+
+function statusByMonth(){
+  const months = STATE.months;
+  return STATUSES.map(st => {
+    const r = {Status: st, total: 0};
+    months.forEach(m => {
+      const col = statusMonthCol(st);
+      const c = STATE.raw.filter(x => x.leadStatus===st && x[col]===m).length;
+      r[m] = c; r.total += c;
+    });
+    return r;
+  });
+}
+
+function platformStatusBreakdown(){
+  const month = STATE.filterMonth;
+  const mode = STATE.filterTable;
+  let rows = applyRefColdFilter(STATE.raw);
+  const groups = [
+    {label:'Google Adwords', match: r => r.platformName==='Google Adwords'},
+    {label:'Facebook',       match: r => r.platformName==='Facebook'},
+    {label:'Brand Marketing',match: r => r.platformName==='Brand Marketing'},
+    {label:'BTL Marketing',  match: r => r.platformName==='BTL Marketing'},
+    {label:'Referral',       match: r => r.platformName==='Referral'},
+    {label:'Emailer',        match: r => r.platformName==='Emailer'},
+    {label:'Direct Registration', match: r => r.platformName==='Direct Registration'},
+    {label:'Cold Leads',     match: r => r.platformName==='Cold Leads'},
+  ];
+  const out = [];
+  for(const g of groups){
+    const sub = rows.filter(g.match);
+    const obj = {Platform: g.label}; let total = 0;
+    for(const st of STATUSES){
+      let pool = sub.filter(r => r.leadStatus===st);
+      if(month!=='All'){
+        const col = dashboardStatusMonthCol(st);
+        if(mode==='AnyMonth'){
+          pool = pool.filter(r => r[col]===month && monthKey(r.CTM) < monthKey(month));
+        } else if(mode==='SameMonth'){
+          pool = pool.filter(r => r[col]===month && r.CTM===month);
+        } else {
+          pool = pool.filter(r => r[col]===month);
+        }
+      }
+      obj[st] = pool.length; total += pool.length;
+    }
+    obj.Total = total;
+    obj.LCR = total>0 ? obj.CONVERTED/total : 0;
+    out.push(obj);
+  }
+  const gt = {Platform:'Grand Total', _tot:true};
+  let tot = 0;
+  STATUSES.forEach(st => { gt[st] = out.reduce((s,r)=>s+r[st],0); tot += gt[st]; });
+  gt.Total = tot;
+  gt.LCR = null;
+  out.push(gt);
+  return out;
+}
+
+function teamPerformance(){
+  const month = STATE.filterMonth;
+  let base = applyRefColdFilter(STATE.raw);
+  const teams = FIXED_TEAMS.slice();
+
+  return teams.map(team => {
+    const rows = base.filter(r => r.Team === team);
+    const totalLeads = month==='All' ? rows.length : rows.filter(r => r.CTM===month).length;
+    const obj = {Team: team, 'Total Leads': totalLeads};
+    for(const st of STATUSES){
+      let pool = rows.filter(r => r.leadStatus===st);
+      if(month!=='All') pool = pool.filter(r => r[statusMonthCol(st)]===month);
+      obj[st] = pool.length;
+    }
+    obj['Conv. Rate'] = totalLeads>0 ? obj.CONVERTED/totalLeads : 0;
+    return obj;
+  });
+}
+
+function incomeSegment(){
+  const month = STATE.filterMonth;
+  const rows = applyRefColdFilter(STATE.raw);
+  const leadRows = month==='All' ? rows : rows.filter(r => r.CTM===month);
+  const convRows = month==='All'
+    ? rows.filter(r => r.leadStatus==='CONVERTED')
+    : rows.filter(r => r.leadStatus==='CONVERTED' && r.CM===month);
+  const order = ['Above 20 Lac','15 Lac to 20 Lac','10 Lac to 20 Lac','10 Lac to 15 Lac','5 Lac to 10 Lac','0 to 5 Lac'];
+  const bandSet = new Set(leadRows.map(r=>r.annualIncome).filter(Boolean));
+  const bands = [];
+  for(const b of order){ if(bandSet.has(b)) bands.push(b); }
+  for(const b of bandSet){ if(!bands.includes(b)) bands.push(b); }
+
+  const results = bands.map(b => {
+    const sub = leadRows.filter(r => r.annualIncome === b);
+    const conv = convRows.filter(r => r.annualIncome === b).length;
+    return { 'Income Band': b, Leads: sub.length, Converted: conv,
+      'Conv. Rate': sub.length>0 ? conv/sub.length : 0 };
+  });
+  const totalBandLeads = results.reduce((s,r) => s+r.Leads, 0);
+  results.forEach(r => { r['Share %'] = totalBandLeads>0 ? r.Leads/totalBandLeads : 0; });
+  return results;
+}
+
+function costSummaryByCampaign(){
+  const cpc = STATE.cost; const header = cpc[0]||[];
+  const monthCols = header.slice(1).map(toMmmYyyy);
+  const month = STATE.filterMonth, refMode = STATE.filterRefCold;
+  const out = []; let totLeads=0, totCost=0;
+  for(let i=1;i<cpc.length;i++){
+    const row = cpc[i]; const name = row[0];
+    let leads, cost;
+    if(month==='All'){
+      leads = STATE.raw.filter(r => r['Campaign Name']===name).length;
+      cost = 0; for(let j=1;j<row.length;j++) cost += Number(row[j])||0;
+    } else {
+      leads = STATE.raw.filter(r => r['Campaign Name']===name && r.CTM===month).length;
+      const idx = monthCols.indexOf(month); cost = idx>=0 ? (Number(row[idx+1])||0) : 0;
+    }
+    if(refMode==='Exclude' && (name==='Referral' || name==='Cold Data')){ leads = 0; }
+    const cpl = leads>0 ? cost/leads : 0;
+    out.push({Campaign:name, Leads:leads, 'Cost (₹)':cost, 'CPL (₹)': cpl});
+    totLeads += leads; totCost += cost;
+  }
+  out.push({Campaign:'Grand Total', Leads:totLeads, 'Cost (₹)':totCost, 'CPL (₹)': totLeads>0?totCost/totLeads:0, _tot:true});
+  return out;
+}
+
+function costPerLeadPerRM(){
+  const cpc = STATE.cost; const header = cpc[0]||[];
+  const monthCols = header.slice(1).map(toMmmYyyy);
+  const month = STATE.filterMonth, refMode = STATE.filterRefCold;
+
+  const costSummary = costSummaryByCampaign();
+  const cplMap = {};
+  for(const c of costSummary){ if(!c._tot) cplMap[c.Campaign] = c['CPL (₹)']; }
+
+  let scope = STATE.raw;
+  if(refMode==='Exclude') scope = scope.filter(r => r['Campaign Name']!=='Referral' && r['Campaign Name']!=='Cold Data');
+  if(month!=='All') scope = scope.filter(r => r.CTM===month);
+  scope = scope.filter(r => r.Team !== 'SV');
+
+  const rms = {};
+  for(const r of scope){
+    const rm = r.currentRmName || '(unassigned)';
+    if(!rms[rm]) rms[rm] = {RM: rm, Team: r.Team||'', Leads:0, Cost:0};
+    rms[rm].Leads++;
+    rms[rm].Cost += cplMap[r['Campaign Name']] || 0;
+  }
+  return Object.values(rms).map(o => ({
+    Team:o.Team, RM:o.RM, Leads:o.Leads,
+    'Cost (₹)': o.Cost, 'CPL (₹)': o.Leads>0?o.Cost/o.Leads:0,
+  })).sort((a,b)=> a.Team.localeCompare(b.Team) || b.Leads-a.Leads);
+}
+
+function costPerLeadPerRMWithTotals(){
+  const month = STATE.filterMonth, refMode = STATE.filterRefCold;
+  const costSummary = costSummaryByCampaign();
+  const cplMap = {};
+  const campaignSet = new Set();
+  let totalLeads = 0, totalCost = 0, totalCpl = 0;
+
+  for(const row of costSummary){
+    const costKey = Object.keys(row).find(k => k.startsWith('Cost '));
+    const cplKey = Object.keys(row).find(k => k.startsWith('CPL '));
+    if(row._tot){
+      totalLeads = row.Leads || 0;
+      totalCost = Number(row[costKey]) || 0;
+      totalCpl = Number(row[cplKey]) || 0;
+    } else {
+      campaignSet.add(row.Campaign);
+      cplMap[row.Campaign] = Number(row[cplKey]) || 0;
+    }
+  }
+
+  let scope = STATE.raw;
+  if(refMode==='Exclude') scope = scope.filter(r => r['Campaign Name']!=='Referral' && r['Campaign Name']!=='Cold Data');
+  if(month!=='All') scope = scope.filter(r => r.CTM===month);
+  scope = scope.filter(r => campaignSet.has(r['Campaign Name']));
+
+  const groups = {};
+  for(const r of scope){
+    const team = r.Team || 'SV';
+    const rm = team === 'SV' ? 'SV Team (Collective)' : (r.currentRmName || '(unassigned)');
+    const key = team === 'SV' ? 'SV' : team + '|' + rm;
+    if(!groups[key]) groups[key] = {Team:team, RM:rm, totalLeads:0, totalCost:0};
+    groups[key].totalLeads++;
+    groups[key].totalCost += cplMap[r['Campaign Name']] || 0;
+  }
+
+  const rows = Object.values(groups).map(r => ({
+    ...r,
+    cpl: r.totalLeads > 0 ? r.totalCost / r.totalLeads : 0,
+  })).sort((a,b) => {
+    if(a.Team==='SV' && b.Team!=='SV') return 1;
+    if(a.Team!=='SV' && b.Team==='SV') return -1;
+    return a.Team.localeCompare(b.Team) || b.totalLeads-a.totalLeads;
+  });
+
+  rows.push({
+    Team:'Grand Total',
+    RM:'',
+    totalLeads,
+    totalCost,
+    cpl: totalCpl,
+    _tot:true,
+  });
+  return rows;
+}
+
+function inProcessDataset(){
+  const month = STATE.filterMonth;
+  let base = applyRefColdFilter(STATE.raw);
+  const statuses = ['DEAD','ON HOLD','ASSIGNED','RE-ASSIGNED','FOLLOW UP','CONVERTED'];
+  const teams = FIXED_TEAMS.slice();
+
+  const out = teams.map(team => {
+    const rows = base.filter(r => r.Team === team);
+    const obj = {Team: team}; let total = 0;
+    for(const st of statuses){
+      let pool;
+      if(month==='All'){
+        pool = rows.filter(r => r.LPM!=='N/A' && r.leadStatus===st);
+      } else {
+        pool = rows.filter(r => r.LPM===month && r.leadStatus===st);
+      }
+      obj[st] = pool.length; total += pool.length;
+    }
+    obj.Total = total;
+    return obj;
+  });
+  const gt = {Team:'Grand Total', _tot:true, Total:0};
+  statuses.forEach(st => { gt[st] = out.reduce((s,r)=>s+r[st],0); gt.Total += gt[st]; });
+  out.push(gt);
+  return {statuses, data: out};
+}
+
+function convertedDataset(){
+  const month = STATE.filterMonth;
+  let base = applyRefColdFilter(STATE.raw);
+  const statuses = ['DEAD','ON HOLD','ASSIGNED','RE-ASSIGNED','FOLLOW UP','IN PROCESS'];
+  const teams = FIXED_TEAMS.slice();
+
+  const isExcelMonthShape = v => /^.{3}-.{4}$/.test(String(v ?? ''));
+  const out = teams.map(team => {
+    const rows = base.filter(r => r.Team === team);
+    const obj = {Team: team}; let total = 0;
+    for(const st of statuses){
+      let pool;
+      if(month==='All'){
+        pool = rows.filter(r => isExcelMonthShape(r.CM) && r.leadStatus===st);
+      } else {
+        pool = rows.filter(r => r.CM===month && r.leadStatus===st);
+      }
+      obj[st] = pool.length; total += pool.length;
+    }
+    obj.Total = total;
+    return obj;
+  });
+  const gt = {Team:'Grand Total', _tot:true, Total:0};
+  statuses.forEach(st => { gt[st] = out.reduce((s,r)=>s+r[st],0); gt.Total += gt[st]; });
+  out.push(gt);
+  return {statuses, data: out};
+}
+
+// ---- B2B Corp Leads ----
+function b2bKPI(){
+  const month = STATE.filterMonth;
+  if(!STATE.b2b.length) return 0;
+  if(month==='All') return STATE.b2b.length;
+  return STATE.b2b.filter(r => r.CreateMonth===month).length;
+}
+
+function b2bByRMStatus(){
+  const month = STATE.filterMonth;
+  const data = month==='All' ? STATE.b2b : STATE.b2b.filter(r => r.CreateMonth===month);
+  const B2B_STATUSES = ['ASSIGNED','DEAD','FOLLOW UP','ON HOLD','RE-ASSIGNED'];
+  const rms = Array.from(new Set(data.map(r => r.currentRmName).filter(Boolean))).sort();
+  const out = rms.map(rm => {
+    const sub = data.filter(r => r.currentRmName===rm);
+    const obj = {RM: rm}; let total = 0;
+    for(const st of B2B_STATUSES){ obj[st] = sub.filter(r => r.status===st).length; total += obj[st]; }
+    obj.Total = total;
+    return obj;
+  });
+  if(!out.length) return {statuses: B2B_STATUSES, data: []};
+  const gt = {RM:'Grand Total', _tot:true, Total:0};
+  B2B_STATUSES.forEach(st => { gt[st] = out.reduce((s,r)=>s+r[st],0); gt.Total += gt[st]; });
+  out.push(gt);
+  return {statuses: B2B_STATUSES, data: out};
+}
+
+function renderB2BTable(){
+  if(!STATE.filesLoaded.b2b){ setNotUploaded('#tbl-b2b','b2b'); return; }
+  const month = STATE.filterMonth;
+  const {statuses, data} = b2bByRMStatus();
+  const title = 'B2B CORP LEADS — RM × STATUS  (' + (month==='All'?'All Months':month) + ')';
+  const el = $('#b2b-table-title'); if(el) el.textContent = title;
+  const host = '#tbl-b2b';
+  if(!data.length){
+    $(host).innerHTML = '<div class="meta" style="padding:12px">No B2B data — upload the B2B Corporate Lead file.</div>';
+    return;
+  }
+  const headers = ['RM', ...statuses, 'Total'];
+  const rows = data.map(r => {
+    const o = {RM: r.RM, _tot: !!r._tot};
+    statuses.forEach(s => o[s] = fmtIN(r[s]));
+    o.Total = fmtIN(r.Total);
+    return o;
+  });
+  renderTable(host, headers, rows);
+}
+
+function mtdPerformance(){
+  const refMode = STATE.filterRefCold;
+  const ALL_BUCKETS = ['Branding','Social Media','Google','Corporate','Referral','Cold Data'];
+  const CORE_BUCKETS = ['Branding','Social Media','Google','Corporate'];
+  const buckets = refMode === 'Only Referral' ? ['Referral']
+                : refMode === 'Exclude'        ? CORE_BUCKETS
+                : ALL_BUCKETS;
+  const mtdMonths = STATE.months.filter(m => monthKey(m) >= monthKey('Apr-2026'));
+  const sd = STATE.mtdStart, ed = STATE.mtdEnd;
+  const days = (ed-sd+1) || 1;
+  const proj = v => v/days*30;
+  const out = [];
+
+  for(const m of mtdMonths){
+    const [mon,yr] = m.split('-');
+    const monIdx = MONTHS_3.indexOf(mon);
+    const yyyymm = yr+'-'+pad2(monIdx+1);
+
+    for(const c of buckets){
+      const pool = STATE.raw.filter(r => r['Campaign Name']===c);
+
+      const leads = pool.filter(r => {
+        const d = r.createdDate;
+        if(!d || d.length < 10) return false;
+        if(d.substring(0,7) !== yyyymm) return false;
+        const day = parseInt(d.substring(8,10), 10);
+        return day >= sd && day <= ed;
+      }).length;
+
+      const conv = pool.filter(r => {
+        if(r.leadStatus !== 'CONVERTED') return false;
+        const d = r.convertedDate;
+        if(!d || d.length < 10) return false;
+        if(d.substring(0,7) !== yyyymm) return false;
+        const day = parseInt(d.substring(8,10), 10);
+        return day >= sd && day <= ed;
+      }).length;
+
+      const ip = pool.filter(r => {
+        if(r.leadStatus !== 'IN PROCESS') return false;
+        const d = r.leadInProcessDate;
+        if(!d || d.length < 10) return false;
+        if(d.substring(0,7) !== yyyymm) return false;
+        const day = parseInt(d.substring(8,10), 10);
+        return day >= sd && day <= ed;
+      }).length;
+
+      out.push({Month:m, Campaign:c, Leads:leads, LeadsProj:proj(leads),
+        Conv:conv, ConvProj:proj(conv), InProc:ip, InProcProj:proj(ip),
+        Qual:conv+ip, QualProj:proj(conv+ip)});
+    }
+  }
+  return out;
+}
+
+// ---- PROCESSED tab ----
+function processedPlatform(){
+  const buckets = platformsForLeadsTable();
+  const rows = STATE.raw, months = STATE.months;
+  const out = buckets.map(b => {
+    const o = {Platform:b.label, total:0};
+    months.forEach(m => { o[m] = rows.filter(x => b.match(x) && x.CTM===m).length; o.total += o[m]; });
+    return o;
+  });
+  const gt = {Platform:'Grand Total', total:0, _tot:true};
+  months.forEach(m => gt[m] = out.reduce((s,r)=>s+r[m],0));
+  gt.total = out.reduce((s,r)=>s+r.total,0); out.push(gt);
+  return out;
+}
+function processedStatus(){
+  const months = STATE.months;
+  return STATUSES.map(st => {
+    const r = {Status:st, total:0};
+    months.forEach(m => {
+      const col = statusMonthCol(st);
+      r[m] = STATE.raw.filter(x => x.leadStatus===st && x[col]===m).length; r.total += r[m];
+    });
+    return r;
+  });
+}
+
+// ---- RM Revenue ----
+function revenueAggregated(){
+  let rows = STATE.rev;
+  if(STATE.revMonth !== 'All'){
+    rows = rows.filter(r => String(r['OLD CHECK']||r['Old Check']||r['old check']||'') === STATE.revMonth);
+  }
+  const map = {};
+  for(const r of rows){
+    const rm = (r.RM||r.rm||r['Curren RM']||'').toString().trim();
+    if(!rm) continue;
+    const key = rm.toLowerCase();
+    if(!map[key]) map[key] = {RM: rm, Team: STATE.teamMap[key] || '', RevBased:0, NotEligible:0, Total:0};
+    const ct = (r['CLIENT TYPE']||r['client type']||'').toString().toUpperCase();
+    if(ct==='REVENUE BASED') map[key].RevBased++;
+    if(ct==='NOT ELIGIBLE') map[key].NotEligible++;
+    map[key].Total += Number(r.Total||r.TOTAL||r.total||0) || 0;
+  }
+  let arr = Object.values(map);
+  if(STATE.revTeam !== 'All') arr = arr.filter(o => o.Team === STATE.revTeam);
+  arr.sort((a,b) => b.Total - a.Total);
+  return arr;
+}
+
+function drawRevChart(){
+  if(!window.Chart) return;
+  const data = revenueAggregated().slice(0, 20);
+  const ctx = $('#rev-chart').getContext('2d');
+  if(STATE.revChart) STATE.revChart.destroy();
+  STATE.revChart = new Chart(ctx, {
+    type:'bar',
+    plugins: [ChartDataLabels],
+    data: {
+      labels: data.map(d => d.RM),
+      datasets: [{
+        label: 'Total Revenue (₹)',
+        data: data.map(d => d.Total),
+        backgroundColor: '#5b8dff',
+        borderRadius: 4,
+      }]
+    },
+    options: {
+      responsive:true, maintainAspectRatio:false,
+      plugins: {
+        legend:{ labels:{ color:'#cfd9f0' } },
+        tooltip:{ callbacks:{ label: c => '₹'+Math.round(c.raw).toLocaleString('en-IN') } },
+        datalabels: {
+          anchor: 'end',
+          align: 'top',
+          color: '#cfd9f0',
+          font: { size: 10, weight: 'bold' },
+          formatter: v => '₹'+Math.round(v).toLocaleString('en-IN'),
+        }
+      },
+      scales: {
+        x:{ ticks:{ color:'#9aa6bf', autoSkip:false, maxRotation:60, minRotation:45 }, grid:{ color:'rgba(255,255,255,.05)' } },
+        y:{ ticks:{ color:'#9aa6bf', callback: v => '₹'+Number(v).toLocaleString('en-IN') }, grid:{ color:'rgba(255,255,255,.05)' } }
+      }
+    }
+  });
+}
+
+// ---- MISSING leads ----
+function missingLeads(){
+  const out = [];
+  for(const r of STATE.raw){
+    const reasons = [];
+    if(!r.currentRmName) reasons.push('No RM');
+    if(!r['Campaign Name']) reasons.push('No Campaign');
+    if(!r.leadStatus) reasons.push('No Status');
+    if(!r.createdDate) reasons.push('No Created');
+    if(!r.Team || r.Team==='SV') {} // SV is default, not missing
+    if(reasons.length){ out.push({...r, Reason: reasons.join(', ')}); }
+  }
+  return out;
+}
+
+// ---- table renderer ----
+function renderTable(host, headers, rows, opts={}){
+  const fmt = opts.fmt || ((v)=>v);
+  const html = `<table class="data ${opts.cls||''}">
+    <thead><tr>${headers.map(h=>`<th>${h}</th>`).join('')}</tr></thead>
+    <tbody>${rows.map(r => `<tr class="${r._tot?'grand':''}">${headers.map(h=>`<td>${fmt(r[h],h,r)}</td>`).join('')}</tr>`).join('')}</tbody>
+  </table>`;
+  if(typeof host==='string') $(host).innerHTML = html; else host.innerHTML = html;
+}
+function filterSummary(extra=''){
+  const parts = ['Month: '+STATE.filterMonth, 'Ref+Cold: '+STATE.filterRefCold];
+  if(extra) parts.push(extra);
+  return '('+parts.join(' | ')+')';
+}
+function updateDashboardHeaderFilters(){
+  const summary = filterSummary();
+  [
+    '#hdr-platform-month',
+    '#hdr-status-month',
+    '#hdr-team',
+    '#hdr-income',
+    '#hdr-cost-summary',
+    '#hdr-cpl-rm',
+  ].forEach(sel => { const el = $(sel); if(el) el.textContent = summary; });
+  const ps = $('#hdr-platform-status');
+  if(ps) ps.textContent = filterSummary('Table: '+STATE.filterTable);
+}
+
+// ---- renderers ----
+function renderKPIs(){
+  if(!STATE.filesLoaded.fin23){ $('#kpis').innerHTML = notUploadedHTML('fin23'); return; }
+  const k = topKPIs();
+  const cards = [
+    {label:'YTD Leads (Fixed)', value: fmtIN(k.ytd), tone:'blue'},
+    {label:'Generated Leads', value: fmtIN(k.generated), tone:'blue'},
+    {label:'Converted',       value: fmtIN(k.converted), tone:'green'},
+    {label:'In Process',      value: fmtIN(k.inProcess), tone:'cyan'},
+    {label:'QL Conversion Rate', value: fmtPct(k.qlRate), tone:'violet'},
+    {label:'Follow Up',       value: fmtIN(k.followUp), tone:'amber'},
+    {label:'On Hold',         value: fmtIN(k.onHold), tone:'orange'},
+    {label:'Dead',            value: fmtIN(k.dead), tone:'red'},
+  ];
+  $('#kpis').innerHTML = cards.map(c => `
+    <div class="kpi kpi-${c.tone}">
+      <div class="kpi-value">${c.value}</div>
+      <div class="kpi-label">${c.label}</div>
+    </div>`).join('');
+}
+
+function renderLiveKPIs(){
+  if(!STATE.filesLoaded.fin23){ $('#live-kpis').innerHTML = ''; return; }
+  const k = liveDataKPIs();
+  const month = STATE.filterMonth;
+  const hint = month==='All' ? '<span style="color:var(--muted);font-size:11px">(Select a month for AnyMonth data)</span>' : '';
+  const cards = [
+    {label:'Assigned', value: fmtIN(k.assigned), tone:'blue'},
+    {label:'AnyMonth Converted', value: k.anyConv!==null ? fmtIN(k.anyConv) : '—', tone:'green'},
+    {label:'AnyMonth InProcess', value: k.anyIP!==null ? fmtIN(k.anyIP) : '—', tone:'cyan'},
+    {label:'Same Month Converted', value: fmtIN(k.sameConv), tone:'green'},
+    {label:'Same Month InProcess', value: fmtIN(k.sameIP), tone:'cyan'},
+    {label:'B2B Corp Leads', value: fmtIN(b2bKPI()), tone:'violet'},
+  ];
+  const el = $('#live-kpis');
+  el.innerHTML = '<div style="font-size:12px;color:#cfd9f0;margin-bottom:6px;font-weight:600">▲ Live Data '+hint+'</div>' +
+    '<div class="live-kpi-grid">' +
+    cards.map(c => `
+    <div class="kpi kpi-${c.tone}">
+      <div class="kpi-value">${c.value}</div>
+      <div class="kpi-label">${c.label}</div>
+    </div>`).join('') + '</div>';
+}
+
+function renderStatusDistributionChart(){
+  if(!STATE.filesLoaded.fin23){ const w=$('#status-dist-chart-wrap'); if(w) w.innerHTML=notUploadedHTML('fin23'); return; }
+  if(!window.Chart) return;
+  const canvas = $('#status-dist-chart');
+  if(!canvas) return;
+  const k = topKPIs();
+  const labels = ['Assigned', 'On Hold', 'Follow Up', 'In Process', 'Converted', 'Dead'];
+  const values = [k.assigned, k.onHold, k.followUp, k.inProcess, k.converted, k.dead];
+  const colors = ['#0284c7', '#2563eb', '#f59e0b', '#0891b2', '#16a34a', '#dc2626'];
+  const filter = $('#status-chart-filter');
+  if(filter) filter.textContent = filterSummary();
+  if(STATE.statusChart) STATE.statusChart.destroy();
+  STATE.statusChart = new Chart(canvas.getContext('2d'), {
+    type:'bar',
+    plugins: window.ChartDataLabels ? [window.ChartDataLabels] : [],
+    data:{
+      labels,
+      datasets:[{
+        label:'Clients',
+        data:values,
+        backgroundColor:colors,
+        borderColor:colors,
+        borderWidth:1,
+        borderRadius:6,
+        maxBarThickness:58,
+      }]
+    },
+    options:{
+      responsive:true,
+      maintainAspectRatio:false,
+      layout:{padding:{top:22,right:8,left:4,bottom:0}},
+      plugins:{
+        legend:{display:false},
+        tooltip:{callbacks:{label:c => `${c.label}: ${fmtIN(c.raw)}`}},
+        datalabels:{
+          anchor:'end',
+          align:'top',
+          offset:2,
+          color:'#1f2937',
+          font:{size:11,weight:'bold'},
+          formatter:v => fmtIN(v),
+        },
+      },
+      scales:{
+        x:{
+          ticks:{color:'#475569',font:{size:11,weight:'600'},maxRotation:0,minRotation:0},
+          grid:{display:false},
+          border:{color:'#cbd5e1'},
+        },
+        y:{
+          beginAtZero:true,
+          ticks:{color:'#64748b',callback:v => fmtIN(v)},
+          grid:{color:'rgba(148,163,184,.25)'},
+          border:{color:'#cbd5e1'},
+        },
+      },
+    },
+  });
+}
+
+function renderPlatformMonth(){
+  if(!STATE.filesLoaded.fin23){ setNotUploaded('#tbl-platform-month','fin23'); return; }
+  const data = leadsByPlatformMonth();
+  const gt = data[data.length-1].total || 1;
+  const months = STATE.months;
+  const rows = data.map((r,i) => {
+    const o = {Platform:r.Platform};
+    months.forEach(m => o[m] = fmtIN(r[m]));
+    o.Total = fmtIN(r.total);
+    o['Share %'] = i===data.length-1 ? '100.00%' : fmtPct(r.total/gt);
+    o._tot = i===data.length-1;
+    return o;
+  });
+  renderTable('#tbl-platform-month', ['Platform', ...months, 'Total', 'Share %'], rows);
+}
+
+function renderStatusMonth(){
+  if(!STATE.filesLoaded.fin23){ setNotUploaded('#tbl-status-month','fin23'); return; }
+  const months = STATE.months;
+  const rows = statusByMonth().map(r => {
+    const o = {Status:r.Status};
+    months.forEach(m => o[m] = fmtIN(r[m]));
+    o.Total = fmtIN(r.total);
+    return o;
+  });
+  renderTable('#tbl-status-month', ['Status', ...months, 'Total'], rows);
+}
+
+function renderPlatformStatus(){
+  if(!STATE.filesLoaded.fin23){ setNotUploaded('#tbl-platform-status','fin23'); return; }
+  updateDashboardHeaderFilters();
+  const data = platformStatusBreakdown();
+  const headers = ['Platform', ...STATUSES, 'Total', 'LCR'];
+  const rows = data.map(r => {
+    const o = {Platform:r.Platform};
+    STATUSES.forEach(s => o[s] = fmtIN(r[s]));
+    o.Total = fmtIN(r.Total);
+    o.LCR = r.LCR == null ? '' : fmtPct(r.LCR);
+    o._tot = !!r._tot;
+    return o;
+  });
+  renderTable('#tbl-platform-status', headers, rows);
+}
+
+function renderTeam(){
+  if(!STATE.filesLoaded.fin23){ setNotUploaded('#tbl-team','fin23'); return; }
+  const data = teamPerformance();
+  const headers = ['Team', 'Total Leads', 'CONVERTED', 'Conv. Rate', 'FOLLOW UP', 'IN PROCESS', 'ON HOLD', 'DEAD', 'ASSIGNED'];
+  const rows = data.map(r => ({
+    Team: r.Team,
+    'Total Leads': fmtIN(r['Total Leads']),
+    CONVERTED: fmtIN(r.CONVERTED),
+    'Conv. Rate': fmtPct(r['Conv. Rate']),
+    'FOLLOW UP': fmtIN(r['FOLLOW UP']),
+    'IN PROCESS': fmtIN(r['IN PROCESS']),
+    'ON HOLD': fmtIN(r['ON HOLD']),
+    DEAD: fmtIN(r.DEAD),
+    ASSIGNED: fmtIN(r.ASSIGNED),
+  }));
+  renderTable('#tbl-team', headers, rows);
+}
+
+function renderIncome(){
+  if(!STATE.filesLoaded.fin23){ setNotUploaded('#tbl-income','fin23'); return; }
+  const data = incomeSegment();
+  renderTable('#tbl-income', ['Income Band','Leads','Converted','Conv. Rate','Share %'], data.map(r => ({
+    'Income Band': r['Income Band'],
+    Leads: fmtIN(r.Leads),
+    Converted: fmtIN(r.Converted),
+    'Conv. Rate': fmtPct(r['Conv. Rate']),
+    'Share %': fmtPct(r['Share %']),
+  })));
+}
+
+function renderCostSummary(){
+  if(!STATE.filesLoaded.fin23){ setNotUploaded('#tbl-cost-summary','fin23'); return; }
+  const data = costSummaryByCampaign();
+  renderTable('#tbl-cost-summary', ['Campaign','Leads','Cost (₹)','CPL (₹)'], data.map(r => ({
+    Campaign:r.Campaign, Leads:fmtIN(r.Leads), 'Cost (₹)':fmtINR(r['Cost (₹)']), 'CPL (₹)':fmtINR(r['CPL (₹)']), _tot:r._tot
+  })));
+}
+
+function renderCplRmLegacy(){
+  const data = costPerLeadPerRM();
+  renderTable('#tbl-cpl-rm', ['Team','RM','Leads','Cost (₹)','CPL (₹)'], data.map(r=>({
+    Team:r.Team, RM:r.RM, Leads:fmtIN(r.Leads), 'Cost (₹)':fmtINR(r['Cost (₹)']), 'CPL (₹)':fmtINR(r['CPL (₹)']),
+  })));
+}
+
+function renderCplRm(){
+  if(!STATE.filesLoaded.fin23){ setNotUploaded('#tbl-cpl-rm','fin23'); return; }
+  const data = costPerLeadPerRMWithTotals();
+  const headers = ['Team','RM','Total Leads','Total Cost (INR)','CPL (INR)'];
+  renderTable('#tbl-cpl-rm', headers, data.map(r => ({
+    Team:r.Team,
+    RM:r.RM,
+    'Total Leads':fmtIN(r.totalLeads),
+    'Total Cost (INR)':fmtINR(r.totalCost),
+    'CPL (INR)':fmtINR(r.cpl),
+    _tot:r._tot,
+  })));
+}
+
+function renderInProcessDataset(){
+  if(!STATE.filesLoaded.fin23){ setNotUploaded('#tbl-inprocess-ds','fin23'); return; }
+  const month = STATE.filterMonth;
+  const title = 'IN-PROCESS DATE SET, STATUS ≠ IN PROCESS   LPM: '+month+'  |  '+STATE.filterRefCold;
+  $('#inprocess-ds-title').textContent = title;
+  const {statuses, data} = inProcessDataset();
+  const headers = ['Team', ...statuses, 'Total'];
+  const rows = data.map(r => {
+    const o = {Team: r.Team, _tot: !!r._tot};
+    statuses.forEach(s => o[s] = fmtIN(r[s]));
+    o.Total = fmtIN(r.Total);
+    return o;
+  });
+  renderTable('#tbl-inprocess-ds', headers, rows);
+}
+
+function renderConvertedDataset(){
+  if(!STATE.filesLoaded.fin23){ setNotUploaded('#tbl-converted-ds','fin23'); return; }
+  const month = STATE.filterMonth;
+  const title = 'CONVERTED DATE SET, STATUS ≠ CONVERTED   CM: '+month+'  |  '+STATE.filterRefCold;
+  $('#converted-ds-title').textContent = title;
+  const {statuses, data} = convertedDataset();
+  const headers = ['Team', ...statuses, 'Total'];
+  const rows = data.map(r => {
+    const o = {Team: r.Team, _tot: !!r._tot};
+    statuses.forEach(s => o[s] = fmtIN(r[s]));
+    o.Total = fmtIN(r.Total);
+    return o;
+  });
+  renderTable('#tbl-converted-ds', headers, rows);
+}
+
+function renderMTD(){
+  if(!STATE.filesLoaded.fin23){ tabNotUploaded('#mtd-tables','fin23'); return; }
+  const data = mtdPerformance();
+  const byMonth = {};
+  data.forEach(r => (byMonth[r.Month] = byMonth[r.Month]||[]).push(r));
+  $('#mtd-tables').innerHTML = Object.entries(byMonth).map(([m, rows]) => `
+    <div class="mtd-block">
+      <h3>${m}</h3>
+      <div class="table-wrap">
+      <table class="data">
+        <thead>
+          <tr><th rowspan="2">Campaign</th><th colspan="2">Leads</th><th colspan="2">Converted</th><th colspan="2">In Process</th><th colspan="2">Qualified</th></tr>
+          <tr><th>MTD</th><th>Projected</th><th>MTD</th><th>Projected</th><th>MTD</th><th>Projected</th><th>MTD</th><th>Projected</th></tr>
+        </thead>
+        <tbody>${rows.map(r=>`<tr>
+          <td>${r.Campaign}</td>
+          <td>${fmtIN(r.Leads)}</td><td>${r.LeadsProj.toFixed(1)}</td>
+          <td>${fmtIN(r.Conv)}</td><td>${r.ConvProj.toFixed(1)}</td>
+          <td>${fmtIN(r.InProc)}</td><td>${r.InProcProj.toFixed(1)}</td>
+          <td>${fmtIN(r.Qual)}</td><td>${r.QualProj.toFixed(1)}</td>
+        </tr>`).join('')}</tbody>
+      </table>
+      </div>
+    </div>`).join('');
+}
+
+function renderCPC(){
+  const cpc = STATE.cost; if(!cpc.length){ $('#cpc-editor').innerHTML='<p>No data.</p>'; return; }
+  const header = cpc[0];
+  const head = '<thead><tr>'+header.map((h,i)=>`<th>${i===0?'Campaign':toMmmYyyy(h)}</th>`).join('')+'</tr></thead>';
+  const body = '<tbody>'+cpc.slice(1).map((row,ri)=>{
+    return '<tr>'+row.map((v,ci)=>{
+      if(ci===0) return `<td>${v}</td>`;
+      return `<td><input type="number" data-r="${ri+1}" data-c="${ci}" value="${v||0}" class="cpc-input"/></td>`;
+    }).join('')+'</tr>';
+  }).join('')+'</tbody>';
+  $('#cpc-editor').innerHTML = '<table class="data editable">'+head+body+'</table>';
+  $$('.cpc-input').forEach(inp => {
+    inp.oninput = () => {
+      STATE.cost[+inp.dataset.r][+inp.dataset.c] = +inp.value || 0;
+      try{ localStorage.setItem('cpc_override', JSON.stringify(STATE.cost)); }catch(e){}
+      renderCostSummary(); renderCplRm(); renderMTD();
+    };
+  });
+}
+
+function renderProcessed(){
+  if(!STATE.filesLoaded.fin23){
+    ['#proc-platform','#proc-status','#proc-team'].forEach(s=>setNotUploaded(s,'fin23'));
+    return;
+  }
+  const months = STATE.months;
+  const plat = processedPlatform();
+  renderTable('#proc-platform', ['Platform', ...months, 'total'], plat.map(r => {
+    const o = {Platform:r.Platform};
+    months.forEach(m => o[m] = fmtIN(r[m]));
+    o.total = fmtIN(r.total); o._tot = !!r._tot;
+    return o;
+  }));
+  const stat = processedStatus();
+  renderTable('#proc-status', ['Status', ...months, 'total'], stat.map(r => {
+    const o = {Status:r.Status};
+    months.forEach(m => o[m] = fmtIN(r[m]));
+    o.total = fmtIN(r.total); return o;
+  }));
+  const data = teamPerformance();
+  const headers = ['Team', 'Total Leads', 'CONVERTED', 'Conv. Rate', 'FOLLOW UP', 'IN PROCESS', 'ON HOLD', 'DEAD', 'ASSIGNED'];
+  renderTable('#proc-team', headers, data.map(r => ({
+    Team: r.Team,
+    'Total Leads': fmtIN(r['Total Leads']),
+    CONVERTED: fmtIN(r.CONVERTED),
+    'Conv. Rate': fmtPct(r['Conv. Rate']),
+    'FOLLOW UP': fmtIN(r['FOLLOW UP']),
+    'IN PROCESS': fmtIN(r['IN PROCESS']),
+    'ON HOLD': fmtIN(r['ON HOLD']),
+    DEAD: fmtIN(r.DEAD),
+    ASSIGNED: fmtIN(r.ASSIGNED),
+  })));
+}
+
+function rawCellValue(row, col){
+  return String(row[col] ?? '');
+}
+
+function hasRawFilter(col){
+  return Object.prototype.hasOwnProperty.call(STATE.rawFilters, col);
+}
+
+function rawFilterDisplay(col){
+  if(!hasRawFilter(col)) return '';
+  const vals = STATE.rawFilters[col] || [];
+  if(vals.length === 0) return 'None';
+  const display = vals.map(v => v === '' ? '(blank)' : v);
+  return display.length <= 2 ? display.join(', ') : display.length + ' selected';
+}
+
+function rawFilteredRows(opts={}){
+  const excludeCol = opts.excludeCol || '';
+  const searchBox = $('#raw-search');
+  const filter = (searchBox ? searchBox.value : '').toLowerCase();
+  return STATE.raw.filter(row => {
+    if(filter && !RAW_COLUMNS.some(col => rawCellValue(row, col).toLowerCase().includes(filter))) return false;
+    for(const [col, vals] of Object.entries(STATE.rawFilters)){
+      if(col === excludeCol) continue;
+      if(!Array.isArray(vals)) continue;
+      if(!vals.includes(rawCellValue(row, col))) return false;
+    }
+    return true;
+  });
+}
+
+function rawFilterValues(col){
+  const set = new Set(rawFilteredRows({excludeCol: col}).map(row => rawCellValue(row, col)));
+  return Array.from(set).sort((a,b) => {
+    if(a === '' && b !== '') return -1;
+    if(a !== '' && b === '') return 1;
+    return a.localeCompare(b, undefined, {numeric:true, sensitivity:'base'});
+  });
+}
+
+function handleRawFilterOutside(e){
+  const menu = $('#raw-filter-menu');
+  if(menu && !menu.contains(e.target) && !e.target.classList.contains('raw-filter-btn')) closeRawFilterMenu();
+}
+
+function closeRawFilterMenu(){
+  const menu = $('#raw-filter-menu');
+  if(menu) menu.remove();
+  document.removeEventListener('click', handleRawFilterOutside, true);
+  window.removeEventListener('resize', closeRawFilterMenu);
+}
+
+function openRawFilterMenu(col, anchor){
+  closeRawFilterMenu();
+  const values = rawFilterValues(col);
+  const active = hasRawFilter(col);
+  const selected = new Set(active ? (STATE.rawFilters[col] || []).map(String) : values);
+  const menu = document.createElement('div');
+  menu.id = 'raw-filter-menu';
+  menu.className = 'raw-filter-menu';
+  menu.innerHTML = `
+    <div class="raw-filter-title">${escHtml(col)}</div>
+    <input type="text" class="raw-filter-search" placeholder="Search values">
+    <div class="raw-filter-actions">
+      <button type="button" class="secondary" data-action="all">All</button>
+      <button type="button" class="secondary" data-action="none">None</button>
+    </div>
+    <div class="raw-filter-options">
+      ${values.map((value, idx) => `
+        <label class="raw-filter-option">
+          <input type="checkbox" data-idx="${idx}" ${selected.has(value) ? 'checked' : ''}>
+          <span title="${escHtml(value || '(blank)')}">${escHtml(value || '(blank)')}</span>
+        </label>
+      `).join('') || '<div class="raw-filter-empty">No values</div>'}
+    </div>
+    <div class="raw-filter-footer">
+      <button type="button" class="secondary" data-action="reset">Reset</button>
+      <button type="button" data-action="apply">Apply</button>
+    </div>
+  `;
+  document.body.appendChild(menu);
+
+  const rect = anchor.getBoundingClientRect();
+  const width = 280;
+  menu.style.width = width + 'px';
+  menu.style.left = Math.max(8, Math.min(rect.left, window.innerWidth - width - 8)) + 'px';
+  menu.style.top = Math.max(8, Math.min(rect.bottom + 6, window.innerHeight - menu.offsetHeight - 8)) + 'px';
+
+  menu.addEventListener('click', e => e.stopPropagation());
+  menu.querySelector('[data-action="all"]').onclick = () => {
+    menu.querySelectorAll('input[type=checkbox]').forEach(inp => inp.checked = true);
+  };
+  menu.querySelector('[data-action="none"]').onclick = () => {
+    menu.querySelectorAll('input[type=checkbox]').forEach(inp => inp.checked = false);
+  };
+  menu.querySelector('[data-action="reset"]').onclick = () => {
+    delete STATE.rawFilters[col];
+    closeRawFilterMenu();
+    renderRawData();
+  };
+  menu.querySelector('[data-action="apply"]').onclick = () => {
+    const checked = Array.from(menu.querySelectorAll('input[type=checkbox]:checked')).map(inp => values[+inp.dataset.idx]);
+    if(checked.length === values.length) delete STATE.rawFilters[col];
+    else STATE.rawFilters[col] = checked;
+    closeRawFilterMenu();
+    renderRawData();
+  };
+  const search = menu.querySelector('.raw-filter-search');
+  const options = Array.from(menu.querySelectorAll('.raw-filter-option'));
+  search.oninput = () => {
+    const q = search.value.toLowerCase();
+    options.forEach(opt => {
+      opt.style.display = opt.textContent.toLowerCase().includes(q) ? 'flex' : 'none';
+    });
+  };
+  search.focus();
+
+  setTimeout(() => document.addEventListener('click', handleRawFilterOutside, true), 0);
+  window.addEventListener('resize', closeRawFilterMenu);
+}
+
+function bindRawFilterButtons(){
+  $$('.raw-filter-btn').forEach(btn => {
+    btn.onclick = e => {
+      e.stopPropagation();
+      openRawFilterMenu(btn.dataset.col, btn);
+    };
+  });
+}
+
+function renderRawData(){
+  if(!STATE.filesLoaded.fin23){ $('#raw-meta').textContent=''; setNotUploaded('#raw-table-wrap','fin23'); return; }
+  closeRawFilterMenu();
+  const rows = rawFilteredRows();
+  const limit = 250;
+  const slice = rows.slice(0, limit);
+  const head = '<thead><tr>'+RAW_COLUMNS.map(col => {
+    const active = hasRawFilter(col);
+    const selected = rawFilterDisplay(col);
+    return `<th>
+      <div class="raw-filter-head">
+        <span>${escHtml(col)}</span>
+        <button type="button" class="raw-filter-btn ${active ? 'active' : ''}" data-col="${escHtml(col)}" title="Filter ${escHtml(col)}">v</button>
+      </div>
+      ${selected ? `<div class="raw-filter-selected" title="${escHtml(selected)}">${escHtml(selected)}</div>` : ''}
+    </th>`;
+  }).join('')+'</tr></thead>';
+  const body = '<tbody>'+slice.map(r=>'<tr>'+RAW_COLUMNS.map(col=>`<td>${escHtml(rawCellValue(r, col))}</td>`).join('')+'</tr>').join('')+'</tbody>';
+  const activeFilters = Object.keys(STATE.rawFilters).length;
+  $('#raw-meta').textContent = `Showing ${slice.length.toLocaleString()} of ${rows.length.toLocaleString()} rows (total ${STATE.raw.length.toLocaleString()})${activeFilters ? ` | Filters: ${activeFilters}` : ''}.`;
+  $('#raw-table-wrap').innerHTML = '<table class="data compact raw-data-table">'+head+body+'</table>';
+  bindRawFilterButtons();
+  requestAnimationFrame(attachAllMirrors);
+}
+
+function renderEmployee(){
+  const rows = STATE.empref;
+  if(!rows.length) rows.push(['Emp Code','Team','Name']);
+  const header = rows[0];
+  const head = '<thead><tr>'+header.map((h,i)=>`<th>${h}</th>`).join('')+(rows.length>1?'<th></th>':'')+'</tr></thead>';
+  const body = '<tbody>'+rows.slice(1).map((row,ri)=>{
+    return '<tr>'+row.map((v,ci)=>`<td><input class="emp-input" data-r="${ri+1}" data-c="${ci}" value="${(v??'').toString().replace(/"/g,'&quot;')}"/></td>`).join('')
+      +`<td><button class="secondary emp-del" data-r="${ri+1}">×</button></td></tr>`;
+  }).join('')+'</tbody>';
+  $('#emp-editor').innerHTML = '<table class="data editable">'+head+body+'</table>';
+  $$('.emp-input').forEach(inp => {
+    inp.oninput = () => {
+      STATE.empref[+inp.dataset.r][+inp.dataset.c] = inp.value;
+      persistEmployee();
+      rebuildTeamMap();
+      renderAffectedByTeamChange();
+    };
+  });
+  $$('.emp-del').forEach(btn => {
+    btn.onclick = () => {
+      STATE.empref.splice(+btn.dataset.r, 1);
+      persistEmployee(); rebuildTeamMap(); renderEmployee(); renderAffectedByTeamChange(); initRevFilters();
+    };
+  });
+}
+function persistEmployee(){
+  try{ localStorage.setItem('empref_override', JSON.stringify(STATE.empref)); }catch(e){}
+}
+function renderAffectedByTeamChange(){
+  renderDashboard();
+  renderProcessed();
+  initRevFilters();
+  renderRMRev();
+}
+
+function renderMissing(){
+  if(!STATE.filesLoaded.fin23){ setNotUploaded('#tbl-missing','fin23'); return; }
+  const rows = missingLeads();
+  const cols = ['currentRmName','Team','clientName','Campaign Name','platformName','createdDate','leadStatus','Reason'];
+  const head = '<thead><tr>'+cols.map(c=>`<th>${c}</th>`).join('')+'</tr></thead>';
+  const body = '<tbody>'+rows.slice(0,500).map(r=>'<tr>'+cols.map(c=>`<td>${r[c]??''}</td>`).join('')+'</tr>').join('')+'</tbody>';
+  $('#tbl-missing').innerHTML = `<div class="meta">${rows.length.toLocaleString()} rows flagged (showing first 500).</div><table class="data compact">${head}${body}</table>`;
+}
+
+function renderRMRev(){
+  if(!STATE.filesLoaded.rev){ setNotUploaded('#tbl-rmrev','rev'); const cw=$('#rev-chart-wrap'); if(cw) cw.innerHTML=notUploadedHTML('rev'); return; }
+  const data = revenueAggregated();
+  const headers = ['RM','Team','# Revenue-Based','# Not Eligible','Total Revenue (₹)'];
+  const rows = data.map(r => ({
+    RM: r.RM, Team: r.Team,
+    '# Revenue-Based': fmtIN(r.RevBased),
+    '# Not Eligible': fmtIN(r.NotEligible),
+    'Total Revenue (₹)': fmtINR(r.Total),
+  }));
+  const tot = data.reduce((s,r)=>s+r.Total,0);
+  rows.push({
+    RM:'Grand Total', Team:'',
+    '# Revenue-Based': fmtIN(data.reduce((s,r)=>s+r.RevBased,0)),
+    '# Not Eligible': fmtIN(data.reduce((s,r)=>s+r.NotEligible,0)),
+    'Total Revenue (₹)': fmtINR(tot),
+    _tot:true,
+  });
+  renderTable('#tbl-rmrev', headers, rows);
+  drawRevChart();
+}
+
+function renderDashboard(){
+  updateDashboardHeaderFilters();
+  renderKPIs();
+  renderLiveKPIs();
+  renderStatusDistributionChart();
+  renderPlatformMonth();
+  renderStatusMonth();
+  renderPlatformStatus();
+  renderTeam();
+  renderIncome();
+  renderCostSummary();
+  renderCplRm();
+  renderInProcessDataset();
+  renderConvertedDataset();
+  renderB2BTable();
+  requestAnimationFrame(attachAllMirrors);
+}
+
+function renderAll(){
+  renderDashboard();
+  renderMTD();
+  renderCPC();
+  renderProcessed();
+  renderRawData();
+  renderEmployee();
+  renderMissing();
+  renderRMRev();
+  requestAnimationFrame(attachAllMirrors);
+}
+
+// ---- UI ----
+function downloadAsJSON(){
+  const filename = ($('#json-filename').value || 'marketing-mis-dashboard').trim().replace(/[^\w\-]/g, '');
+  const data = {
+    exportedAt: new Date().toISOString(),
+    raw: STATE.raw,
+    revenue: STATE.rev,
+    months: STATE.months,
+    teamMap: STATE.empref,
+    costPerCampaign: STATE.cost,
+    filters: {
+      currentMonth: STATE.filterMonth,
+      refColdMode: STATE.filterRefCold,
+      tableMode: STATE.filterTable,
+    }
+  };
+  const json = JSON.stringify(data, null, 2);
+  const blob = new Blob([json], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename + '.json'; a.click();
+  URL.revokeObjectURL(url);
+  closeDownloadModal();
+}
+
+function openDownloadModal(){
+  $('#json-filename').value = 'marketing-mis-dashboard-' + new Date().getFullYear() + '-' + String(new Date().getMonth()+1).padStart(2,'0');
+  $('#download-modal').classList.add('active');
+  $('#json-filename').focus();
+}
+
+function closeDownloadModal(){
+  $('#download-modal').classList.remove('active');
+}
+
+function bindUI(){
+  $('#load-btn').onclick = handleLoad;
+  $('#reupload-btn').onclick = showUpload;
+
+  $('#download-json-btn').onclick = openDownloadModal;
+  $('#confirm-download').onclick = downloadAsJSON;
+  $('#cancel-download').onclick = closeDownloadModal;
+  $('#download-modal').onclick = e => { if(e.target.id==='download-modal') closeDownloadModal(); };
+  $('#json-filename').onkeypress = e => { if(e.key==='Enter') downloadAsJSON(); };
+
+  $('#filter-month').onchange = e => { STATE.filterMonth = e.target.value; renderDashboard(); };
+  $('#filter-refcold').onchange = e => { STATE.filterRefCold = e.target.value; renderDashboard(); renderMTD(); };
+  $('#filter-table').onchange = e => { STATE.filterTable = e.target.value; renderPlatformStatus(); };
+
+  $('#mtd-start').onchange = e => { STATE.mtdStart = +e.target.value||1; renderMTD(); };
+  $('#mtd-end').onchange = e => { STATE.mtdEnd = +e.target.value||30; renderMTD(); };
+
+  $('#rev-team-filter').onchange = e => { STATE.revTeam = e.target.value; renderRMRev(); };
+  $('#rev-month-filter').onchange = e => { STATE.revMonth = e.target.value; renderRMRev(); };
+
+  $('#raw-search').oninput = renderRawData;
+  $('#raw-clear-filters').onclick = () => {
+    STATE.rawFilters = {};
+    renderRawData();
+  };
+
+  $('#reset-cpc').onclick = () => {
+    try{ localStorage.removeItem('cpc_override'); }catch(e){}
+    loadCostFromStorage(); reconcileCostMonths();
+    renderCPC(); renderCostSummary(); renderCplRm(); renderMTD();
+  };
+
+  $('#emp-add').onclick = () => {
+    STATE.empref.push(['', '', '']);
+    persistEmployee(); rebuildTeamMap(); renderEmployee();
+  };
+  $('#emp-reset').onclick = () => {
+    try{ localStorage.removeItem('empref_override'); }catch(e){}
+    loadEmployeeFromStorage(); rebuildTeamMap();
+    renderEmployee(); renderAffectedByTeamChange();
+  };
+
+  $('#emp-export').onclick = () => {
+    const snap = Object.assign({}, window.SNAPSHOT, {
+      EMPLOYEE_REF: STATE.empref,
+      'Cost Per Campaign': STATE.cost,
+    });
+    const content = 'window.SNAPSHOT = ' + JSON.stringify(snap) + ';';
+    const blob = new Blob([content], {type: 'text/javascript'});
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'snapshot.js';
+    a.click();
+    URL.revokeObjectURL(a.href);
+  };
+}
+
+// ---- top mirror scrollbar ----
+function attachMirrorScroll(tableWrap){
+  const existing = tableWrap.previousElementSibling;
+  if(existing && existing.classList.contains('scroll-mirror')) existing.remove();
+
+  const mirror = document.createElement('div');
+  mirror.className = 'scroll-mirror';
+  const inner = document.createElement('div');
+  inner.className = 'scroll-mirror-inner';
+  mirror.appendChild(inner);
+  tableWrap.parentNode.insertBefore(mirror, tableWrap);
+
+  requestAnimationFrame(() => {
+    inner.style.width = tableWrap.scrollWidth + 'px';
+    let syncing = false;
+    mirror.addEventListener('scroll', () => {
+      if(syncing) return; syncing = true;
+      tableWrap.scrollLeft = mirror.scrollLeft;
+      syncing = false;
+    });
+    tableWrap.addEventListener('scroll', () => {
+      if(syncing) return; syncing = true;
+      mirror.scrollLeft = tableWrap.scrollLeft;
+      inner.style.width = tableWrap.scrollWidth + 'px';
+      syncing = false;
+    });
+  });
+}
+
+function attachAllMirrors(){
+  $$('.table-wrap').forEach(attachMirrorScroll);
+}
+
+window.addEventListener('DOMContentLoaded', () => {
+  bindUI();
+  tabBar();
+  showUpload();
+});
