@@ -1714,32 +1714,144 @@ function renderAll(){
 }
 
 // ---- UI ----
-function downloadAsJSON(){
-  const filename = ($('#json-filename').value || 'marketing-mis-dashboard').trim().replace(/[^\w\-]/g, '');
-  const data = {
+function buildExportData(){
+  return {
     exportedAt: new Date().toISOString(),
     raw: STATE.raw,
+    b2bRaw: STATE.b2bRaw,
     revenue: STATE.rev,
     months: STATE.months,
     teamMap: STATE.empref,
     costPerCampaign: STATE.cost,
+    filesLoaded: STATE.filesLoaded,
     filters: {
       currentMonth: STATE.filterMonth,
       refColdMode: STATE.filterRefCold,
       tableMode: STATE.filterTable,
+      mtdRefColdMode: STATE.mtdFilterRefCold,
+      revLPMode: STATE.revLPFilter,
+      revTeam: STATE.revTeam,
+      revMonth: STATE.revMonth,
     }
   };
-  const json = JSON.stringify(data, null, 2);
-  const blob = new Blob([json], {type:'application/json'});
-  const url = URL.createObjectURL(blob);
+}
+
+function downloadRawJSON(filename){
+  const data = buildExportData();
+  const blob = new Blob([JSON.stringify(data, null, 2)], {type:'application/json'});
   const a = document.createElement('a');
-  a.href = url; a.download = filename + '.json'; a.click();
-  URL.revokeObjectURL(url);
+  a.href = URL.createObjectURL(blob);
+  a.download = (filename||'marketing-mis-data') + '.json';
+  a.click(); URL.revokeObjectURL(a.href);
+}
+
+async function downloadAsWebpage(){
+  const filename = ($('#json-filename').value || 'marketing-mis-dashboard').trim().replace(/[^\w\-]/g, '') || 'marketing-mis-dashboard';
+  try{
+    $('#confirm-download').disabled = true;
+    $('#confirm-download').textContent = 'Building…';
+
+    const [htmlText, appJsText, snapJsText] = await Promise.all([
+      fetch('index.html').then(r => r.text()),
+      fetch('app.js').then(r => r.text()),
+      fetch('snapshot.js').then(r => r.text()),
+    ]);
+
+    const stateJson = JSON.stringify(buildExportData());
+    const preloadTag = `<script>window.__PRELOADED_STATE__=${stateJson};<\/script>`;
+
+    let out = htmlText;
+    out = out.replace('<script src="snapshot.js"></script>', `<script>${snapJsText}<\/script>`);
+    out = out.replace('<script src="app.js"></script>', `${preloadTag}\n<script>${appJsText}<\/script>`);
+
+    const blob = new Blob([out], {type:'text/html'});
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = filename + '.html';
+    a.click(); URL.revokeObjectURL(a.href);
+  } catch(e){
+    alert('Failed to build webpage: ' + e.message);
+  } finally{
+    $('#confirm-download').disabled = false;
+    $('#confirm-download').textContent = 'Download';
+  }
   closeDownloadModal();
 }
 
+async function applyPreloadedState(data){
+  STATE.raw      = data.raw || [];
+  STATE.b2bRaw   = data.b2bRaw || [];
+  STATE.b2b      = buildB2BData(STATE.b2bRaw);
+  STATE.rev      = data.revenue || [];
+  STATE.empref   = data.teamMap || STATE.empref;
+  STATE.cost     = data.costPerCampaign || STATE.cost;
+  STATE.filesLoaded = data.filesLoaded || {
+    fin23: STATE.raw.length > 0,
+    rev:   STATE.rev.length > 0,
+    b2b:   STATE.b2bRaw.length > 0,
+  };
+  if(data.filters){
+    if(data.filters.currentMonth)  STATE.filterMonth       = data.filters.currentMonth;
+    if(data.filters.refColdMode)   STATE.filterRefCold     = data.filters.refColdMode;
+    if(data.filters.tableMode)     STATE.filterTable       = data.filters.tableMode;
+    if(data.filters.mtdRefColdMode) STATE.mtdFilterRefCold = data.filters.mtdRefColdMode;
+    if(data.filters.revLPMode)     STATE.revLPFilter       = data.filters.revLPMode;
+    if(data.filters.revTeam)       STATE.revTeam           = data.filters.revTeam;
+    if(data.filters.revMonth)      STATE.revMonth          = data.filters.revMonth;
+  }
+  rebuildTeamMap();
+  detectMonths();
+  reconcileCostMonths();
+  initFilters();
+  initRevFilters();
+  renderAll();
+  showApp();
+}
+
+function openShareModal(){
+  $('#share-result').style.display = 'none';
+  $('#share-json-url').value = '';
+  $('#share-modal').classList.add('active');
+}
+function closeShareModal(){ $('#share-modal').classList.remove('active'); }
+
+function generateShareLink(){
+  const url = ($('#share-json-url').value||'').trim();
+  if(!url){ alert('Please paste a raw JSON URL first.'); return; }
+  const base = window.location.origin + window.location.pathname;
+  const link = base + '?json=' + encodeURIComponent(url);
+  $('#share-result-url').value = link;
+  $('#share-result').style.display = 'block';
+}
+
+async function tryAutoLoad(){
+  const params = new URLSearchParams(window.location.search);
+  const jsonUrl = params.get('json');
+  if(jsonUrl){
+    try{
+      const res = await fetch(jsonUrl);
+      if(!res.ok) throw new Error('HTTP ' + res.status);
+      const data = await res.json();
+      loadEmployeeFromStorage();
+      loadCostFromStorage();
+      await applyPreloadedState(data);
+      return true;
+    } catch(e){
+      console.warn('Failed to load from ?json= param:', e);
+      alert('Could not load data from URL: ' + e.message);
+    }
+  }
+  if(window.__PRELOADED_STATE__){
+    loadEmployeeFromStorage();
+    loadCostFromStorage();
+    await applyPreloadedState(window.__PRELOADED_STATE__);
+    return true;
+  }
+  return false;
+}
+
 function openDownloadModal(){
-  $('#json-filename').value = 'marketing-mis-dashboard-' + new Date().getFullYear() + '-' + String(new Date().getMonth()+1).padStart(2,'0');
+  $('#json-filename').value = 'marketing-mis-' + new Date().getFullYear() + '-' + String(new Date().getMonth()+1).padStart(2,'0');
   $('#download-modal').classList.add('active');
   $('#json-filename').focus();
 }
@@ -1753,10 +1865,24 @@ function bindUI(){
   $('#reupload-btn').onclick = showUpload;
 
   $('#download-json-btn').onclick = openDownloadModal;
-  $('#confirm-download').onclick = downloadAsJSON;
+  $('#confirm-download').onclick = downloadAsWebpage;
   $('#cancel-download').onclick = closeDownloadModal;
   $('#download-modal').onclick = e => { if(e.target.id==='download-modal') closeDownloadModal(); };
-  $('#json-filename').onkeypress = e => { if(e.key==='Enter') downloadAsJSON(); };
+  $('#json-filename').onkeypress = e => { if(e.key==='Enter') downloadAsWebpage(); };
+
+  $('#share-link-btn').onclick = openShareModal;
+  $('#cancel-share').onclick = closeShareModal;
+  $('#share-modal').onclick = e => { if(e.target.id==='share-modal') closeShareModal(); };
+  $('#share-generate-btn').onclick = generateShareLink;
+  $('#share-copy-btn').onclick = () => {
+    $('#share-result-url').select();
+    navigator.clipboard.writeText($('#share-result-url').value).catch(()=>{});
+    $('#share-copy-btn').textContent = 'Copied!';
+    setTimeout(()=>{ $('#share-copy-btn').textContent = 'Copy'; }, 2000);
+  };
+  $('#share-download-json').onclick = () => {
+    downloadRawJSON('marketing-mis-data-' + new Date().getFullYear() + '-' + String(new Date().getMonth()+1).padStart(2,'0'));
+  };
 
   $('#filter-month').onchange = e => { STATE.filterMonth = e.target.value; renderDashboard(); };
   $('#filter-refcold').onchange = e => { STATE.filterRefCold = e.target.value; renderDashboard(); };
@@ -1841,8 +1967,9 @@ function attachAllMirrors(){
   $$('.table-wrap').forEach(attachMirrorScroll);
 }
 
-window.addEventListener('DOMContentLoaded', () => {
+window.addEventListener('DOMContentLoaded', async () => {
   bindUI();
   tabBar();
-  showUpload();
+  const autoLoaded = await tryAutoLoad();
+  if(!autoLoaded) showUpload();
 });
