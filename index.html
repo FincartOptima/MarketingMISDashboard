@@ -321,7 +321,8 @@ table.data.editable td input:focus{outline:2px solid var(--orange);background:#f
           <option value="Only Referral">Only Referral</option>
         </select>
       </span>
-      <button class="btn-blue" id="download-json-btn">Download JSON</button>
+      <button class="btn-blue" id="download-json-btn">Download Webpage</button>
+      <button class="btn-green" id="share-link-btn">Make Shareable Link</button>
       <button class="secondary" id="reupload-btn">Re-upload</button>
     </div>
   </header>
@@ -538,15 +539,44 @@ table.data.editable td input:focus{outline:2px solid var(--orange);background:#f
   </div>
 </div>
 
-<!-- Download JSON Modal -->
+<!-- Download Webpage Modal -->
 <div class="modal" id="download-modal">
   <div class="modal-content">
-    <h3>Download Dashboard JSON</h3>
-    <p class="muted" style="font-size:12px;margin-bottom:14px">Enter a filename for the export.</p>
-    <input type="text" id="json-filename" placeholder="marketing-mis-2026-06">
+    <h3>Download Self-Contained Webpage</h3>
+    <p class="muted" style="font-size:12px;margin-bottom:14px">Downloads a single <strong>.html</strong> file with all data and code embedded. Anyone can open it in a browser — no uploads needed.</p>
+    <input type="text" id="json-filename" placeholder="marketing-mis-dashboard">
     <div class="modal-actions">
       <button class="secondary" id="cancel-download">Cancel</button>
       <button id="confirm-download">Download</button>
+    </div>
+  </div>
+</div>
+
+<!-- Shareable Link Modal -->
+<div class="modal" id="share-modal">
+  <div class="modal-content">
+    <h3>Make Shareable Link</h3>
+    <p class="muted" style="font-size:12px;margin-bottom:10px">
+      1. Download the JSON data first using the button below.<br>
+      2. Upload it to GitHub (or any public host).<br>
+      3. Paste the <strong>raw file URL</strong> below to generate a shareable link.
+    </p>
+    <button class="secondary" id="share-download-json" style="margin-bottom:12px;width:100%">↓ Download JSON data first</button>
+    <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:4px">Raw JSON URL (e.g. https://raw.githubusercontent.com/…)</label>
+    <input type="text" id="share-json-url" placeholder="https://raw.githubusercontent.com/user/repo/main/data.json" style="width:100%;box-sizing:border-box">
+    <div style="margin-top:12px">
+      <button id="share-generate-btn" style="width:100%">Generate Link</button>
+    </div>
+    <div id="share-result" style="display:none;margin-top:14px">
+      <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:4px">Your shareable link:</label>
+      <div style="display:flex;gap:6px">
+        <input type="text" id="share-result-url" readonly style="flex:1;font-size:11px;background:var(--surface2)">
+        <button id="share-copy-btn" class="btn-green">Copy</button>
+      </div>
+      <p class="muted" style="font-size:11px;margin-top:6px">Anyone who opens this link will see the dashboard pre-loaded with your data.</p>
+    </div>
+    <div class="modal-actions" style="margin-top:16px">
+      <button class="secondary" id="cancel-share">Close</button>
     </div>
   </div>
 </div>
