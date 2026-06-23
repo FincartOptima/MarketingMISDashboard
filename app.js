@@ -80,11 +80,18 @@ const STATE = {
   b2bRaw: [],
   b2bFilters: {},
   rev: [],
+  fy: [],
+  pa: [],
+  rmMaster: [],
+  rmMasterLookup: {},
+  rmMasterTeam: {},
   months: [],
   empref: [],
   teamMap: {},
   cost: [],
-  filesLoaded: { fin23: false, rev: false, b2b: false },
+  filesLoaded: { fin23: false, rev: false, b2b: false, fy: false, pa: false },
+  rmPerfMonth: 'All',
+  rmPerfRefCold: 'Include',
   filterMonth: 'All',
   filterRefCold: 'Include',
   filterTable: 'All',
@@ -141,6 +148,37 @@ function rebuildTeamMap(){
       row.Team = STATE.teamMap[key] || existingTeam || 'SV';
     }
   }
+}
+
+function loadRMMasterFromStorage(){
+  try{
+    const saved = localStorage.getItem('rmmaster_override');
+    if(saved){ STATE.rmMaster = JSON.parse(saved); buildRMMasterLookup(); return; }
+  }catch(e){}
+  STATE.rmMaster = (window.SNAPSHOT && window.SNAPSHOT['RM Master Mapping'])
+    ? JSON.parse(JSON.stringify(window.SNAPSHOT['RM Master Mapping']))
+    : [['Source Name','Correct RM Name','Team']];
+  buildRMMasterLookup();
+}
+function buildRMMasterLookup(){
+  STATE.rmMasterLookup = {};
+  STATE.rmMasterTeam = {};
+  for(let i=1;i<STATE.rmMaster.length;i++){
+    const r = STATE.rmMaster[i]; if(!r) continue;
+    const src = (r[0]||'').toString().trim().toLowerCase();
+    const correct = (r[1]||'').toString().trim();
+    const team = (r[2]||'').toString().trim();
+    if(src && correct) STATE.rmMasterLookup[src] = correct;
+    if(correct && team) STATE.rmMasterTeam[correct.toLowerCase()] = team;
+  }
+}
+function mapRM(rawName){
+  const k = (rawName||'').toString().trim().toLowerCase();
+  if(!k) return '';
+  return STATE.rmMasterLookup[k] || (rawName||'').toString().trim();
+}
+function persistRMMaster(){
+  try{ localStorage.setItem('rmmaster_override', JSON.stringify(STATE.rmMaster)); }catch(e){}
 }
 
 function loadCostFromStorage(){
@@ -237,6 +275,8 @@ function detectMonths(){
   for(const r of STATE.b2bRaw){
     if(r.CreateMonth) set.add(r.CreateMonth);
   }
+  for(const r of STATE.fy){ if(r.Month) set.add(r.Month); }
+  for(const r of STATE.pa){ if(r.Month) set.add(r.Month); }
   STATE.months = sortMonths(Array.from(set));
 }
 
@@ -299,6 +339,35 @@ function buildB2BData(rawRows){
   }));
 }
 
+// FY 2026-2027 — Financial Plans source. Map via RM Name.
+function buildFYData(rows){
+  return rows.map(r => {
+    const rmName = (pickField(r,'RM Name','RM','rmName')||'').toString().trim();
+    return {
+      Month:       normalizeMonthLabel(pickField(r,'Month','month')) || '',
+      rmName:      rmName,
+      mappedRM:    mapRM(rmName),
+      workpoint:   (pickField(r,'Excel/ Workpoint','Excel/Workpoint','ExcelWorkpoint')||'').toString().trim(),
+      leadSource:  (pickField(r,'Lead Source ','Lead Source','leadSource')||'').toString().trim(),
+      clientName:  (pickField(r,'Client Name','clientName')||'').toString().trim(),
+    };
+  });
+}
+// Plan Approval Sheet — Financial Plans source. Map via Advisor.
+function buildPAData(rows){
+  return rows.map(r => {
+    const advisor = (pickField(r,'Advisor','advisor')||'').toString().trim();
+    return {
+      Month:       normalizeMonthLabel(pickField(r,'Month','month')) || '',
+      advisor:     advisor,
+      mappedRM:    mapRM(advisor),
+      clientType:  (pickField(r,'Client Type','clientType')||'').toString().trim(),
+      leadSource:  (pickField(r,'Lead Source','Lead Source ','leadSource')||'').toString().trim(),
+      clientName:  (pickField(r,'Client Name','clientName')||'').toString().trim(),
+    };
+  });
+}
+
 async function handleLoad(){
   const fin    = $('#fin23-file').files[0];
   const rev    = $('#rev-file').files[0];
@@ -307,11 +376,13 @@ async function handleLoad(){
 
   $('#load-btn').disabled = true;
   $('#load-btn').textContent = 'Loading…';
-  STATE.filesLoaded = { fin23: false, rev: false, b2b: false };
+  STATE.filesLoaded = { fin23: false, rev: false, b2b: false,
+    fy: STATE.fy.length>0, pa: STATE.pa.length>0 };
 
   try{
     loadEmployeeFromStorage();
     loadCostFromStorage();
+    loadRMMasterFromStorage();
 
     if(fin){
       const finWb = await readWb(fin);
@@ -400,6 +471,7 @@ function initRevFilters(){
 function tabBar(){
   const tabs = [
     {id:'dashboard', label:'Dashboard',        primary:true},
+    {id:'rmperf',    label:'RM Performance',   primary:true},
     {id:'mtd',       label:'MTD Performance',  primary:true},
     {id:'rmrev',     label:'RM Revenue',       primary:true},
     {id:'cpc',       label:'Cost Per Campaign'},
@@ -425,6 +497,7 @@ function activateTab(id){
   const hf = $('#header-dash-filters');
   if(hf) hf.style.display = id==='dashboard' ? '' : 'none';
   if(id==='rmrev') drawRevChart();
+  if(id==='rmperf') renderRMPerformance();
   requestAnimationFrame(() => {
     const panel = $('#tab-'+id);
     if(panel) panel.querySelectorAll('.table-wrap').forEach(attachMirrorScroll);
@@ -770,6 +843,97 @@ function convertedDataset(){
   return {statuses, data: out};
 }
 
+// ---- RM Performance (Lead → Revenue tracker) ----
+function rmPerformance(){
+  const month = STATE.rmPerfMonth;
+  const refExclude = STATE.rmPerfRefCold === 'Exclude';
+  const campOK = r => !refExclude || (r['Campaign Name']!=='Referral' && r['Campaign Name']!=='Cold Data');
+  const lsOK = ls => !refExclude || (ls!=='Referral' && ls!=='ReferralProgram');
+  const lpOK = lp => !refExclude || (lp!=='Referral' && lp!=='ReferralProgram');
+
+  // ---- per-RM (currentRmName / mapped) ----
+  const leadsForRM = rm => STATE.raw.filter(r => r.currentRmName===rm && (month==='All'||r.CTM===month) && campOK(r)).length;
+  const qualityForRM = rm => {
+    const base = STATE.raw.filter(r => r.currentRmName===rm && r.leadStatus!=='ON HOLD' && r.leadStatus!=='DEAD' && campOK(r));
+    if(month==='All') return base.length;
+    const lpm = base.filter(r=>r.LPM===month).length;
+    const cm  = base.filter(r=>r.CM===month).length;
+    const both= base.filter(r=>r.LPM===month && r.CM===month).length;
+    return lpm + cm - both;
+  };
+  const fpForRM = rm => {
+    const fy = STATE.fy.filter(r => r.mappedRM===rm && r.workpoint.toUpperCase()==='WORKPOINT' && (month==='All'||r.Month===month) && lsOK(r.leadSource)).length;
+    const pa = STATE.pa.filter(r => r.mappedRM===rm && r.clientType.toUpperCase()==='NEW' && (month==='All'||r.Month===month) && lsOK(r.leadSource)).length;
+    return fy + pa;
+  };
+  const revRowsForRM = rm => {
+    const U = rm.toUpperCase();
+    return STATE.rev.filter(r => mapRM(r.RM||r.rm||r['Curren RM']).toUpperCase()===U
+      && (month==='All' || String(r['OLD CHECK']||r['Old Check']||r['old check']||'')===month)
+      && lpOK((r.LP||r.lp||r['Campaign Category']||'').toString().trim()));
+  };
+  const rev15kForRM = rm => revRowsForRM(rm).filter(r => (r['CLIENT TYPE']||r['client type']||'').toString().toUpperCase()==='REVENUE BASED').length;
+  const transForRM  = rm => revRowsForRM(rm).filter(r => (r['CLIENT TYPE']||r['client type']||'').toString().toUpperCase()==='NOT ELIGIBLE').length;
+  const revenueForRM= rm => revRowsForRM(rm).reduce((s,r)=> s + (Number(r.Total||r.TOTAL||r.total||0)||0), 0);
+
+  // ---- team-based (raw) for summary leads/quality ----
+  const leadsForTeam = team => STATE.raw.filter(r => r.Team===team && (month==='All'||r.CTM===month) && campOK(r)).length;
+  const qualityForTeam = team => {
+    const base = STATE.raw.filter(r => r.Team===team && r.leadStatus!=='ON HOLD' && r.leadStatus!=='DEAD' && campOK(r));
+    if(month==='All') return base.length;
+    const lpm = base.filter(r=>r.LPM===month).length;
+    const cm  = base.filter(r=>r.CM===month).length;
+    const both= base.filter(r=>r.LPM===month && r.CM===month).length;
+    return lpm + cm - both;
+  };
+
+  const teams = FIXED_TEAMS.slice();
+  const detail = [];
+  const summary = [];
+  for(const team of teams){
+    const rms = [];
+    for(let i=1;i<STATE.empref.length;i++){
+      const er = STATE.empref[i]; if(!er) continue;
+      if((er[1]||'').toString().trim()===team){
+        const nm = (er[2]||'').toString().trim();
+        if(nm) rms.push(nm);
+      }
+    }
+    let tFp=0,tR15=0,tTr=0,tRev=0;
+    for(const rm of rms){
+      const row = { team, rm,
+        leads: leadsForRM(rm), quality: qualityForRM(rm),
+        fp: fpForRM(rm), rev15k: rev15kForRM(rm),
+        trans: transForRM(rm), revenue: revenueForRM(rm) };
+      detail.push(row);
+      tFp+=row.fp; tR15+=row.rev15k; tTr+=row.trans; tRev+=row.revenue;
+    }
+    summary.push({ team,
+      leads: leadsForTeam(team), quality: qualityForTeam(team),
+      fp: tFp, rev15k: tR15, trans: tTr, revenue: tRev });
+  }
+
+  const grand = summary.reduce((g,s)=>({
+    leads:g.leads+s.leads, quality:g.quality+s.quality, fp:g.fp+s.fp,
+    rev15k:g.rev15k+s.rev15k, trans:g.trans+s.trans, revenue:g.revenue+s.revenue,
+  }), {leads:0,quality:0,fp:0,rev15k:0,trans:0,revenue:0});
+
+  // ---- KPI strip ----
+  const statusCount = st => {
+    const base = STATE.raw.filter(r => campOK(r));
+    if(month==='All') return base.filter(r=>r.leadStatus===st).length;
+    const col = st==='CONVERTED'?'CM': st==='IN PROCESS'?'LPM':'CTM';
+    return base.filter(r=>r.leadStatus===st && r[col]===month).length;
+  };
+  const kpi = {
+    totalLeads: STATE.raw.filter(r => (month==='All'||r.CTM===month) && campOK(r)).length,
+    converted: statusCount('CONVERTED'), inProcess: statusCount('IN PROCESS'),
+    followUp: statusCount('FOLLOW UP'), onHold: statusCount('ON HOLD'), dead: statusCount('DEAD'),
+  };
+
+  return { kpi, summary, detail, grand };
+}
+
 // ---- B2B Corp Leads ----
 function b2bKPI(){
   const month = STATE.filterMonth;
@@ -816,6 +980,155 @@ function renderB2BTable(){
     return o;
   });
   renderTable(host, headers, rows);
+}
+
+function renderRMPerfFunnel(grand){
+  const host = $('#rmperf-funnel'); if(!host) return;
+  const stages = [
+    {label:'Total Leads',           value:grand.leads,   color:'var(--blue)'},
+    {label:'Quality Leads',         value:grand.quality, color:'var(--green)'},
+    {label:'Plans Made',            value:grand.fp,      color:'var(--violet)'},
+    {label:'Revenue >15K Clients',  value:grand.rev15k,  color:'var(--orange)'},
+    {label:'Transactional Clients', value:grand.trans,   color:'var(--pink)'},
+  ];
+  const max = Math.max(...stages.map(s=>s.value), 1);
+  const leads = grand.leads || 0;
+  const sub = $('#rmperf-funnel-sub');
+  if(sub) sub.textContent = '(' + (STATE.rmPerfMonth==='All'?'All Months':STATE.rmPerfMonth) + ' · ' + STATE.rmPerfRefCold + ')';
+
+  host.innerHTML = stages.map((s,i) => {
+    const widthPct = Math.max((s.value / max) * 100, 14); // floor so labels stay readable
+    const convFromLeads = leads>0 ? (s.value/leads*100) : 0;
+    const conv = i===0
+      ? '100% of leads'
+      : `${convFromLeads.toFixed(1)}% of leads`;
+    const arrow = i>0 ? '<div class="funnel-arrow">▼</div>' : '';
+    return `${arrow}
+      <div class="funnel-stage">
+        <div class="funnel-bar" style="width:${widthPct}%;background:${s.color}">
+          <span class="funnel-label">${s.label}</span>
+          <span class="funnel-value">${fmtIN(s.value)}</span>
+        </div>
+        <div class="funnel-conv">${conv}</div>
+      </div>`;
+  }).join('');
+}
+
+function renderRMPerformance(){
+  // Sync in-tab filter dropdowns
+  const monthSel = $('#rmperf-month');
+  if(monthSel){
+    monthSel.innerHTML = ['All', ...STATE.months].map(m=>`<option value="${m}">${m}</option>`).join('');
+    monthSel.value = (STATE.months.includes(STATE.rmPerfMonth)||STATE.rmPerfMonth==='All') ? STATE.rmPerfMonth : 'All';
+    STATE.rmPerfMonth = monthSel.value;
+  }
+  const rcSel = $('#rmperf-refcold'); if(rcSel) rcSel.value = STATE.rmPerfRefCold;
+
+  // Upload-status banner for FY / Plan Approval
+  const fpReady = STATE.filesLoaded.fy || STATE.filesLoaded.pa;
+  const banner = $('#rmperf-upload-banner');
+  if(banner){
+    const fyTxt = STATE.filesLoaded.fy ? `✓ FY 2026-2027 (${STATE.fy.length} rows)` : '✗ FY 2026-2027 not uploaded';
+    const paTxt = STATE.filesLoaded.pa ? `✓ Plan Approval (${STATE.pa.length} rows)` : '✗ Plan Approval not uploaded';
+    banner.innerHTML = `<span class="${STATE.filesLoaded.fy?'rmperf-ok':'rmperf-miss'}">${fyTxt}</span>
+      <span class="${STATE.filesLoaded.pa?'rmperf-ok':'rmperf-miss'}">${paTxt}</span>
+      ${fpReady?'':'<span class="rmperf-hint">Upload these to populate <strong>Financial Plans Made</strong>.</span>'}`;
+  }
+
+  if(!STATE.filesLoaded.fin23 && !STATE.filesLoaded.rev && !fpReady){
+    setNotUploaded('#rmperf-summary','fin23');
+    $('#rmperf-detail').innerHTML = '';
+    $('#rmperf-kpis').innerHTML = '';
+    $('#rmperf-funnel').innerHTML = '';
+    return;
+  }
+
+  const {kpi, summary, detail, grand} = rmPerformance();
+
+  // KPI strip
+  const kpiCards = [
+    {label:'Total Leads', value:fmtIN(kpi.totalLeads), tone:'blue'},
+    {label:'Converted', value:fmtIN(kpi.converted), tone:'green'},
+    {label:'In Process', value:fmtIN(kpi.inProcess), tone:'cyan'},
+    {label:'Follow Up', value:fmtIN(kpi.followUp), tone:'amber'},
+    {label:'On Hold', value:fmtIN(kpi.onHold), tone:'orange'},
+    {label:'Dead', value:fmtIN(kpi.dead), tone:'red'},
+  ];
+  $('#rmperf-kpis').innerHTML = kpiCards.map(c=>`
+    <div class="kpi kpi-${c.tone}"><div class="kpi-value">${c.value}</div><div class="kpi-label">${c.label}</div></div>`).join('');
+
+  renderRMPerfFunnel(grand);
+
+  // Summary table (team level)
+  const sHeaders = ['Team','Total Leads','Quality Leads','Financial Plans Made','Revenue >15K Clients','Transactional Clients','Total Revenue (₹)'];
+  const sRows = summary.map(r => ({
+    Team: r.team,
+    'Total Leads': fmtIN(r.leads),
+    'Quality Leads': fmtIN(r.quality),
+    'Financial Plans Made': fmtIN(r.fp),
+    'Revenue >15K Clients': fmtIN(r.rev15k),
+    'Transactional Clients': fmtIN(r.trans),
+    'Total Revenue (₹)': fmtINR(r.revenue),
+  }));
+  sRows.push({
+    Team:'TOTAL',
+    'Total Leads': fmtIN(grand.leads),
+    'Quality Leads': fmtIN(grand.quality),
+    'Financial Plans Made': fmtIN(grand.fp),
+    'Revenue >15K Clients': fmtIN(grand.rev15k),
+    'Transactional Clients': fmtIN(grand.trans),
+    'Total Revenue (₹)': fmtINR(grand.revenue),
+    _tot:true,
+  });
+  renderTable('#rmperf-summary', sHeaders, sRows);
+
+  // Detail table (team × RM) with team subtotals
+  const dHeaders = ['Team','RM Name','Total Leads','Quality Leads','Financial Plans Made','Revenue >15K Clients','Transactional Clients','Total Revenue (₹)'];
+  const dRows = [];
+  const byTeam = {};
+  detail.forEach(r => (byTeam[r.team] = byTeam[r.team]||[]).push(r));
+  for(const team of FIXED_TEAMS){
+    const rms = byTeam[team] || [];
+    if(!rms.length) continue;
+    let t={leads:0,quality:0,fp:0,rev15k:0,trans:0,revenue:0};
+    rms.forEach(r => {
+      dRows.push({
+        Team: r.team, 'RM Name': r.rm,
+        'Total Leads': fmtIN(r.leads), 'Quality Leads': fmtIN(r.quality),
+        'Financial Plans Made': fmtIN(r.fp), 'Revenue >15K Clients': fmtIN(r.rev15k),
+        'Transactional Clients': fmtIN(r.trans), 'Total Revenue (₹)': fmtINR(r.revenue),
+      });
+      t.leads+=r.leads; t.quality+=r.quality; t.fp+=r.fp; t.rev15k+=r.rev15k; t.trans+=r.trans; t.revenue+=r.revenue;
+    });
+    dRows.push({
+      Team: team+' Total', 'RM Name':'',
+      'Total Leads': fmtIN(t.leads), 'Quality Leads': fmtIN(t.quality),
+      'Financial Plans Made': fmtIN(t.fp), 'Revenue >15K Clients': fmtIN(t.rev15k),
+      'Transactional Clients': fmtIN(t.trans), 'Total Revenue (₹)': fmtINR(t.revenue),
+      _tot:true,
+    });
+  }
+  renderTable('#rmperf-detail', dHeaders, dRows);
+}
+
+async function handleRMPerfUpload(kind, file){
+  if(!file) return;
+  try{
+    const wb = await readWb(file);
+    const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], {defval:'', raw:true});
+    if(kind==='fy'){
+      STATE.fy = buildFYData(rows);
+      STATE.filesLoaded.fy = true;
+    } else {
+      STATE.pa = buildPAData(rows);
+      STATE.filesLoaded.pa = true;
+    }
+    detectMonths();
+    initFilters();
+    renderRMPerformance();
+  }catch(e){
+    console.error(e); alert('Failed to load file: ' + e.message);
+  }
 }
 
 function mtdPerformance(){
@@ -1702,6 +2015,7 @@ function renderDashboard(){
 
 function renderAll(){
   renderDashboard();
+  renderRMPerformance();
   renderMTD();
   renderCPC();
   renderProcessed();
@@ -1720,6 +2034,9 @@ function buildExportData(){
     raw: STATE.raw,
     b2bRaw: STATE.b2bRaw,
     revenue: STATE.rev,
+    fy: STATE.fy,
+    pa: STATE.pa,
+    rmMaster: STATE.rmMaster,
     months: STATE.months,
     teamMap: STATE.empref,
     costPerCampaign: STATE.cost,
@@ -1732,6 +2049,8 @@ function buildExportData(){
       revLPMode: STATE.revLPFilter,
       revTeam: STATE.revTeam,
       revMonth: STATE.revMonth,
+      rmPerfMonth: STATE.rmPerfMonth,
+      rmPerfRefCold: STATE.rmPerfRefCold,
     }
   };
 }
@@ -1786,12 +2105,18 @@ async function applyPreloadedState(data){
   STATE.b2bRaw   = data.b2bRaw || [];
   STATE.b2b      = buildB2BData(STATE.b2bRaw);
   STATE.rev      = data.revenue || [];
+  STATE.fy       = data.fy || [];
+  STATE.pa       = data.pa || [];
   STATE.empref   = data.teamMap || STATE.empref;
   STATE.cost     = data.costPerCampaign || STATE.cost;
+  if(data.rmMaster && data.rmMaster.length){ STATE.rmMaster = data.rmMaster; }
+  buildRMMasterLookup();
   STATE.filesLoaded = data.filesLoaded || {
     fin23: STATE.raw.length > 0,
     rev:   STATE.rev.length > 0,
     b2b:   STATE.b2bRaw.length > 0,
+    fy:    STATE.fy.length > 0,
+    pa:    STATE.pa.length > 0,
   };
   if(data.filters){
     if(data.filters.currentMonth)  STATE.filterMonth       = data.filters.currentMonth;
@@ -1801,6 +2126,8 @@ async function applyPreloadedState(data){
     if(data.filters.revLPMode)     STATE.revLPFilter       = data.filters.revLPMode;
     if(data.filters.revTeam)       STATE.revTeam           = data.filters.revTeam;
     if(data.filters.revMonth)      STATE.revMonth          = data.filters.revMonth;
+    if(data.filters.rmPerfMonth)   STATE.rmPerfMonth       = data.filters.rmPerfMonth;
+    if(data.filters.rmPerfRefCold) STATE.rmPerfRefCold     = data.filters.rmPerfRefCold;
   }
   rebuildTeamMap();
   detectMonths();
@@ -1837,6 +2164,7 @@ async function tryAutoLoad(){
       const data = await res.json();
       loadEmployeeFromStorage();
       loadCostFromStorage();
+      loadRMMasterFromStorage();
       await applyPreloadedState(data);
       return true;
     } catch(e){
@@ -1848,6 +2176,7 @@ async function tryAutoLoad(){
     try{
       loadEmployeeFromStorage();
       loadCostFromStorage();
+      loadRMMasterFromStorage();
       await applyPreloadedState(window.__PRELOADED_STATE__);
       return true;
     } catch(e){
@@ -1905,6 +2234,11 @@ function bindUI(){
   $('#rev-team-filter').onchange = e => { STATE.revTeam = e.target.value; renderRMRev(); };
   $('#rev-month-filter').onchange = e => { STATE.revMonth = e.target.value; renderRMRev(); };
 
+  $('#rmperf-month').onchange = e => { STATE.rmPerfMonth = e.target.value; renderRMPerformance(); };
+  $('#rmperf-refcold').onchange = e => { STATE.rmPerfRefCold = e.target.value; renderRMPerformance(); };
+  $('#rmperf-fy-file').onchange = e => handleRMPerfUpload('fy', e.target.files[0]);
+  $('#rmperf-pa-file').onchange = e => handleRMPerfUpload('pa', e.target.files[0]);
+
   $('#raw-search').oninput = renderRawData;
   $('#raw-clear-filters').onclick = () => { STATE.rawFilters = {}; renderRawData(); };
 
@@ -1931,6 +2265,7 @@ function bindUI(){
     const snap = Object.assign({}, window.SNAPSHOT, {
       EMPLOYEE_REF: STATE.empref,
       'Cost Per Campaign': STATE.cost,
+      'RM Master Mapping': STATE.rmMaster,
     });
     const content = 'window.SNAPSHOT = ' + JSON.stringify(snap) + ';';
     const blob = new Blob([content], {type: 'text/javascript'});
