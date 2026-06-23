@@ -1757,7 +1757,10 @@ async function downloadAsWebpage(){
       fetch('snapshot.js').then(r => r.text()),
     ]);
 
-    const stateJson = JSON.stringify(buildExportData());
+    // Escape </script> inside JSON so it doesn't break the HTML script tag
+    const stateJson = JSON.stringify(buildExportData())
+      .replace(/<\/script>/gi, '<\\/script>')
+      .replace(/<!--/g, '<\\!--');
     const preloadTag = `<script>window.__PRELOADED_STATE__=${stateJson};<\/script>`;
 
     let out = htmlText;
@@ -1842,10 +1845,15 @@ async function tryAutoLoad(){
     }
   }
   if(window.__PRELOADED_STATE__){
-    loadEmployeeFromStorage();
-    loadCostFromStorage();
-    await applyPreloadedState(window.__PRELOADED_STATE__);
-    return true;
+    try{
+      loadEmployeeFromStorage();
+      loadCostFromStorage();
+      await applyPreloadedState(window.__PRELOADED_STATE__);
+      return true;
+    } catch(e){
+      console.error('Failed to apply preloaded state:', e);
+      return false;
+    }
   }
   return false;
 }
