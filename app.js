@@ -8,6 +8,7 @@ const MONTHS_3 = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','N
 const STATUSES = ['CONVERTED','IN PROCESS','ASSIGNED','RE-ASSIGNED','FOLLOW UP','ON HOLD','DEAD'];
 const FIXED_TEAMS = ['Akanksha','Ankit S','Anmol G','Ratan P','Ravi S','Vidhi','Vivek S','Yash T','SV','Ambika S'];
 const RAW_COLUMNS = ['currentRmName','Team','clientName','landingPage','platformName','Campaign Name','userId','createdDate','CTM','lastStatusDate','LSM','leadInProcessDate','LPM','leadHead','leadStatus','convertedDate','CM','firstRmName','convertedByName','annualIncome','clientCategory','FMONTH'];
+const B2B_RAW_COLUMNS = ['name','email','phone','companyName','companyEmail','leadHead','currentRmName','firstRmName','createdDate','CreateMonth','brokerName','brokerEmail','leadStatus','platformName','categoryName','landingPage','enquiryType'];
 
 const $  = sel => document.querySelector(sel);
 const $$ = sel => Array.from(document.querySelectorAll(sel));
@@ -76,6 +77,8 @@ function dashboardStatusMonthCol(status){
 const STATE = {
   raw: [],
   b2b: [],
+  b2bRaw: [],
+  b2bFilters: {},
   rev: [],
   months: [],
   empref: [],
@@ -87,8 +90,10 @@ const STATE = {
   filterTable: 'All',
   mtdStart: 1,
   mtdEnd: 11,
+  mtdFilterRefCold: 'Include',
   revTeam: 'All',
   revMonth: 'All',
+  revLPFilter: 'Include',
   revChart: null,
   statusChart: null,
   rawFilters: {},
@@ -229,6 +234,9 @@ function detectMonths(){
   for(const r of STATE.raw){
     if(r.FMONTH && r.FMONTH!=='N/A') set.add(r.FMONTH);
   }
+  for(const r of STATE.b2bRaw){
+    if(r.CreateMonth) set.add(r.CreateMonth);
+  }
   STATE.months = sortMonths(Array.from(set));
 }
 
@@ -254,15 +262,40 @@ function parseRevenueInput(wb){
   return data;
 }
 
-function buildB2BData(rows){
-  return rows.map(r => ({
-    name: (r.name||r.Name||'').toString().trim(),
-    companyName: (r.companyName||r.CompanyName||'').toString().trim(),
-    currentRmName: (r.currentRmName||r.CurrentRmName||r.RM||'').toString().trim(),
-    CreateMonth: normalizeMonthLabel(r.CreateMonth||r.createMonth) || toMmmYyyy(r.createdDate||r.CreatedDate),
-    status: (r.lea||r.status||r.Status||r.leadStatus||'').toString().trim().toUpperCase(),
-    enquiryType: (r.enquiryType||'').toString().trim(),
-    platformName: (r.platformName||'').toString().trim(),
+function buildB2BRaw(rows){
+  return rows.map(r => {
+    const cd = (r.createdDate||r.CreatedDate||'').toString().trim();
+    const cm = normalizeMonthLabel(r.CreateMonth||r.createMonth) || toMmmYyyy(cd);
+    return {
+      name:         (r.name||r.Name||'').toString().trim(),
+      email:        (r.email||'').toString().trim(),
+      phone:        (r.phone||'').toString().trim(),
+      companyName:  (r.companyName||r.CompanyName||'').toString().trim(),
+      companyEmail: (r.companyEmail||'').toString().trim(),
+      leadHead:     (r.leadHead||'').toString().trim(),
+      currentRmName:(r.currentRmName||r.CurrentRmName||'').toString().trim(),
+      firstRmName:  (r.firstRmName||r.FirstRmName||'').toString().trim(),
+      createdDate:  cd,
+      CreateMonth:  cm,
+      brokerName:   (r.brokerName||'').toString().trim(),
+      brokerEmail:  (r.brokerEmail||'').toString().trim(),
+      leadStatus:   (r.lea||r.leadStatus||r.status||r.Status||'').toString().trim().toUpperCase(),
+      platformName: (r.platformName||'').toString().trim(),
+      categoryName: (r.categoryName||'').toString().trim(),
+      landingPage:  (r.landingPage||'').toString().trim(),
+      enquiryType:  (r.enquiryType||'').toString().trim(),
+    };
+  });
+}
+function buildB2BData(rawRows){
+  return rawRows.map(r => ({
+    name:          r.name,
+    companyName:   r.companyName,
+    currentRmName: r.currentRmName,
+    CreateMonth:   r.CreateMonth,
+    status:        r.leadStatus,
+    enquiryType:   r.enquiryType,
+    platformName:  r.platformName,
   }));
 }
 
@@ -305,10 +338,14 @@ async function handleLoad(){
     if(b2bFile){
       const b2bWb = await readWb(b2bFile);
       const b2bRows = XLSX.utils.sheet_to_json(b2bWb.Sheets[b2bWb.SheetNames[0]], {defval:'', raw:true});
-      STATE.b2b = buildB2BData(b2bRows);
+      STATE.b2bRaw = buildB2BRaw(b2bRows);
+      STATE.b2b = buildB2BData(STATE.b2bRaw);
+      STATE.b2bFilters = {};
       STATE.filesLoaded.b2b = true;
     } else {
+      STATE.b2bRaw = [];
       STATE.b2b = [];
+      STATE.b2bFilters = {};
     }
 
     detectMonths();
@@ -359,6 +396,7 @@ function tabBar(){
     {id:'cpc',       label:'Cost Per Campaign'},
     {id:'processed', label:'PROCESSED'},
     {id:'rawdata',   label:'RAW_DATA'},
+    {id:'b2braw',    label:'B2B RAW_DATA'},
     {id:'employee',  label:'EMPLOYEE_REF'},
     {id:'missing',   label:'MISSING_LEADS'},
   ];
@@ -375,6 +413,8 @@ function tabBar(){
 function activateTab(id){
   $$('.tab').forEach(b => b.classList.toggle('active', b.dataset.tab===id));
   $$('.tab-panel').forEach(p => p.classList.toggle('active', p.id==='tab-'+id));
+  const hf = $('#header-dash-filters');
+  if(hf) hf.style.display = id==='dashboard' ? '' : 'none';
   if(id==='rmrev') drawRevChart();
   requestAnimationFrame(() => {
     const panel = $('#tab-'+id);
@@ -413,11 +453,8 @@ function liveDataKPIs(){
     ? rows.filter(r=>r.leadStatus==='ASSIGNED').length
     : rows.filter(r=>r.leadStatus==='ASSIGNED' && r.CTM===month).length;
 
-  let anyConv = null, anyIP = null, sameConv, sameIP;
-  if(month==='All'){
-    sameConv = rows.length;
-    sameIP = rows.filter(r=>r.leadStatus==='IN PROCESS').length;
-  } else {
+  let anyConv = null, anyIP = null, sameConv = null, sameIP = null;
+  if(month!=='All'){
     anyConv = rows.filter(r =>
       r.leadStatus==='CONVERTED' && r.CM===month && monthKey(r.CTM) < monthKey(month)
     ).length;
@@ -773,7 +810,7 @@ function renderB2BTable(){
 }
 
 function mtdPerformance(){
-  const refMode = STATE.filterRefCold;
+  const refMode = STATE.mtdFilterRefCold;
   const ALL_BUCKETS = ['Branding','Social Media','Google','Corporate','Referral','Cold Data'];
   const CORE_BUCKETS = ['Branding','Social Media','Google','Corporate'];
   const buckets = refMode === 'Only Referral' ? ['Referral']
@@ -858,6 +895,18 @@ function revenueAggregated(){
   let rows = STATE.rev;
   if(STATE.revMonth !== 'All'){
     rows = rows.filter(r => String(r['OLD CHECK']||r['Old Check']||r['old check']||'') === STATE.revMonth);
+  }
+  const lpMode = STATE.revLPFilter;
+  if(lpMode === 'Exclude'){
+    rows = rows.filter(r => {
+      const lp = (r.LP||r.lp||r['Campaign Category']||'').toString().trim();
+      return lp !== 'Referral' && lp !== 'Cold Data';
+    });
+  } else if(lpMode === 'Only Referral'){
+    rows = rows.filter(r => {
+      const lp = (r.LP||r.lp||r['Campaign Category']||'').toString().trim();
+      return lp === 'Referral';
+    });
   }
   const map = {};
   for(const r of rows){
@@ -987,8 +1036,8 @@ function renderLiveKPIs(){
     {label:'Assigned', value: fmtIN(k.assigned), tone:'blue'},
     {label:'AnyMonth Converted', value: k.anyConv!==null ? fmtIN(k.anyConv) : '—', tone:'green'},
     {label:'AnyMonth InProcess', value: k.anyIP!==null ? fmtIN(k.anyIP) : '—', tone:'cyan'},
-    {label:'Same Month Converted', value: fmtIN(k.sameConv), tone:'green'},
-    {label:'Same Month InProcess', value: fmtIN(k.sameIP), tone:'cyan'},
+    {label:'Same Month Converted', value: k.sameConv!==null ? fmtIN(k.sameConv) : '—', tone:'green'},
+    {label:'Same Month InProcess', value: k.sameIP!==null ? fmtIN(k.sameIP) : '—', tone:'cyan'},
     {label:'B2B Corp Leads', value: fmtIN(b2bKPI()), tone:'violet'},
   ];
   const el = $('#live-kpis');
@@ -1406,6 +1455,104 @@ function bindRawFilterButtons(){
   });
 }
 
+// ---- B2B raw data filter ----
+function b2bCellValue(row, col){ return String(row[col] ?? ''); }
+function b2bHasFilter(col){ return Object.prototype.hasOwnProperty.call(STATE.b2bFilters, col); }
+function b2bFilterDisplay(col){
+  if(!b2bHasFilter(col)) return '';
+  const vals = STATE.b2bFilters[col] || [];
+  if(!vals.length) return 'None';
+  const d = vals.map(v => v===''?'(blank)':v);
+  return d.length <= 2 ? d.join(', ') : d.length+' selected';
+}
+function b2bFilteredRows(opts={}){
+  const excl = opts.excludeCol||'';
+  const q = ($('#b2b-search')||{value:''}).value.toLowerCase();
+  return STATE.b2bRaw.filter(row => {
+    if(q && !B2B_RAW_COLUMNS.some(c => b2bCellValue(row,c).toLowerCase().includes(q))) return false;
+    for(const [col, vals] of Object.entries(STATE.b2bFilters)){
+      if(col===excl || !Array.isArray(vals)) continue;
+      if(!vals.includes(b2bCellValue(row,col))) return false;
+    }
+    return true;
+  });
+}
+function b2bFilterValues(col){
+  const set = new Set(b2bFilteredRows({excludeCol:col}).map(r => b2bCellValue(r,col)));
+  return Array.from(set).sort((a,b)=>{
+    if(a===''&&b!=='') return -1; if(a!==''&&b==='') return 1;
+    return a.localeCompare(b,undefined,{numeric:true,sensitivity:'base'});
+  });
+}
+function handleB2BFilterOutside(e){
+  const m=$('#b2b-filter-menu');
+  if(m && !m.contains(e.target) && !e.target.classList.contains('b2b-filter-btn')) closeB2BFilterMenu();
+}
+function closeB2BFilterMenu(){
+  const m=$('#b2b-filter-menu'); if(m) m.remove();
+  document.removeEventListener('click',handleB2BFilterOutside,true);
+  window.removeEventListener('resize',closeB2BFilterMenu);
+}
+function openB2BFilterMenu(col, anchor){
+  closeB2BFilterMenu();
+  const values = b2bFilterValues(col);
+  const active = b2bHasFilter(col);
+  const selected = new Set(active ? (STATE.b2bFilters[col]||[]).map(String) : values);
+  const menu = document.createElement('div');
+  menu.id = 'b2b-filter-menu'; menu.className = 'raw-filter-menu';
+  menu.innerHTML = `
+    <div class="raw-filter-title">${escHtml(col)}</div>
+    <input type="text" class="raw-filter-search" placeholder="Search values">
+    <div class="raw-filter-actions">
+      <button type="button" class="secondary" data-action="all">All</button>
+      <button type="button" class="secondary" data-action="none">None</button>
+    </div>
+    <div class="raw-filter-options">
+      ${values.map((v,i)=>`<label class="raw-filter-option"><input type="checkbox" data-idx="${i}" ${selected.has(v)?'checked':''}><span title="${escHtml(v||'(blank)')}">${escHtml(v||'(blank)')}</span></label>`).join('')||'<div class="raw-filter-empty">No values</div>'}
+    </div>
+    <div class="raw-filter-footer">
+      <button type="button" class="secondary" data-action="reset">Reset</button>
+      <button type="button" data-action="apply">Apply</button>
+    </div>`;
+  document.body.appendChild(menu);
+  const rect = anchor.getBoundingClientRect(), w=280;
+  menu.style.cssText = `width:${w}px;left:${Math.max(8,Math.min(rect.left,window.innerWidth-w-8))}px;top:${Math.max(8,Math.min(rect.bottom+6,window.innerHeight-menu.offsetHeight-8))}px`;
+  menu.addEventListener('click', e=>e.stopPropagation());
+  menu.querySelector('[data-action="all"]').onclick  = ()=>menu.querySelectorAll('input[type=checkbox]').forEach(i=>i.checked=true);
+  menu.querySelector('[data-action="none"]').onclick = ()=>menu.querySelectorAll('input[type=checkbox]').forEach(i=>i.checked=false);
+  menu.querySelector('[data-action="reset"]').onclick = ()=>{ delete STATE.b2bFilters[col]; closeB2BFilterMenu(); renderB2BRawData(); };
+  menu.querySelector('[data-action="apply"]').onclick = ()=>{
+    const checked = Array.from(menu.querySelectorAll('input[type=checkbox]:checked')).map(i=>values[+i.dataset.idx]);
+    if(checked.length===values.length) delete STATE.b2bFilters[col]; else STATE.b2bFilters[col]=checked;
+    closeB2BFilterMenu(); renderB2BRawData();
+  };
+  const srch=menu.querySelector('.raw-filter-search'), opts2=Array.from(menu.querySelectorAll('.raw-filter-option'));
+  srch.oninput=()=>{ const q=srch.value.toLowerCase(); opts2.forEach(o=>{ o.style.display=o.textContent.toLowerCase().includes(q)?'flex':'none'; }); };
+  srch.focus();
+  setTimeout(()=>document.addEventListener('click',handleB2BFilterOutside,true),0);
+  window.addEventListener('resize',closeB2BFilterMenu);
+}
+function bindB2BFilterButtons(){
+  $$('.b2b-filter-btn').forEach(btn => {
+    btn.onclick = e => { e.stopPropagation(); openB2BFilterMenu(btn.dataset.col, btn); };
+  });
+}
+function renderB2BRawData(){
+  if(!STATE.filesLoaded.b2b){ $('#b2b-raw-meta').textContent=''; setNotUploaded('#b2b-raw-table-wrap','b2b'); return; }
+  closeB2BFilterMenu();
+  const rows = b2bFilteredRows(), limit=500, slice=rows.slice(0,limit);
+  const head = '<thead><tr>'+B2B_RAW_COLUMNS.map(col => {
+    const active=b2bHasFilter(col), sel=b2bFilterDisplay(col);
+    return `<th><div class="raw-filter-head"><span>${escHtml(col)}</span><button type="button" class="b2b-filter-btn ${active?'active':''}" data-col="${escHtml(col)}" title="Filter ${escHtml(col)}">v</button></div>${sel?`<div class="raw-filter-selected" title="${escHtml(sel)}">${escHtml(sel)}</div>`:''}</th>`;
+  }).join('')+'</tr></thead>';
+  const body = '<tbody>'+slice.map(r=>'<tr>'+B2B_RAW_COLUMNS.map(col=>`<td>${escHtml(b2bCellValue(r,col))}</td>`).join('')+'</tr>').join('')+'</tbody>';
+  const af = Object.keys(STATE.b2bFilters).length;
+  $('#b2b-raw-meta').textContent = `Showing ${slice.length.toLocaleString()} of ${rows.length.toLocaleString()} rows (total ${STATE.b2bRaw.length.toLocaleString()})${af?` | Filters: ${af}`:''}`;
+  $('#b2b-raw-table-wrap').innerHTML = '<table class="data compact raw-data-table">'+head+body+'</table>';
+  bindB2BFilterButtons();
+  requestAnimationFrame(attachAllMirrors);
+}
+
 function renderRawData(){
   if(!STATE.filesLoaded.fin23){ $('#raw-meta').textContent=''; setNotUploaded('#raw-table-wrap','fin23'); return; }
   closeRawFilterMenu();
@@ -1521,6 +1668,7 @@ function renderAll(){
   renderCPC();
   renderProcessed();
   renderRawData();
+  renderB2BRawData();
   renderEmployee();
   renderMissing();
   renderRMRev();
@@ -1573,20 +1721,23 @@ function bindUI(){
   $('#json-filename').onkeypress = e => { if(e.key==='Enter') downloadAsJSON(); };
 
   $('#filter-month').onchange = e => { STATE.filterMonth = e.target.value; renderDashboard(); };
-  $('#filter-refcold').onchange = e => { STATE.filterRefCold = e.target.value; renderDashboard(); renderMTD(); };
+  $('#filter-refcold').onchange = e => { STATE.filterRefCold = e.target.value; renderDashboard(); };
   $('#filter-table').onchange = e => { STATE.filterTable = e.target.value; renderPlatformStatus(); };
 
   $('#mtd-start').onchange = e => { STATE.mtdStart = +e.target.value||1; renderMTD(); };
   $('#mtd-end').onchange = e => { STATE.mtdEnd = +e.target.value||30; renderMTD(); };
+  $('#mtd-refcold').onchange = e => { STATE.mtdFilterRefCold = e.target.value; renderMTD(); };
+
+  $('#rev-lp-filter').onchange = e => { STATE.revLPFilter = e.target.value; renderRMRev(); };
 
   $('#rev-team-filter').onchange = e => { STATE.revTeam = e.target.value; renderRMRev(); };
   $('#rev-month-filter').onchange = e => { STATE.revMonth = e.target.value; renderRMRev(); };
 
   $('#raw-search').oninput = renderRawData;
-  $('#raw-clear-filters').onclick = () => {
-    STATE.rawFilters = {};
-    renderRawData();
-  };
+  $('#raw-clear-filters').onclick = () => { STATE.rawFilters = {}; renderRawData(); };
+
+  $('#b2b-search').oninput = renderB2BRawData;
+  $('#b2b-clear-filters').onclick = () => { STATE.b2bFilters = {}; renderB2BRawData(); };
 
   $('#reset-cpc').onclick = () => {
     try{ localStorage.removeItem('cpc_override'); }catch(e){}
