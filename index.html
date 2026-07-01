@@ -1,0 +1,927 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Marketing MIS Dashboard</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+/* ============================================================
+   2D SHARP FLAT DESIGN — Orange primary, multicolour accents
+   No gradients. No shadows. Sharp corners.
+   ============================================================ */
+:root{
+  --bg:      #f1f5f9;
+  --panel:   #ffffff;
+  --panel2:  #f8fafc;
+  --line:    #cbd5e1;
+  --text:    #0f172a;
+  --muted:   #64748b;
+  /* accent palette */
+  --orange:  #f97316;
+  --red:     #ef4444;
+  --yellow:  #eab308;
+  --pink:    #ec4899;
+  --blue:    #3b82f6;
+  --green:   #22c55e;
+  --violet:  #8b5cf6;
+  --cyan:    #06b6d4;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{background:var(--bg);color:var(--text);font:14px/1.5 system-ui,'Segoe UI',Inter,sans-serif}
+
+/* ---------- BUTTONS ---------- */
+button{
+  background:var(--orange);color:#fff;border:2px solid var(--orange);
+  border-radius:0;padding:7px 16px;font:600 13px/1 inherit;cursor:pointer;
+  transition:background .12s,color .12s;
+}
+button:hover{background:#ea580c;border-color:#ea580c}
+button:disabled{opacity:.4;cursor:default}
+button.secondary{background:#fff;color:var(--orange);border-color:var(--orange)}
+button.secondary:hover{background:#fff7ed}
+button.btn-green{background:var(--green);border-color:var(--green)}
+button.btn-green:hover{background:#16a34a;border-color:#16a34a}
+button.btn-blue{background:var(--blue);border-color:var(--blue)}
+button.btn-blue:hover{background:#2563eb;border-color:#2563eb}
+button.btn-red{background:var(--red);border-color:var(--red)}
+
+/* ---------- INPUTS ---------- */
+input[type=file]{padding:8px;background:#fff;color:var(--text);border:2px solid var(--line);width:100%;font:inherit}
+input[type=text],input[type=number],select{
+  background:#fff;color:var(--text);
+  border:2px solid var(--line);
+  padding:6px 10px;font:inherit;
+}
+input[type=text]:focus,input[type=number]:focus,select:focus{
+  outline:none;border-color:var(--orange);
+}
+select{min-width:120px}
+
+/* ============ UPLOAD SCREEN ============ */
+#upload-screen{
+  position:fixed;inset:0;display:none;align-items:center;justify-content:center;
+  background:#e2e8f0;
+}
+.upload-card{
+  background:#fff;border:3px solid var(--orange);
+  padding:32px 36px;max-width:600px;width:92%;
+}
+.upload-logo{
+  font-size:28px;font-weight:900;letter-spacing:-1px;
+  color:var(--orange);margin-bottom:4px;
+}
+.upload-logo span{color:var(--blue)}
+.upload-sub{color:var(--muted);margin-bottom:20px;font-size:13px}
+.upload-row{margin-bottom:14px}
+.upload-row label{
+  display:block;margin-bottom:5px;font-size:11px;font-weight:700;
+  color:var(--text);text-transform:uppercase;letter-spacing:.5px;
+}
+.upload-divider{height:2px;background:var(--line);margin:18px 0}
+
+/* ============ APP SHELL ============ */
+#app{display:none}
+header.app{
+  position:sticky;top:0;z-index:20;
+  background:#fff;border-bottom:3px solid var(--orange);
+  padding:10px 20px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;
+}
+.header-logo{height:40px;width:auto;flex-shrink:0;object-fit:contain}
+.header-brand-wrap{display:flex;flex-direction:column;justify-content:center;margin-left:4px}
+header.app .brand{font-size:18px;font-weight:900;color:var(--orange);letter-spacing:-.5px}
+header.app .brand em{color:var(--blue);font-style:normal}
+header.app .subtitle{color:var(--muted);font-size:11px;margin-top:1px}
+header.app .spacer{flex:1}
+.filters{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.filters label{font-size:11px;font-weight:700;color:var(--text);text-transform:uppercase;letter-spacing:.3px;white-space:nowrap}
+/* dashboard month/refcold group — keep label + dropdown on one horizontal line */
+#header-dash-filters{display:flex;align-items:center;gap:6px;flex-wrap:nowrap;margin-right:6px}
+#header-dash-filters > div{display:inline-flex}
+#header-dash-filters label{margin-left:4px}
+#header-dash-filters label:first-child{margin-left:0}
+/* header action buttons — consistent height & spacing */
+.filters button{height:34px;display:inline-flex;align-items:center;white-space:nowrap}
+
+/* ============ TABS ============ */
+#tabs{
+  display:flex;background:#fff;border-bottom:2px solid var(--line);
+  overflow-x:auto;flex-wrap:nowrap;
+  scrollbar-width:thin;scrollbar-color:var(--orange) #e2e8f0;
+}
+#tabs::-webkit-scrollbar{height:4px}
+#tabs::-webkit-scrollbar-thumb{background:var(--orange)}
+.tab{
+  flex:none;background:transparent;color:var(--muted);
+  border:0;border-bottom:3px solid transparent;margin-bottom:-2px;
+  padding:12px 18px;font:600 13px/1 inherit;cursor:pointer;
+  transition:color .1s,border-color .1s,background .1s;
+}
+.tab:hover{color:var(--orange);background:#fff7ed}
+.tab.active{color:var(--orange);border-bottom-color:var(--orange);background:#fff7ed}
+.tab.primary{color:#1e40af}
+.tab.primary.active{color:var(--blue);border-bottom-color:var(--blue);background:#eff6ff}
+
+/* ============ PANELS ============ */
+.tab-panel{display:none;padding:20px;max-width:1600px;margin:0 auto}
+.tab-panel.active{display:block}
+
+/* ============ SECTIONS ============ */
+.section{
+  background:#fff;border:2px solid var(--line);
+  padding:16px 18px;margin-bottom:16px;
+  border-top:4px solid var(--orange);
+}
+.section.bar-green{border-top-color:var(--green)}
+.section.bar-blue{border-top-color:var(--blue)}
+.section.bar-pink{border-top-color:var(--pink)}
+.section.bar-red{border-top-color:var(--red)}
+.section.bar-yellow{border-top-color:var(--yellow)}
+.section.bar-violet{border-top-color:var(--violet)}
+.section.bar-cyan{border-top-color:var(--cyan)}
+
+.section h2{
+  font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.6px;
+  color:var(--text);margin-bottom:12px;
+}
+.section .hint{color:var(--muted);font-size:12px;margin-top:8px}
+.info-btn{
+  display:inline-flex;align-items:center;justify-content:center;
+  width:20px;height:20px;border-radius:50%;border:1.5px solid var(--muted);
+  background:transparent;color:var(--muted);font-size:12px;font-weight:700;
+  cursor:pointer;vertical-align:middle;margin-left:6px;padding:0;
+  font-family:serif;font-style:italic;line-height:1;
+}
+.info-btn:hover{background:var(--muted);color:#fff}
+.info-popup{
+  position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);
+  z-index:9999;background:#ffffff;border:1px solid #d1d5db;
+  border-radius:10px;padding:20px 24px;max-width:520px;width:90%;
+  box-shadow:0 8px 32px rgba(0,0,0,.22);color:#111827;
+}
+.info-popup h3{margin:0 0 10px;font-size:15px;color:#e85d04}
+.info-popup p{margin:4px 0;font-size:13px;line-height:1.5;color:#1f2937}
+.info-popup .info-label{font-weight:600;color:#6b7280;font-size:11px;text-transform:uppercase;letter-spacing:.5px;margin-top:10px;display:block}
+.info-popup .close-info{
+  position:absolute;top:10px;right:14px;background:none;border:none;
+  font-size:18px;cursor:pointer;color:#6b7280;line-height:1;
+}
+.info-popup .close-info:hover{color:#111827}
+.info-overlay{position:fixed;inset:0;z-index:9998;background:rgba(0,0,0,.3)}
+.file-not-uploaded{
+  display:flex;align-items:flex-start;gap:12px;
+  padding:18px 20px;margin:8px 0;
+  background:#fff7ed;border:2px solid var(--orange);
+  color:#92400e;font-size:13px;line-height:1.6;
+}
+.file-not-uploaded .fnu-icon{font-size:20px;flex-shrink:0;margin-top:1px;}
+.file-not-uploaded strong{color:#7c2d12;display:block;margin-bottom:2px;}
+.tab-not-uploaded{padding:40px 24px;}
+.tab-not-uploaded .file-not-uploaded{max-width:520px;}
+
+/* ===== Heatmap row tints + legend ===== */
+tr.heat-high td{background:rgba(59,130,246,.16) !important}
+tr.heat-mid  td{background:rgba(147,197,253,.22) !important}
+tr.heat-low  td{background:rgba(252,165,165,.22) !important}
+tr.heat-vlow td{background:rgba(239,68,68,.16) !important}
+/* ---- custom multi-select ---- */
+.ms-wrap{position:relative;display:inline-block;min-width:110px}
+.ms-btn{display:flex;align-items:center;justify-content:space-between;gap:6px;padding:0 10px;height:34px;
+  border:1px solid var(--line);border-radius:6px;background:#fff;cursor:pointer;font-size:13px;
+  min-width:110px;color:var(--text);user-select:none}
+.ms-btn:hover{border-color:#94a3b8}
+.ms-btn .ms-arrow{font-size:10px;opacity:.5;margin-left:4px}
+.ms-dropdown{display:none;position:absolute;top:calc(100% + 4px);left:0;z-index:9999;
+  background:#fff;border:1px solid var(--line);border-radius:8px;box-shadow:0 6px 24px rgba(0,0,0,.12);
+  min-width:160px;max-height:260px;overflow-y:auto;padding:4px 0}
+.ms-wrap.open .ms-dropdown{display:block}
+.ms-opt{display:flex;align-items:center;gap:8px;padding:7px 12px;cursor:pointer;font-size:13px;
+  transition:background .1s}
+.ms-opt:hover{background:#f1f5f9}
+.ms-opt input[type=checkbox]{width:14px;height:14px;accent-color:var(--accent);cursor:pointer;flex-shrink:0}
+.ms-opt.ms-all{font-weight:600;border-bottom:1px solid var(--line);padding-bottom:8px;margin-bottom:2px}
+.ms-opt.ms-selected{background:#eff6ff}
+
+.heat-legend{
+  display:flex;flex-wrap:wrap;gap:14px;font-size:11px;color:var(--muted);
+  margin:4px 0 10px;padding:6px 8px;background:#f8fafc;border:1px solid var(--line);
+}
+.heat-legend .hl-item{display:inline-flex;align-items:center;gap:6px;font-weight:600}
+.heat-legend .hl-sw{display:inline-block;width:14px;height:10px;border:1px solid var(--line)}
+.hl-sw.hl-high{background:rgba(59,130,246,.65)}
+.hl-sw.hl-mid {background:rgba(147,197,253,.9)}
+.hl-sw.hl-low {background:rgba(252,165,165,.9)}
+.hl-sw.hl-vlow{background:rgba(239,68,68,.55)}
+
+/* ===== RM Performance in-tab uploads ===== */
+.rmperf-banner{display:flex;flex-wrap:wrap;gap:16px;align-items:center;margin-bottom:12px;font-size:12px}
+.rmperf-banner .rmperf-ok{color:var(--green);font-weight:600}
+.rmperf-banner .rmperf-miss{color:var(--red);font-weight:600}
+.rmperf-banner .rmperf-hint{color:var(--muted)}
+.rmperf-uploads{display:flex;flex-wrap:wrap;gap:20px}
+.rmperf-upload-row{display:flex;flex-direction:column;gap:6px}
+.rmperf-upload-row label{font-size:12px;font-weight:600;color:var(--text)}
+
+/* ===== Conversion Funnel ===== */
+.funnel{display:flex;flex-direction:column;align-items:center;gap:0;padding:8px 0;width:100%}
+.funnel-stage{display:flex;flex-direction:column;align-items:center;width:100%}
+.funnel-bar{
+  display:flex;align-items:center;justify-content:space-between;gap:14px;
+  height:48px;min-width:280px;max-width:100%;padding:0 22px;box-sizing:border-box;
+  color:#fff;transition:width .35s ease;
+}
+.funnel-bar .funnel-label{font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.3px;white-space:nowrap}
+.funnel-bar .funnel-value{font-size:20px;font-weight:900;letter-spacing:-.5px;white-space:nowrap}
+.funnel-conv{font-size:11px;color:var(--muted);margin:2px 0 4px;font-weight:600;text-align:center}
+.funnel-arrow{color:var(--muted);font-size:16px;line-height:1;text-align:center;width:100%;margin:2px 0}
+
+/* ============ GRID ============ */
+.grid{display:grid;gap:16px}
+.grid.cols-2{grid-template-columns:1fr 1fr}
+.grid.cols-3{grid-template-columns:1fr 1fr 1fr}
+@media(max-width:1100px){.grid.cols-2,.grid.cols-3{grid-template-columns:1fr}}
+
+/* ============ KPI CARDS ============ */
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:16px}
+.kpi{
+  background:#fff;border:2px solid var(--line);
+  padding:14px 16px;position:relative;
+  border-left:5px solid var(--orange);
+}
+.kpi-value{font-size:26px;font-weight:900;line-height:1;letter-spacing:-1px;color:var(--orange)}
+.kpi-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-top:5px}
+
+/* KPI colour tokens */
+.kpi-orange{border-left-color:var(--orange)}.kpi-orange .kpi-value{color:var(--orange)}
+.kpi-red   {border-left-color:var(--red)}   .kpi-red .kpi-value   {color:var(--red)}
+.kpi-yellow{border-left-color:var(--yellow)}.kpi-yellow .kpi-value{color:var(--yellow)}
+.kpi-pink  {border-left-color:var(--pink)}  .kpi-pink .kpi-value  {color:var(--pink)}
+.kpi-blue  {border-left-color:var(--blue)}  .kpi-blue .kpi-value  {color:var(--blue)}
+.kpi-green {border-left-color:var(--green)} .kpi-green .kpi-value {color:var(--green)}
+.kpi-violet{border-left-color:var(--violet)}.kpi-violet .kpi-value{color:var(--violet)}
+.kpi-cyan  {border-left-color:var(--cyan)}  .kpi-cyan .kpi-value  {color:var(--cyan)}
+.kpi-amber {border-left-color:#d97706}      .kpi-amber .kpi-value {color:#d97706}
+
+/* ============ LIVE DATA BAND ============ */
+#live-kpis{margin-bottom:16px}
+.live-band-header{
+  font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.6px;
+  color:var(--orange);border-left:4px solid var(--orange);
+  padding-left:8px;margin-bottom:8px;
+}
+.live-kpi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+
+/* ============ TABLE WRAPPER ============ */
+.table-wrap{overflow:auto;max-height:460px;border:2px solid var(--line)}
+.table-wrap::-webkit-scrollbar{width:7px;height:7px}
+.table-wrap::-webkit-scrollbar-track{background:var(--bg)}
+.table-wrap::-webkit-scrollbar-thumb{background:var(--orange)}
+.scroll-mirror{overflow-x:auto;overflow-y:hidden;height:10px;margin-bottom:1px;
+  scrollbar-width:thin;scrollbar-color:var(--orange) var(--bg)}
+.scroll-mirror::-webkit-scrollbar{height:7px}
+.scroll-mirror::-webkit-scrollbar-thumb{background:var(--orange)}
+.scroll-mirror-inner{height:1px}
+.mtd-block .table-wrap{max-height:280px}
+
+/* ============ TABLES ============ */
+table.data{border-collapse:collapse;width:100%;font-size:13px}
+table.data.compact{font-size:12px}
+table.data th,table.data td{
+  padding:7px 10px;border-bottom:1px solid var(--line);
+  text-align:right;white-space:nowrap;
+}
+table.data th:first-child,table.data td:first-child{
+  text-align:left;position:sticky;left:0;background:var(--panel2);z-index:1;
+}
+table.data thead th{
+  background:var(--text);color:#fff;
+  font:700 11px/1 inherit;text-transform:uppercase;letter-spacing:.4px;
+  position:sticky;top:0;z-index:2;border-bottom:2px solid var(--orange);
+}
+table.data thead th:first-child{background:var(--text)}
+table.data tbody tr:hover{background:#fff7ed}
+table.data tbody tr.grand td{
+  font-weight:800;background:#fff7ed;color:var(--orange);
+  border-top:2px solid var(--orange);border-bottom:2px solid var(--orange);
+}
+table.data.editable td input{width:100%;background:transparent;border:0;color:var(--text);text-align:right;padding:2px 4px}
+table.data.editable td input:focus{outline:2px solid var(--orange);background:#fff7ed}
+
+/* raw data filter */
+.raw-data-table{border-collapse:collapse}
+.raw-filter-head{display:flex;align-items:center;gap:4px;justify-content:flex-start}
+.raw-filter-btn{
+  background:transparent;border:1px solid var(--line);color:var(--muted);
+  padding:1px 5px;font-size:10px;cursor:pointer;line-height:1;min-width:20px;
+}
+.raw-filter-btn.active{background:var(--orange);border-color:var(--orange);color:#fff}
+.raw-filter-selected{font-size:10px;color:var(--orange);font-weight:700;margin-top:2px;max-width:120px;overflow:hidden;text-overflow:ellipsis}
+.raw-filter-menu{
+  position:fixed;background:#fff;border:2px solid var(--orange);z-index:200;
+  max-height:340px;display:flex;flex-direction:column;overflow:hidden;
+}
+.raw-filter-title{font:700 12px/1 inherit;padding:10px 12px;border-bottom:1px solid var(--line);color:var(--orange)}
+.raw-filter-search{border:0;border-bottom:2px solid var(--line);padding:7px 12px;font:inherit;outline:none}
+.raw-filter-search:focus{border-bottom-color:var(--orange)}
+.raw-filter-actions{display:flex;gap:0;border-bottom:1px solid var(--line)}
+.raw-filter-actions button{flex:1;border:0;border-right:1px solid var(--line);padding:6px;font-size:12px}
+.raw-filter-actions button:last-child{border-right:0}
+.raw-filter-options{overflow-y:auto;flex:1}
+.raw-filter-option{display:flex;align-items:center;gap:8px;padding:6px 12px;cursor:pointer;font-size:12px}
+.raw-filter-option:hover{background:#fff7ed}
+.raw-filter-option input{accent-color:var(--orange);cursor:pointer}
+.raw-filter-option span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.raw-filter-empty{padding:10px 12px;color:var(--muted);font-size:12px}
+.raw-filter-footer{display:flex;gap:0;border-top:1px solid var(--line)}
+.raw-filter-footer button{flex:1;border:0;border-right:1px solid var(--line);padding:8px;font-size:12px}
+.raw-filter-footer button:last-child{border-right:0}
+
+/* ============ CHART ============ */
+#rev-chart-wrap{background:#fff;border:2px solid var(--line);padding:16px;height:400px;margin-bottom:16px}
+
+/* ============ MTD ============ */
+.mtd-block{margin-bottom:16px}
+.mtd-block h3{font-size:13px;font-weight:800;color:var(--orange);text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px;border-left:4px solid var(--orange);padding-left:8px}
+
+/* ============ MISC ============ */
+.pill{display:inline-block;padding:2px 8px;border:1px solid var(--line);font-size:11px;font-weight:600;color:var(--muted)}
+.muted{color:var(--muted)}
+.meta{color:var(--muted);font-size:12px;margin-bottom:6px}
+.scroll-x{overflow-x:auto}
+
+/* ============ MODAL ============ */
+.modal{display:none;position:fixed;inset:0;background:rgba(15,23,42,.5);z-index:1000;align-items:center;justify-content:center}
+.modal.active{display:flex}
+.modal-content{background:#fff;border:3px solid var(--orange);padding:28px;max-width:420px;width:90%}
+.modal-content h3{font-size:16px;font-weight:800;color:var(--orange);margin-bottom:14px;text-transform:uppercase;letter-spacing:.4px}
+.modal-content input{width:100%;margin-bottom:12px}
+.modal-actions{display:flex;gap:8px;margin-top:18px}
+.modal-actions button{flex:1}
+
+/* ============ STATUS CHART ============ */
+#status-dist-chart-wrap{height:220px;background:#fff;border:2px solid var(--line);padding:12px;margin-bottom:16px}
+
+/* ============ PREMIUM TAB LOCK ============ */
+.premium-lock{display:none}
+.tab-panel.locked .premium-content{display:none}
+.tab-panel.locked .premium-lock{display:flex;align-items:center;justify-content:center;min-height:420px}
+.lock-box{background:#fff;border:3px solid var(--orange);padding:32px 36px;max-width:380px;width:92%;text-align:center}
+.lock-box .lock-icon{font-size:36px;margin-bottom:10px}
+.lock-box h3{font-size:16px;font-weight:800;color:var(--text);margin-bottom:6px;text-transform:none;letter-spacing:normal}
+.lock-box p{color:var(--muted);font-size:12px;margin-bottom:16px}
+.lock-box input[type=password]{width:100%;margin-bottom:10px;text-align:center;box-sizing:border-box}
+.lock-box button{width:100%}
+.lock-box .lock-error{color:var(--red);font-size:12px;margin-top:8px;min-height:16px;font-weight:600}
+.lock-box .lock-hint{color:var(--muted);font-size:11px;margin-top:14px;font-style:italic}
+</style>
+</head>
+<body>
+
+<!-- ============ UPLOAD ============ -->
+<div id="upload-screen">
+  <div class="upload-card">
+    <div class="upload-logo">Marketing <span>MIS</span></div>
+    <div class="upload-sub">All files are independent — upload any combination. Tabs without a file will show "not uploaded" instead of breaking.</div>
+    <div class="upload-divider"></div>
+    <div class="upload-row">
+      <label>1 · FIN23 — Lead Management Raw Export <span style="color:var(--muted)">(optional)</span></label>
+      <input type="file" id="fin23-file" accept=".xlsx,.xls,.csv">
+    </div>
+    <div class="upload-row">
+      <label>2 · Revenue Input — Revenue per Client / RM <span style="color:var(--muted)">(optional)</span></label>
+      <input type="file" id="rev-file" accept=".xlsx,.xls,.csv">
+    </div>
+    <div class="upload-row">
+      <label>3 · B2B Corporate Lead File <span style="color:var(--muted)">(optional)</span></label>
+      <input type="file" id="b2b-file" accept=".xlsx,.xls,.csv">
+    </div>
+    <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:16px">
+      <button id="load-btn">Load Dashboard</button>
+    </div>
+    <div class="hint muted" style="margin-top:14px;font-size:12px;border-top:2px solid var(--line);padding-top:10px">
+      <strong style="color:var(--text)">Team mapping</strong> comes from EMPLOYEE_REF — editable live inside the app. Upload at least one file to proceed.
+    </div>
+  </div>
+</div>
+
+<!-- ============ APP ============ -->
+<div id="app">
+  <header class="app">
+    <img src="logo.png" class="header-logo" alt="Logo" onerror="this.style.display='none'">
+    <div class="header-brand-wrap">
+      <div class="brand">Marketing <em>MIS</em> Dashboard</div>
+      <div class="subtitle" id="app-subtitle">—</div>
+    </div>
+    <div class="spacer"></div>
+    <div class="filters">
+      <span id="header-dash-filters">
+        <label>Month</label>
+        <div id="filter-month-wrap"></div>
+        <label>Ref+Cold</label>
+        <div id="filter-refcold-wrap"></div>
+      </span>
+      <button class="btn-green" id="publish-gh-btn" title="Push current data to GitHub so the shared link auto-loads it">📤 Publish to GitHub</button>
+      <button class="secondary" id="settings-btn" title="Settings">⚙️</button>
+      <button class="btn-blue" id="download-json-btn">↓ Webpage</button>
+      <button class="secondary" id="reupload-btn">Re-upload</button>
+    </div>
+  </header>
+
+  <div id="tabs"></div>
+
+  <!-- ===== DASHBOARD ===== -->
+  <div class="tab-panel" id="tab-dashboard">
+
+    <!-- Top KPIs -->
+    <div class="kpis" id="kpis"></div>
+
+    <!-- Live Data KPIs -->
+    <div id="live-kpis"></div>
+
+    <!-- Status distribution bar chart -->
+    <div class="section bar-blue">
+      <h2>Status Distribution <span id="status-chart-filter" style="font-weight:400;text-transform:none;font-size:11px;color:var(--muted)"></span>
+        <button class="info-btn" data-info="status-chart" title="Chart info">i</button>
+      </h2>
+      <div id="status-dist-chart-wrap"><canvas id="status-dist-chart"></canvas></div>
+    </div>
+
+    <!-- Platform × Month -->
+    <div class="section bar-yellow">
+      <h2>Leads Generated · Platform × Month
+        <button class="info-btn" data-info="platform-month" title="Table info">i</button>
+      </h2>
+      <div id="legend-platform-month"></div>
+      <div class="table-wrap" id="tbl-platform-month"></div>
+    </div>
+
+    <!-- Status Distribution — Mapped (non-SV) + SV -->
+    <div class="grid cols-2">
+      <div class="section bar-blue">
+        <h2>Status Distribution · Mapped Teams
+          <button class="info-btn" data-info="status-month-mapped" title="Table info">i</button>
+        </h2>
+        <div id="legend-status-month-mapped"></div>
+        <div class="table-wrap" id="tbl-status-month-mapped"></div>
+      </div>
+      <div class="section bar-blue">
+        <h2>Status Distribution · SV (Unmapped)
+          <button class="info-btn" data-info="status-month-sv" title="Table info">i</button>
+        </h2>
+        <div id="legend-status-month-sv"></div>
+        <div class="table-wrap" id="tbl-status-month-sv"></div>
+      </div>
+    </div>
+
+    <!-- Platform × Status -->
+    <div class="section bar-pink">
+      <h2>Platform × Status Breakdown
+        <button class="info-btn" data-info="platform-status" title="Table info">i</button>
+        <span style="float:right;font-weight:400;text-transform:none">
+          <label style="font-size:11px;color:var(--muted)">Table mode</label>
+          <select id="filter-table" style="margin-left:6px">
+            <option value="All">Default (status-specific month)</option>
+            <option value="SameMonth">Same Month (CTM)</option>
+            <option value="AnyMonth">Any Month (created before selected)</option>
+          </select>
+        </span>
+      </h2>
+      <div id="ps-team-filter-wrap" style="margin-bottom:6px"></div>
+      <div id="legend-platform-status"></div>
+      <div class="table-wrap" id="tbl-platform-status"></div>
+    </div>
+
+    <!-- Landing Page × Status -->
+    <div class="section bar-pink">
+      <h2>Landing Page × Status Breakdown
+        <button class="info-btn" data-info="lp-status" title="Table info">i</button>
+        <span style="float:right;font-weight:400;text-transform:none;display:flex;align-items:center;gap:10px">
+          <label style="font-size:11px;color:var(--muted)">Table mode</label>
+          <span id="lp-mode-wrap"></span>
+        </span>
+      </h2>
+      <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:6px">
+        <div id="lp-team-filter-wrap" style="display:flex;align-items:center"></div>
+        <div id="lp-campaign-filter-wrap" style="display:flex;align-items:center"></div>
+      </div>
+      <div id="legend-lp-status"></div>
+      <div class="table-wrap" id="tbl-lp-status"></div>
+    </div>
+
+    <!-- Team Performance -->
+    <div class="section bar-green">
+      <h2>Team Performance Matrix
+        <button class="info-btn" data-info="team-perf" title="Table info">i</button>
+      </h2>
+      <div id="legend-team"></div>
+      <div class="table-wrap" id="tbl-team"></div>
+    </div>
+
+    <!-- Leads per Campaign × Team -->
+    <div class="section bar-violet">
+      <h2>Leads per Campaign · Team × Campaign
+        <button class="info-btn" data-info="campaign-team" title="Table info">i</button>
+        <span id="hdr-campaign-team" style="float:right;font-weight:400;text-transform:none;color:var(--muted);font-size:11px"></span>
+      </h2>
+      <div id="legend-campaign-team"></div>
+      <div class="table-wrap" id="tbl-campaign-team"></div>
+      <div class="hint">Rows = teams, columns = campaigns. Counts use <strong>CreateMonth (CTM)</strong>. Honors global Month + Ref/Cold filter.</div>
+    </div>
+
+    <!-- Income + Cost -->
+    <div class="grid cols-2">
+      <div class="section bar-cyan">
+        <h2>Income Segment Analysis
+          <button class="info-btn" data-info="income" title="Table info">i</button>
+        </h2>
+        <div id="legend-income"></div>
+        <div class="table-wrap" id="tbl-income"></div>
+      </div>
+      <div class="section bar-yellow">
+        <h2>Cost Summary by Campaign
+          <button class="info-btn" data-info="cost-summary" title="Table info">i</button>
+        </h2>
+        <div id="legend-cost-summary"></div>
+        <div class="table-wrap" id="tbl-cost-summary"></div>
+        <div class="hint">Costs from the editable <strong>Cost Per Campaign</strong> tab.</div>
+      </div>
+    </div>
+
+    <!-- CPL per RM -->
+    <div class="section bar-red">
+      <h2>Cost Per Lead · per Team / RM
+        <button class="info-btn" data-info="cpl-rm" title="Table info">i</button>
+      </h2>
+      <div id="legend-cpl-rm"></div>
+      <div class="table-wrap" id="tbl-cpl-rm"></div>
+    </div>
+
+    <!-- InProcess + Converted Datasets -->
+    <div class="grid cols-2">
+      <div class="section bar-pink">
+        <h2 id="inprocess-ds-title">In-Process Date Set, Status ≠ IN PROCESS
+          <button class="info-btn" data-info="inprocess-ds" title="Table info">i</button>
+        </h2>
+        <div class="table-wrap" id="tbl-inprocess-ds"></div>
+      </div>
+      <div class="section bar-violet">
+        <h2 id="converted-ds-title">Converted Date Set, Status ≠ CONVERTED
+          <button class="info-btn" data-info="converted-ds" title="Table info">i</button>
+        </h2>
+        <div class="table-wrap" id="tbl-converted-ds"></div>
+      </div>
+    </div>
+
+    <!-- B2B Corp Leads -->
+    <div class="section bar-orange" style="border-top-color:var(--orange)">
+      <h2 id="b2b-table-title">B2B Corp Leads — RM × Status
+        <button class="info-btn" data-info="b2b" title="Table info">i</button>
+      </h2>
+      <div class="table-wrap" id="tbl-b2b"></div>
+      <div class="hint">Upload the <strong>B2B Corporate Lead File</strong> on the upload screen to populate this table.</div>
+    </div>
+
+  </div>
+
+  <!-- ===== RM PERFORMANCE ===== -->
+  <div class="tab-panel" id="tab-rmperf">
+    <div class="premium-lock">
+      <div class="lock-box">
+        <div class="lock-icon">🔒</div>
+        <h3>RM Performance is locked</h3>
+        <p>Enter the password to view this tab.</p>
+        <input type="password" id="rmperf-pw-input" placeholder="Password">
+        <button id="rmperf-pw-submit">Unlock</button>
+        <div class="lock-error" id="rmperf-pw-error"></div>
+        <div class="lock-hint">Hint: The most obvious password is ?</div>
+      </div>
+    </div>
+    <div class="premium-content">
+    <div class="section bar-orange">
+      <h2>RM Performance — Lead → Revenue Tracker
+        <span style="float:right;font-weight:400;text-transform:none">
+          <label style="font-size:11px;color:var(--muted);margin-right:6px">Month</label>
+          <div id="rmperf-month-wrap"></div>
+          <label style="font-size:11px;color:var(--muted);margin:0 6px 0 12px">Ref+Cold</label>
+          <div id="rmperf-refcold-wrap"></div>
+        </span>
+      </h2>
+      <div class="meta">Total Leads &amp; Quality Leads from RAW_DATA · Financial Plans from FY 2026-2027 + Plan Approval · Revenue metrics from Revenue Input. RM names mapped via RM Master Mapping.</div>
+      <div id="rmperf-kpis" class="kpis" style="margin:14px 0 0"></div>
+    </div>
+
+    <!-- In-tab upload prompt for FY + Plan Approval -->
+    <div class="section bar-yellow">
+      <h2>Financial Plan Sources <span style="font-weight:400;font-size:13px;color:var(--muted)">(upload if needed)</span></h2>
+      <div id="rmperf-upload-banner" class="rmperf-banner"></div>
+      <div class="rmperf-uploads">
+        <div class="rmperf-upload-row">
+          <label>FY 2026-2027 (Financial Plan tickets)</label>
+          <input type="file" id="rmperf-fy-file" accept=".xlsx,.xls,.csv">
+        </div>
+        <div class="rmperf-upload-row">
+          <label>Plan Approval Sheet</label>
+          <input type="file" id="rmperf-pa-file" accept=".xlsx,.xls,.csv">
+        </div>
+        <div class="rmperf-upload-row" style="justify-content:flex-end">
+          <label>&nbsp;</label>
+          <button id="rmperf-recalc" class="btn-green" title="Re-run RM Performance calculations using the currently loaded data">Calculate</button>
+        </div>
+      </div>
+      <div id="rmperf-recalc-status" class="hint" style="margin-top:8px"></div>
+    </div>
+
+    <div class="section bar-violet">
+      <h2>Conversion Funnel <span id="rmperf-funnel-sub" style="font-weight:400;font-size:13px;color:var(--muted)"></span>
+        <button class="info-btn" data-info="rmperf-funnel" title="Table info">i</button>
+      </h2>
+      <div id="rmperf-funnel" class="funnel"></div>
+    </div>
+
+    <div class="section bar-green">
+      <h2>RM Performance Summary — by Team
+        <button class="info-btn" data-info="rmperf-summary" title="Table info">i</button>
+      </h2>
+      <div id="legend-rmperf-summary"></div>
+      <div class="table-wrap" id="rmperf-summary"></div>
+    </div>
+
+    <div class="section bar-blue">
+      <h2>Team × RM Detailed Breakdown
+        <button class="info-btn" data-info="rmperf-detail" title="Table info">i</button>
+      </h2>
+      <div id="legend-rmperf-detail"></div>
+      <div class="table-wrap" id="rmperf-detail"></div>
+    </div>
+    </div>
+  </div>
+
+  <!-- ===== MTD PERFORMANCE ===== -->
+  <div class="tab-panel" id="tab-mtd">
+    <div class="section">
+      <h2>MTD Performance — Last 3 Months from Today</h2>
+      <div class="filters" style="margin-bottom:14px">
+        <label>Day window</label>
+        <input type="number" id="mtd-start" min="1" max="31" value="1" style="width:70px">
+        <span class="muted">to</span>
+        <input type="number" id="mtd-end" min="1" max="31" value="11" style="width:70px">
+        <span class="muted" style="font-size:12px">(Projected = MTD ÷ window × 30)</span>
+        <label style="margin-left:16px">Ref+Cold</label>
+        <select id="mtd-refcold">
+          <option value="Include">Include</option>
+          <option value="Exclude">Exclude</option>
+          <option value="Only Referral">Only Referral</option>
+        </select>
+      </div>
+      <div id="mtd-tables"></div>
+    </div>
+  </div>
+
+  <!-- ===== RM REVENUE ===== -->
+  <div class="tab-panel" id="tab-rmrev">
+    <div class="premium-lock">
+      <div class="lock-box">
+        <div class="lock-icon">🔒</div>
+        <h3>RM Revenue is locked</h3>
+        <p>Enter the password to view this tab.</p>
+        <input type="password" id="rmrev-pw-input" placeholder="Password">
+        <button id="rmrev-pw-submit">Unlock</button>
+        <div class="lock-error" id="rmrev-pw-error"></div>
+        <div class="lock-hint">Hint: The most obvious password is ?</div>
+      </div>
+    </div>
+    <div class="premium-content">
+    <div class="section bar-green">
+      <h2>RM Revenue
+        <button class="info-btn" data-info="rmrev" title="Table info">i</button>
+        <span style="float:right;font-weight:400;text-transform:none">
+          <label style="font-size:11px;color:var(--muted);margin-right:6px">Team</label>
+          <div id="rev-team-filter-wrap" style="display:inline-block;vertical-align:middle"></div>
+          <label style="font-size:11px;color:var(--muted);margin:0 6px 0 12px">Period</label>
+          <div id="rev-month-filter-wrap" style="display:inline-block;vertical-align:middle"></div>
+          <label style="font-size:11px;color:var(--muted);margin:0 6px 0 12px">Ref+Cold (LP)</label>
+          <select id="rev-lp-filter">
+            <option value="Include">Include</option>
+            <option value="Exclude">Exclude</option>
+            <option value="Only Referral">Only Referral</option>
+          </select>
+        </span>
+      </h2>
+      <div id="rev-chart-wrap"><canvas id="rev-chart"></canvas></div>
+      <div class="table-wrap" id="tbl-rmrev"></div>
+      <div class="hint">Sourced from Revenue Input upload. Team joined via EMPLOYEE_REF. Period uses <code>OLD CHECK</code> column.</div>
+    </div>
+    </div>
+  </div>
+
+  <!-- ===== COST PER CAMPAIGN ===== -->
+  <div class="tab-panel" id="tab-cpc">
+    <div class="section bar-yellow">
+      <h2>Cost Per Campaign (Editable)
+        <span style="float:right"><button class="secondary" id="reset-cpc">Reset to default</button></span>
+      </h2>
+      <div class="meta">Month columns auto-extend to match RAW_DATA. Edits persist in localStorage.</div>
+      <div class="scroll-x" id="cpc-editor"></div>
+    </div>
+  </div>
+
+  <!-- ===== PROCESSED ===== -->
+  <div class="tab-panel" id="tab-processed">
+    <div class="section bar-yellow">
+      <h2>Leads by Platform & Month</h2>
+      <div class="table-wrap" id="proc-platform"></div>
+    </div>
+    <div class="section bar-blue">
+      <h2>Leads by Status & Month</h2>
+      <div class="table-wrap" id="proc-status"></div>
+    </div>
+    <div class="section bar-green">
+      <h2>Team Performance Matrix</h2>
+      <div class="table-wrap" id="proc-team"></div>
+    </div>
+  </div>
+
+  <!-- ===== RAW_DATA ===== -->
+  <div class="tab-panel" id="tab-rawdata">
+    <div class="section">
+      <h2>RAW_DATA (derived from FIN23)</h2>
+      <div class="filters" style="margin-bottom:8px">
+        <input type="text" id="raw-search" placeholder="Search any field…" style="min-width:260px">
+        <button class="secondary" id="raw-clear-filters">Clear Filters</button>
+        <span class="meta" id="raw-meta"></span>
+      </div>
+      <div class="table-wrap" id="raw-table-wrap"></div>
+    </div>
+  </div>
+
+  <!-- ===== B2B RAW DATA ===== -->
+  <div class="tab-panel" id="tab-b2braw">
+    <div class="section">
+      <h2>B2B RAW_DATA (derived from B2B Corporate Lead File)</h2>
+      <div class="filters" style="margin-bottom:8px">
+        <input type="text" id="b2b-search" placeholder="Search any field…" style="min-width:260px">
+        <button class="secondary" id="b2b-clear-filters">Clear Filters</button>
+        <span class="meta" id="b2b-raw-meta"></span>
+      </div>
+      <div class="table-wrap" id="b2b-raw-table-wrap"></div>
+    </div>
+  </div>
+
+  <!-- ===== EMPLOYEE_REF ===== -->
+  <div class="tab-panel" id="tab-employee">
+    <div class="section bar-pink">
+      <h2>EMPLOYEE_REF — RM → Team Mapping
+        <span style="float:right;display:flex;gap:6px;flex-wrap:wrap">
+          <button class="btn-green" id="emp-add">+ Add Row</button>
+          <button class="btn-blue" id="emp-recalc">↻ Calculate</button>
+          <button class="secondary" id="emp-xlsx-download">↓ Download Excel</button>
+          <label class="secondary" style="display:inline-flex;align-items:center;padding:7px 16px;cursor:pointer;border:2px solid var(--orange);background:#fff;color:var(--orange);font:600 13px/1 inherit">
+            ↑ Upload Excel
+            <input type="file" id="emp-xlsx-upload" accept=".xlsx,.xls,.csv" style="display:none">
+          </label>
+          <button class="secondary" id="emp-export">↓ Export snapshot.js</button>
+          <button class="secondary" id="emp-reset">Reset</button>
+        </span>
+      </h2>
+      <div class="meta">Single source of truth for RM → Team. Edits persist and update all tabs immediately. Use <strong>Download Excel</strong> to edit in spreadsheets, then <strong>Upload Excel</strong> to replace the table. <strong>Calculate</strong> recomputes every tab on the dashboard.</div>
+      <div id="emp-status" class="hint" style="margin:6px 0 0"></div>
+      <div class="scroll-x" id="emp-editor"></div>
+    </div>
+  </div>
+
+  <!-- ===== RM MASTER MAPPING ===== -->
+  <div class="tab-panel" id="tab-rmmaster">
+    <div class="section bar-violet">
+      <h2>RM Master Mapping — Source Name → Correct RM → Team
+        <span style="float:right;display:flex;gap:6px;flex-wrap:wrap">
+          <button class="btn-green" id="rmm-add">+ Add Row</button>
+          <button class="btn-blue" id="rmm-recalc">↻ Calculate</button>
+          <button class="secondary" id="rmm-xlsx-download">↓ Download Excel</button>
+          <label class="secondary" style="display:inline-flex;align-items:center;padding:7px 16px;cursor:pointer;border:2px solid var(--orange);background:#fff;color:var(--orange);font:600 13px/1 inherit">
+            ↑ Upload Excel
+            <input type="file" id="rmm-xlsx-upload" accept=".xlsx,.xls,.csv" style="display:none">
+          </label>
+          <button class="secondary" id="rmm-export">↓ Export snapshot.js</button>
+          <button class="secondary" id="rmm-reset">Reset</button>
+        </span>
+      </h2>
+      <div class="meta">Maps abbreviated or variant RM names from <strong>FY 2026-2027</strong>, <strong>Plan Approval</strong>, and <strong>Revenue Input</strong> to the canonical RM name + team. Whenever a source file uses a non-standard name (e.g. "Vivek" instead of "Vivek Singhal"), add a row here. Edits persist in your browser and update all tabs immediately. Download to Excel for bulk edits, re-upload to replace. <strong>Export snapshot.js</strong> commits changes to the bundled snapshot. <strong>Calculate</strong> recomputes every tab on the dashboard.</div>
+      <div id="rmm-stats" style="font-size:12px;color:var(--muted);margin:6px 0 4px"></div>
+      <div id="rmm-status" class="hint" style="margin:0 0 8px"></div>
+      <div class="scroll-x" id="rmm-editor"></div>
+    </div>
+  </div>
+
+  <!-- ===== MISSING LEADS ===== -->
+  <div class="tab-panel" id="tab-missing">
+    <div class="section bar-red">
+      <h2>Missing / Incomplete Leads</h2>
+      <div class="meta">Rows where required fields are blank.</div>
+      <div class="table-wrap" id="tbl-missing"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Download Webpage Modal -->
+<div class="modal" id="download-modal">
+  <div class="modal-content">
+    <h3>Download Self-Contained Webpage</h3>
+    <p class="muted" style="font-size:12px;margin-bottom:14px">Downloads a single <strong>.html</strong> file with all data and code embedded. Anyone can open it in a browser — no uploads needed.</p>
+    <input type="text" id="json-filename" placeholder="marketing-mis-dashboard">
+    <div class="modal-actions">
+      <button class="secondary" id="cancel-download">Cancel</button>
+      <button id="confirm-download">Download</button>
+    </div>
+  </div>
+</div>
+
+<!-- Shareable Link Modal -->
+<div class="modal" id="share-modal">
+  <div class="modal-content">
+    <h3>Make Shareable Link</h3>
+    <p class="muted" style="font-size:12px;margin-bottom:10px">
+      1. Download the JSON data first using the button below.<br>
+      2. Upload it to GitHub (or any public host).<br>
+      3. Paste the <strong>raw file URL</strong> below to generate a shareable link.
+    </p>
+    <button class="secondary" id="share-download-json" style="margin-bottom:12px;width:100%">↓ Download JSON data first</button>
+    <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:4px">Raw JSON URL (e.g. https://raw.githubusercontent.com/…)</label>
+    <input type="text" id="share-json-url" placeholder="https://raw.githubusercontent.com/user/repo/main/data.json" style="width:100%;box-sizing:border-box">
+    <div style="margin-top:12px">
+      <button id="share-generate-btn" style="width:100%">Generate Link</button>
+    </div>
+    <div id="share-result" style="display:none;margin-top:14px">
+      <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:4px">Your shareable link:</label>
+      <div style="display:flex;gap:6px">
+        <input type="text" id="share-result-url" readonly style="flex:1;font-size:11px;background:var(--surface2)">
+        <button id="share-copy-btn" class="btn-green">Copy</button>
+      </div>
+      <p class="muted" style="font-size:11px;margin-top:6px">Anyone who opens this link will see the dashboard pre-loaded with your data.</p>
+    </div>
+    <div class="modal-actions" style="margin-top:16px">
+      <button class="secondary" id="cancel-share">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Settings Modal -->
+<div class="modal" id="settings-modal">
+  <div class="modal-content" style="max-width:560px">
+    <h3>⚙️ Settings</h3>
+    <p class="muted" style="font-size:12px;margin-bottom:14px">All settings are saved <strong>only in your browser</strong> (localStorage). The GitHub token is never uploaded to the repo.</p>
+
+    <h4 style="margin:14px 0 6px;font-size:13px;color:#16a34a">📤 GitHub Auto-Publish</h4>
+    <p class="muted" style="font-size:11px;margin-bottom:8px">Publish your dashboard data to GitHub so the link auto-loads it. <a href="https://github.com/settings/tokens" target="_blank">Get a Personal Access Token →</a> (tick <code>repo</code> scope)</p>
+    <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:4px">GitHub Username / Org</label>
+    <input type="text" id="cfg-gh-owner" placeholder="your-github-username" style="width:100%;box-sizing:border-box;margin-bottom:8px">
+    <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:4px">Repository Name</label>
+    <input type="text" id="cfg-gh-repo" placeholder="marketing-mis-dashboard" style="width:100%;box-sizing:border-box;margin-bottom:8px">
+    <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:4px">Branch (default: main)</label>
+    <input type="text" id="cfg-gh-branch" placeholder="main" style="width:100%;box-sizing:border-box;margin-bottom:8px">
+    <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:4px">State file path (default: state.json)</label>
+    <input type="text" id="cfg-gh-path" placeholder="state.json" style="width:100%;box-sizing:border-box;margin-bottom:8px">
+    <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:4px">Personal Access Token</label>
+    <input type="password" id="cfg-gh-token" placeholder="ghp_..." style="width:100%;box-sizing:border-box;margin-bottom:8px">
+
+    <h4 style="margin:18px 0 6px;font-size:13px;color:#2563eb">📊 Google Sheets — Cost Per Campaign Live Sync</h4>
+    <p class="muted" style="font-size:11px;margin-bottom:8px">In your sheet: File → Share → <strong>Publish to web</strong> → Select the Cost tab → Format: <strong>CSV</strong> → Publish, then paste the URL below.</p>
+    <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:4px">Google Sheets CSV URL</label>
+    <input type="text" id="cfg-gs-url" placeholder="https://docs.google.com/spreadsheets/d/e/.../pub?output=csv" style="width:100%;box-sizing:border-box;margin-bottom:8px">
+
+    <div id="settings-status" style="font-size:12px;margin-top:8px;min-height:16px"></div>
+
+    <div class="modal-actions" style="margin-top:14px">
+      <button class="secondary" id="cancel-settings">Close</button>
+      <button class="secondary" id="test-gs-btn">Test Sheets Sync</button>
+      <button id="save-settings-btn">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Publish Result Modal -->
+<div class="modal" id="publish-modal">
+  <div class="modal-content" style="max-width:520px">
+    <h3 id="publish-title">📤 Publish to GitHub</h3>
+    <div id="publish-body" style="font-size:13px;line-height:1.5"></div>
+    <div class="modal-actions" style="margin-top:14px">
+      <button id="publish-close-btn">Close</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
+<script>
+  (function(){
+    var t = Date.now();
+    var parent = document.currentScript.parentNode;
+    ['snapshot.js','app.js'].forEach(function(src){
+      var s = document.createElement('script');
+      s.src = src + '?t=' + t;
+      s.async = false;
+      parent.appendChild(s);
+    });
+  })();
+</script>
+</body>
+</html>
