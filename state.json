@@ -1,5 +1,5 @@
 {
-  "exportedAt": "2026-07-07T07:31:18.367Z",
+  "exportedAt": "2026-07-07T10:10:54.374Z",
   "raw": [
     {
       "currentRmName": "Yash Nimesh Kapadia",
@@ -205639,11 +205639,7 @@
   },
   "dataTill": "Data till 5th July 2026",
   "filters": {
-    "currentMonth": [
-      "Jun-2026",
-      "May-2026",
-      "Apr-2026"
-    ],
+    "currentMonth": "All",
     "refColdMode": "Include",
     "tableMode": "All",
     "mtdRefColdMode": "Include",
