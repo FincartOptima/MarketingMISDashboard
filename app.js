@@ -555,6 +555,11 @@ async function loadAllFromRepo(){
   if(STATE.fy && STATE.fy.length) STATE.fy.forEach(r => { r.mappedRM = mapRM(r.rmName); });
   if(STATE.pa && STATE.pa.length) STATE.pa.forEach(r => { r.mappedRM = mapRM(r.advisor); });
 
+  // If a Google Sheets Cost Per Campaign source is configured (Settings), it overrides
+  // whatever loadCostFromStorage() set above — same as the old auto-load flow.
+  setLoadingStatus('Syncing Cost Per Campaign…');
+  await syncCostFromSheets(true);
+
   detectMonths();
   reconcileCostMonths();
   initFilters();
