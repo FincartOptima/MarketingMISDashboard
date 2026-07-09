@@ -395,29 +395,15 @@ table.data.editable td input:focus{outline:2px solid var(--orange);background:#f
 </head>
 <body>
 
-<!-- ============ UPLOAD ============ -->
+<!-- ============ LOADING ============ -->
 <div id="upload-screen">
   <div class="upload-card">
     <div class="upload-logo">Marketing <span>MIS</span></div>
-    <div class="upload-sub">All files are independent — upload any combination. Tabs without a file will show "not uploaded" instead of breaking.</div>
+    <div class="upload-sub">Loading data directly from the repository — no upload needed.</div>
     <div class="upload-divider"></div>
-    <div class="upload-row">
-      <label>1 · FIN23 — Lead Management Raw Export <span style="color:var(--muted)">(optional)</span></label>
-      <input type="file" id="fin23-file" accept=".xlsx,.xls,.csv">
-    </div>
-    <div class="upload-row">
-      <label>2 · Revenue Input — Revenue per Client / RM <span style="color:var(--muted)">(optional)</span></label>
-      <input type="file" id="rev-file" accept=".xlsx,.xls,.csv">
-    </div>
-    <div class="upload-row">
-      <label>3 · B2B Corporate Lead File <span style="color:var(--muted)">(optional)</span></label>
-      <input type="file" id="b2b-file" accept=".xlsx,.xls,.csv">
-    </div>
-    <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:16px">
-      <button id="load-btn">Load Dashboard</button>
-    </div>
+    <div id="loading-status" class="hint muted" style="text-align:center;font-size:13px;padding:10px 0">Starting…</div>
     <div class="hint muted" style="margin-top:14px;font-size:12px;border-top:2px solid var(--line);padding-top:10px">
-      <strong style="color:var(--text)">Team mapping</strong> comes from EMPLOYEE_REF — editable live inside the app. Upload at least one file to proceed.
+      Data is pulled from fixed files in the repo: <strong>B2C.xlsx</strong>, <strong>Revenue Input.xlsx</strong>, <strong>B2B.xlsx</strong>, <strong>FY2026.xlsx</strong>, <strong>Plan Approval.xlsx</strong>. To refresh data, replace these files in the repo and push.
     </div>
   </div>
 </div>
@@ -438,10 +424,8 @@ table.data.editable td input:focus{outline:2px solid var(--orange);background:#f
         <label>Ref+Cold</label>
         <div id="filter-refcold-wrap"></div>
       </span>
-      <button class="btn-green" id="publish-gh-btn" title="Push current data to GitHub so the shared link auto-loads it">📤 Publish to GitHub</button>
       <button class="secondary" id="settings-btn" title="Settings">⚙️</button>
       <button class="btn-blue" id="download-json-btn">↓ Webpage</button>
-      <button class="secondary" id="reupload-btn">Re-upload</button>
     </div>
   </header>
 
@@ -610,7 +594,7 @@ table.data.editable td input:focus{outline:2px solid var(--orange);background:#f
         <button class="info-btn" data-info="b2b" title="Table info">i</button>
       </h2>
       <div class="table-wrap" id="tbl-b2b"></div>
-      <div class="hint">Upload the <strong>B2B Corporate Lead File</strong> on the upload screen to populate this table.</div>
+      <div class="hint">Add <strong>B2B.xlsx</strong> to the repo to populate this table.</div>
     </div>
 
   </div>
@@ -642,22 +626,14 @@ table.data.editable td input:focus{outline:2px solid var(--orange);background:#f
       <div id="rmperf-kpis" class="kpis" style="margin:14px 0 0"></div>
     </div>
 
-    <!-- In-tab upload prompt for FY + Plan Approval -->
+    <!-- Repo-fetch status for FY2026 + Plan Approval -->
     <div class="section bar-yellow">
-      <h2>Financial Plan Sources <span style="font-weight:400;font-size:13px;color:var(--muted)">(upload if needed)</span></h2>
+      <h2>Financial Plan Sources <span style="font-weight:400;font-size:13px;color:var(--muted)">(fetched from repo)</span></h2>
       <div id="rmperf-upload-banner" class="rmperf-banner"></div>
       <div class="rmperf-uploads">
-        <div class="rmperf-upload-row">
-          <label>FY 2026-2027 (Financial Plan tickets)</label>
-          <input type="file" id="rmperf-fy-file" accept=".xlsx,.xls,.csv">
-        </div>
-        <div class="rmperf-upload-row">
-          <label>Plan Approval Sheet</label>
-          <input type="file" id="rmperf-pa-file" accept=".xlsx,.xls,.csv">
-        </div>
         <div class="rmperf-upload-row" style="justify-content:flex-end">
           <label>&nbsp;</label>
-          <button id="rmperf-recalc" class="btn-green" title="Re-run RM Performance calculations using the currently loaded data">Calculate</button>
+          <button id="rmperf-recalc" class="btn-green" title="Re-run RM Performance calculations using the currently loaded data">Recalculate</button>
         </div>
       </div>
       <div id="rmperf-recalc-status" class="hint" style="margin-top:8px"></div>

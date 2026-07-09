@@ -131,12 +131,14 @@ const PREMIUM_TABS = ['rmperf', 'rmrev'];
 const PREMIUM_PASSWORD = 'Password';
 
 const FILE_LABELS = {
-  fin23: 'FIN23 Lead Management file',
-  rev:   'Revenue Input file',
-  b2b:   'B2B Corporate Lead file',
+  fin23: 'FIN23 Lead Management file (B2C.xlsx)',
+  rev:   'Revenue Input file (Revenue Input.xlsx)',
+  b2b:   'B2B Corporate Lead file (B2B.xlsx)',
+  fy:    'FY2026 file (FY2026.xlsx)',
+  pa:    'Plan Approval file (Plan Approval.xlsx)',
 };
 function notUploadedHTML(key){
-  return `<div class="file-not-uploaded"><span class="fnu-icon">&#9888;</span><strong>${FILE_LABELS[key]}</strong> has not been uploaded.<br>Re-upload from the upload screen to load this data.</div>`;
+  return `<div class="file-not-uploaded"><span class="fnu-icon">&#9888;</span><strong>${FILE_LABELS[key]}</strong> was not found in the repository.<br>Add/update this file in the repo and refresh the page.</div>`;
 }
 function setNotUploaded(selector, key){
   const el = $(selector);
@@ -240,9 +242,30 @@ function reconcileCostMonths(){
 }
 
 // ---- file load ----
-async function readWb(file){
+// Parses only the sheet(s) actually needed instead of the whole workbook — large FIN23
+// exports carry many extra pivot/dashboard sheets that are otherwise parsed and thrown away.
+// cellDates is intentionally left off; parseDateAny/normalizeMonthLabel already handle raw
+// serial numbers and strings, and skipping eager Date conversion is much faster on big files.
+function parseWbBuffer(buf, onlySheetNames){
+  if(onlySheetNames){
+    const meta = XLSX.read(buf, {type:'array', bookSheets:true});
+    const targets = onlySheetNames.map(n => n.toLowerCase());
+    const name = meta.SheetNames.find(n => targets.includes(n.toLowerCase())) || meta.SheetNames[0];
+    return XLSX.read(buf, {type:'array', sheets:[name]});
+  }
+  return XLSX.read(buf, {type:'array', sheets:[0]});
+}
+async function readWb(file, onlySheetNames){
   const buf = await file.arrayBuffer();
-  return XLSX.read(buf, {type:'array', cellDates:true});
+  return parseWbBuffer(buf, onlySheetNames);
+}
+// Fetches an .xlsx file that lives alongside index.html/app.js in the repo (works both
+// locally via the dev server and on GitHub Pages, since both serve the repo root as-is).
+async function fetchWb(relativePath, onlySheetNames){
+  const res = await fetch(encodeURI(relativePath) + '?t=' + Date.now());
+  if(!res.ok) throw new Error('HTTP ' + res.status + ' fetching ' + relativePath);
+  const buf = await res.arrayBuffer();
+  return parseWbBuffer(buf, onlySheetNames);
 }
 function findSheetName(wb, ...names){
   const targets = names.map(n => n.toLowerCase());
@@ -447,69 +470,97 @@ function buildPAData(rows){
   });
 }
 
-async function handleLoad(){
-  const fin    = $('#fin23-file').files[0];
-  const rev    = $('#rev-file').files[0];
-  const b2bFile= $('#b2b-file').files[0];
-  if(!fin && !rev && !b2bFile){ alert('Please upload at least one file.'); return; }
+// Fixed filenames the dashboard pulls straight from the repo — no manual upload.
+// To refresh data, replace these files in the repo and push; the page picks them up on next load.
+const REPO_FILES = {
+  fin23: 'B2C.xlsx',
+  rev:   'Revenue Input.xlsx',
+  b2b:   'B2B.xlsx',
+  fy:    'FY2026.xlsx',
+  pa:    'Plan Approval.xlsx',
+};
 
-  $('#load-btn').disabled = true;
-  $('#load-btn').textContent = 'Loading…';
-  STATE.filesLoaded = { fin23: false, rev: false, b2b: false,
-    fy: STATE.fy.length>0, pa: STATE.pa.length>0 };
+function setLoadingStatus(text){
+  const el = $('#loading-status');
+  if(el) el.textContent = text;
+}
 
+async function loadAllFromRepo(){
+  STATE.filesLoaded = { fin23: false, rev: false, b2b: false, fy: false, pa: false };
+
+  loadEmployeeFromStorage();
+  loadCostFromStorage();
+  loadRMMasterFromStorage();
+
+  setLoadingStatus('Loading B2C.xlsx…');
   try{
-    loadEmployeeFromStorage();
-    loadCostFromStorage();
-    loadRMMasterFromStorage();
-
-    if(fin){
-      const finWb = await readWb(fin);
-      const finSheet = findSheetName(finWb, 'RAW_DATA', 'RawData');
-      const finRows = XLSX.utils.sheet_to_json(finWb.Sheets[finSheet], {defval:'', raw:true});
-      STATE.raw = buildRawData(finRows);
-      STATE.rawFilters = {};
-      STATE.filesLoaded.fin23 = true;
-    } else {
-      STATE.raw = [];
-      STATE.rawFilters = {};
-    }
-
-    rebuildTeamMap();
-
-    if(rev){
-      const revWb = await readWb(rev);
-      STATE.rev = parseRevenueInput(revWb);
-      STATE.filesLoaded.rev = true;
-    } else {
-      STATE.rev = [];
-    }
-
-    if(b2bFile){
-      const b2bWb = await readWb(b2bFile);
-      const b2bRows = XLSX.utils.sheet_to_json(b2bWb.Sheets[b2bWb.SheetNames[0]], {defval:'', raw:true});
-      STATE.b2bRaw = buildB2BRaw(b2bRows);
-      STATE.b2b = buildB2BData(STATE.b2bRaw);
-      STATE.b2bFilters = {};
-      STATE.filesLoaded.b2b = true;
-    } else {
-      STATE.b2bRaw = [];
-      STATE.b2b = [];
-      STATE.b2bFilters = {};
-    }
-
-    detectMonths();
-    reconcileCostMonths();
-    initFilters();
-    initRevFilters();
-    renderAll();
-    showApp();
+    const finWb = await fetchWb(REPO_FILES.fin23, ['RAW_DATA', 'RawData']);
+    const finSheet = findSheetName(finWb, 'RAW_DATA', 'RawData');
+    const finRows = XLSX.utils.sheet_to_json(finWb.Sheets[finSheet], {defval:'', raw:true});
+    STATE.raw = buildRawData(finRows);
+    STATE.rawFilters = {};
+    STATE.filesLoaded.fin23 = true;
   }catch(e){
-    console.error(e); alert('Failed to load: ' + e.message);
-  }finally{
-    $('#load-btn').disabled = false;
-    $('#load-btn').textContent = 'Load Dashboard';
+    console.warn('[MIS] B2C.xlsx not loaded:', e.message);
+    STATE.raw = []; STATE.rawFilters = {};
   }
+
+  rebuildTeamMap();
+
+  setLoadingStatus('Loading Revenue Input.xlsx…');
+  try{
+    const revWb = await fetchWb(REPO_FILES.rev);
+    STATE.rev = parseRevenueInput(revWb);
+    STATE.filesLoaded.rev = true;
+  }catch(e){
+    console.warn('[MIS] Revenue Input.xlsx not loaded:', e.message);
+    STATE.rev = [];
+  }
+
+  setLoadingStatus('Loading B2B.xlsx…');
+  try{
+    const b2bWb = await fetchWb(REPO_FILES.b2b);
+    const b2bRows = XLSX.utils.sheet_to_json(b2bWb.Sheets[b2bWb.SheetNames[0]], {defval:'', raw:true});
+    STATE.b2bRaw = buildB2BRaw(b2bRows);
+    STATE.b2b = buildB2BData(STATE.b2bRaw);
+    STATE.b2bFilters = {};
+    STATE.filesLoaded.b2b = true;
+  }catch(e){
+    console.warn('[MIS] B2B.xlsx not loaded:', e.message);
+    STATE.b2bRaw = []; STATE.b2b = []; STATE.b2bFilters = {};
+  }
+
+  setLoadingStatus('Loading FY2026.xlsx…');
+  try{
+    const fyWb = await fetchWb(REPO_FILES.fy);
+    const fyRows = XLSX.utils.sheet_to_json(fyWb.Sheets[fyWb.SheetNames[0]], {defval:'', raw:true});
+    STATE.fy = buildFYData(fyRows);
+    STATE.filesLoaded.fy = true;
+  }catch(e){
+    console.warn('[MIS] FY2026.xlsx not loaded:', e.message);
+    STATE.fy = [];
+  }
+
+  setLoadingStatus('Loading Plan Approval.xlsx…');
+  try{
+    const paWb = await fetchWb(REPO_FILES.pa);
+    const paRows = XLSX.utils.sheet_to_json(paWb.Sheets[paWb.SheetNames[0]], {defval:'', raw:true});
+    STATE.pa = buildPAData(paRows);
+    STATE.filesLoaded.pa = true;
+  }catch(e){
+    console.warn('[MIS] Plan Approval.xlsx not loaded:', e.message);
+    STATE.pa = [];
+  }
+
+  if(STATE.fy && STATE.fy.length) STATE.fy.forEach(r => { r.mappedRM = mapRM(r.rmName); });
+  if(STATE.pa && STATE.pa.length) STATE.pa.forEach(r => { r.mappedRM = mapRM(r.advisor); });
+
+  detectMonths();
+  reconcileCostMonths();
+  initFilters();
+  initRevFilters();
+  renderAll();
+  showApp();
 }
 
 function showUpload(){ $('#upload-screen').style.display='flex'; $('#app').style.display='none'; }
@@ -1474,7 +1525,7 @@ function renderB2BTable(){
   const el = $('#b2b-table-title'); if(el) el.textContent = title;
   const host = '#tbl-b2b';
   if(!data.length){
-    $(host).innerHTML = '<div class="meta" style="padding:12px">No B2B data — upload the B2B Corporate Lead file.</div>';
+    $(host).innerHTML = '<div class="meta" style="padding:12px">No B2B data — B2B.xlsx was not found in the repo.</div>';
     return;
   }
   const headers = ['RM', ...statuses, 'Total'];
@@ -1541,15 +1592,15 @@ function renderRMPerformance(){
       val => { STATE.rmPerfRefCold = val; renderRMPerformance(); }, {multi:false});
   }
 
-  // Upload-status banner for FY / Plan Approval
+  // Repo-fetch status banner for FY2026 / Plan Approval
   const fpReady = STATE.filesLoaded.fy || STATE.filesLoaded.pa;
   const banner = $('#rmperf-upload-banner');
   if(banner){
-    const fyTxt = STATE.filesLoaded.fy ? `✓ FY 2026-2027 (${STATE.fy.length} rows)` : '✗ FY 2026-2027 not uploaded';
-    const paTxt = STATE.filesLoaded.pa ? `✓ Plan Approval (${STATE.pa.length} rows)` : '✗ Plan Approval not uploaded';
+    const fyTxt = STATE.filesLoaded.fy ? `✓ FY2026.xlsx (${STATE.fy.length} rows)` : '✗ FY2026.xlsx not found in repo';
+    const paTxt = STATE.filesLoaded.pa ? `✓ Plan Approval.xlsx (${STATE.pa.length} rows)` : '✗ Plan Approval.xlsx not found in repo';
     banner.innerHTML = `<span class="${STATE.filesLoaded.fy?'rmperf-ok':'rmperf-miss'}">${fyTxt}</span>
       <span class="${STATE.filesLoaded.pa?'rmperf-ok':'rmperf-miss'}">${paTxt}</span>
-      ${fpReady?'':'<span class="rmperf-hint">Upload these to populate <strong>Financial Plans Made</strong>.</span>'}`;
+      ${fpReady?'':'<span class="rmperf-hint">Add these files to the repo to populate <strong>Financial Plans Made</strong>.</span>'}`;
   }
 
   if(!STATE.filesLoaded.fin23 && !STATE.filesLoaded.rev && !fpReady){
@@ -1634,26 +1685,6 @@ function renderRMPerformance(){
     });
   }
   renderTable('#rmperf-detail', dHeaders, dRows);
-}
-
-async function handleRMPerfUpload(kind, file){
-  if(!file) return;
-  try{
-    const wb = await readWb(file);
-    const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], {defval:'', raw:true});
-    if(kind==='fy'){
-      STATE.fy = buildFYData(rows);
-      STATE.filesLoaded.fy = true;
-    } else {
-      STATE.pa = buildPAData(rows);
-      STATE.filesLoaded.pa = true;
-    }
-    detectMonths();
-    initFilters();
-    renderRMPerformance();
-  }catch(e){
-    console.error(e); alert('Failed to load file: ' + e.message);
-  }
 }
 
 function mtdPerformance(){
@@ -3412,9 +3443,6 @@ function closeDownloadModal(){
 }
 
 function bindUI(){
-  $('#load-btn').onclick = handleLoad;
-  $('#reupload-btn').onclick = showUpload;
-
   $('#download-json-btn').onclick = openDownloadModal;
   $('#confirm-download').onclick = downloadAsWebpage;
 
@@ -3457,8 +3485,6 @@ function bindUI(){
   // rev-team-filter-wrap and rev-month-filter-wrap are custom multi-select widgets — wired inside initRevFilters()
 
   // rmperf-month and rmperf-refcold are now custom multi-select widgets — wired inside renderRMPerformance()
-  $('#rmperf-fy-file').onchange = e => handleRMPerfUpload('fy', e.target.files[0]);
-  $('#rmperf-pa-file').onchange = e => handleRMPerfUpload('pa', e.target.files[0]);
   const recalcBtn = $('#rmperf-recalc');
   if(recalcBtn) recalcBtn.onclick = () => {
     const status = $('#rmperf-recalc-status');
@@ -3828,8 +3854,23 @@ async function bootApp(){
   bindUI();
   tabBar();
   initPremiumLock();
-  const autoLoaded = await tryAutoLoad();
-  if(!autoLoaded) showUpload();
+  // A self-contained "Download Webpage" export embeds its own data — use it directly
+  // instead of fetching from the repo.
+  if(window.__PRELOADED_STATE__){
+    try{
+      loadEmployeeFromStorage();
+      loadCostFromStorage();
+      loadRMMasterFromStorage();
+      await applyPreloadedState(window.__PRELOADED_STATE__);
+      await syncCostFromSheets(true);
+      renderAll();
+      showApp();
+      return;
+    }catch(e){
+      console.error('Failed to apply preloaded state:', e);
+    }
+  }
+  await loadAllFromRepo();
 }
 if(document.readyState === 'loading'){
   window.addEventListener('DOMContentLoaded', bootApp);
