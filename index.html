@@ -403,7 +403,7 @@ table.data.editable td input:focus{outline:2px solid var(--orange);background:#f
     <div class="upload-divider"></div>
     <div id="loading-status" class="hint muted" style="text-align:center;font-size:13px;padding:10px 0">Starting…</div>
     <div class="hint muted" style="margin-top:14px;font-size:12px;border-top:2px solid var(--line);padding-top:10px">
-      Data is pulled from fixed files in the repo: <strong>B2C.xlsx</strong>, <strong>Revenue Input.xlsx</strong>, <strong>B2B.xlsx</strong>, <strong>FY2026.xlsx</strong>, <strong>Plan Approval.xlsx</strong>. To refresh data, replace these files in the repo and push.
+      Data comes from <strong>data.js</strong>, generated offline by running <code>python extract.py</code> — it will ask for a path to each source file (B2C is required; Revenue Input, B2B, FY2026, and Plan Approval are optional). To refresh data: run the script again with updated files, then commit and push the new data.js.
     </div>
   </div>
 </div>
@@ -925,7 +925,7 @@ table.data.editable td input:focus{outline:2px solid var(--orange);background:#f
   (function(){
     var t = Date.now();
     var parent = document.currentScript.parentNode;
-    ['snapshot.js','app.js'].forEach(function(src){
+    ['data.js','snapshot.js','app.js'].forEach(function(src){
       var s = document.createElement('script');
       s.src = src + '?t=' + t;
       s.async = false;

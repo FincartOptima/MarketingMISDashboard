@@ -242,34 +242,12 @@ function reconcileCostMonths(){
 }
 
 // ---- file load ----
-// Parses only the sheet(s) actually needed instead of the whole workbook — large FIN23
-// exports carry many extra pivot/dashboard sheets that are otherwise parsed and thrown away.
-// cellDates is intentionally left off; parseDateAny/normalizeMonthLabel already handle raw
-// serial numbers and strings, and skipping eager Date conversion is much faster on big files.
-function parseWbBuffer(buf, onlySheetNames){
-  if(onlySheetNames){
-    const meta = XLSX.read(buf, {type:'array', bookSheets:true});
-    const targets = onlySheetNames.map(n => n.toLowerCase());
-    const name = meta.SheetNames.find(n => targets.includes(n.toLowerCase())) || meta.SheetNames[0];
-    return XLSX.read(buf, {type:'array', sheets:[name]});
-  }
-  return XLSX.read(buf, {type:'array', sheets:[0]});
-}
-async function readWb(file, onlySheetNames){
+// Only used now for the small in-tab "Upload Excel" edits on EMPLOYEE_REF / RM Master
+// Mapping. The five main data sources are pre-extracted offline by extract.py into
+// data.js (see loadAllFromRepo) — no in-browser XLSX parsing for those anymore.
+async function readWb(file){
   const buf = await file.arrayBuffer();
-  return parseWbBuffer(buf, onlySheetNames);
-}
-// Fetches an .xlsx file that lives alongside index.html/app.js in the repo (works both
-// locally via the dev server and on GitHub Pages, since both serve the repo root as-is).
-async function fetchWb(relativePath, onlySheetNames){
-  const res = await fetch(encodeURI(relativePath) + '?t=' + Date.now());
-  if(!res.ok) throw new Error('HTTP ' + res.status + ' fetching ' + relativePath);
-  const buf = await res.arrayBuffer();
-  return parseWbBuffer(buf, onlySheetNames);
-}
-function findSheetName(wb, ...names){
-  const targets = names.map(n => n.toLowerCase());
-  return wb.SheetNames.find(n => targets.includes(n.toLowerCase())) || wb.SheetNames[0];
+  return XLSX.read(buf, {type:'array', sheets:[0]});
 }
 
 function buildRawData(finRows){
@@ -335,28 +313,6 @@ function detectMonths(){
     if(isValidMonth(m)) set.add(m);
   }
   STATE.months = sortMonths(Array.from(set));
-}
-
-function parseRevenueInput(wb){
-  const sh = wb.Sheets[wb.SheetNames[0]];
-  const rows = XLSX.utils.sheet_to_json(sh, {header:1, defval:'', raw:true, blankrows:false});
-  let headerIdx = 0;
-  for(let i=0;i<Math.min(rows.length,5);i++){
-    const r = rows[i].map(x => (x||'').toString().toLowerCase());
-    if(r.includes('clientname') && r.includes('rm') && r.includes('total')){ headerIdx = i; break; }
-  }
-  const headers = rows[headerIdx].map(h => (h||'').toString().trim());
-  const data = [];
-  for(let i=headerIdx+1;i<rows.length;i++){
-    const row = rows[i];
-    const obj = {}; let any = false;
-    for(let c=0;c<headers.length;c++){
-      const v = row[c]; obj[headers[c]] = (v==null?'':v);
-      if(v!=null && v!=='') any = true;
-    }
-    if(any) data.push(obj);
-  }
-  return data;
 }
 
 function buildB2BRaw(rows){
@@ -470,21 +426,14 @@ function buildPAData(rows){
   });
 }
 
-// Fixed filenames the dashboard pulls straight from the repo — no manual upload.
-// To refresh data, replace these files in the repo and push; the page picks them up on next load.
-const REPO_FILES = {
-  fin23: 'B2C.xlsx',
-  rev:   'Revenue Input.xlsx',
-  b2b:   'B2B.xlsx',
-  fy:    'FY2026.xlsx',
-  pa:    'Plan Approval.xlsx',
-};
-
 function setLoadingStatus(text){
   const el = $('#loading-status');
   if(el) el.textContent = text;
 }
 
+// data.js (built offline by extract.py from B2C.xlsx, Revenue Input.xlsx, B2B.xlsx,
+// FY2026.xlsx, Plan Approval.xlsx) is loaded via a plain <script> tag before app.js,
+// so window.MARKETING_DATA is already available here — no in-browser XLSX parsing.
 async function loadAllFromRepo(){
   STATE.filesLoaded = { fin23: false, rev: false, b2b: false, fy: false, pa: false };
 
@@ -492,63 +441,51 @@ async function loadAllFromRepo(){
   loadCostFromStorage();
   loadRMMasterFromStorage();
 
-  setLoadingStatus('Loading B2C.xlsx…');
-  try{
-    const finWb = await fetchWb(REPO_FILES.fin23, ['RAW_DATA', 'RawData']);
-    const finSheet = findSheetName(finWb, 'RAW_DATA', 'RawData');
-    const finRows = XLSX.utils.sheet_to_json(finWb.Sheets[finSheet], {defval:'', raw:true});
-    STATE.raw = buildRawData(finRows);
+  setLoadingStatus('Loading data.js…');
+  const d = window.MARKETING_DATA || {};
+
+  if(d.fin23 && d.fin23.length){
+    STATE.raw = buildRawData(d.fin23);
     STATE.rawFilters = {};
     STATE.filesLoaded.fin23 = true;
-  }catch(e){
-    console.warn('[MIS] B2C.xlsx not loaded:', e.message);
+  } else {
+    console.warn('[MIS] fin23 data missing from data.js');
     STATE.raw = []; STATE.rawFilters = {};
   }
 
   rebuildTeamMap();
 
-  setLoadingStatus('Loading Revenue Input.xlsx…');
-  try{
-    const revWb = await fetchWb(REPO_FILES.rev);
-    STATE.rev = parseRevenueInput(revWb);
+  if(d.rev && d.rev.length){
+    STATE.rev = d.rev;
     STATE.filesLoaded.rev = true;
-  }catch(e){
-    console.warn('[MIS] Revenue Input.xlsx not loaded:', e.message);
+  } else {
+    console.warn('[MIS] rev data missing from data.js');
     STATE.rev = [];
   }
 
-  setLoadingStatus('Loading B2B.xlsx…');
-  try{
-    const b2bWb = await fetchWb(REPO_FILES.b2b);
-    const b2bRows = XLSX.utils.sheet_to_json(b2bWb.Sheets[b2bWb.SheetNames[0]], {defval:'', raw:true});
-    STATE.b2bRaw = buildB2BRaw(b2bRows);
+  if(d.b2b && d.b2b.length){
+    STATE.b2bRaw = buildB2BRaw(d.b2b);
     STATE.b2b = buildB2BData(STATE.b2bRaw);
     STATE.b2bFilters = {};
     STATE.filesLoaded.b2b = true;
-  }catch(e){
-    console.warn('[MIS] B2B.xlsx not loaded:', e.message);
+  } else {
+    console.warn('[MIS] b2b data missing from data.js');
     STATE.b2bRaw = []; STATE.b2b = []; STATE.b2bFilters = {};
   }
 
-  setLoadingStatus('Loading FY2026.xlsx…');
-  try{
-    const fyWb = await fetchWb(REPO_FILES.fy);
-    const fyRows = XLSX.utils.sheet_to_json(fyWb.Sheets[fyWb.SheetNames[0]], {defval:'', raw:true});
-    STATE.fy = buildFYData(fyRows);
+  if(d.fy && d.fy.length){
+    STATE.fy = buildFYData(d.fy);
     STATE.filesLoaded.fy = true;
-  }catch(e){
-    console.warn('[MIS] FY2026.xlsx not loaded:', e.message);
+  } else {
+    console.warn('[MIS] fy data missing from data.js');
     STATE.fy = [];
   }
 
-  setLoadingStatus('Loading Plan Approval.xlsx…');
-  try{
-    const paWb = await fetchWb(REPO_FILES.pa);
-    const paRows = XLSX.utils.sheet_to_json(paWb.Sheets[paWb.SheetNames[0]], {defval:'', raw:true});
-    STATE.pa = buildPAData(paRows);
+  if(d.pa && d.pa.length){
+    STATE.pa = buildPAData(d.pa);
     STATE.filesLoaded.pa = true;
-  }catch(e){
-    console.warn('[MIS] Plan Approval.xlsx not loaded:', e.message);
+  } else {
+    console.warn('[MIS] pa data missing from data.js');
     STATE.pa = [];
   }
 
