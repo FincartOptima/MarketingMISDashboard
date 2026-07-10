@@ -823,6 +823,19 @@ function buildGrandTotalRow(labelField, labelValue, dynamicKeys, rows, totalFiel
   return gt;
 }
 
+// Filters `pool` by whether a status's month-anchor column matches the active
+// month filter, honoring the AnyMonth/SameMonth tri-state used by several
+// breakdown tables: AnyMonth = the status event happened in the selected
+// month(s) but the lead was NOT created then; SameMonth = the event happened
+// in the selected month(s) AND the lead was created then; default (neither) =
+// the event column just needs to match the selected month(s).
+function applyMonthMode(pool, anyMonthColName, mode){
+  if(isAllMonths()) return pool;
+  if(mode === 'AnyMonth')  return pool.filter(r => monthFilter(r[anyMonthColName]) && !monthFilter(r.CTM));
+  if(mode === 'SameMonth') return pool.filter(r => monthFilter(r[anyMonthColName]) && monthFilter(r.CTM));
+  return pool.filter(r => monthFilter(r[anyMonthColName]));
+}
+
 function applyRefColdFilter(rows){
   const mode = rcFilter(STATE.filterRefCold);
   if(mode === 'Exclude')
@@ -920,19 +933,7 @@ function platformStatusBreakdown(){
     const sub = rows.filter(g.match);
     const obj = {Platform: g.label}; let total = 0;
     for(const st of STATUSES){
-      let pool = sub.filter(r => r.leadStatus===st);
-      if(!isAllMonths()){
-        if(mode==='AnyMonth'){
-          const acol = anyMonthCol(st);
-          pool = pool.filter(r => monthFilter(r[acol]) && !monthFilter(r.CTM));
-        } else if(mode==='SameMonth'){
-          const acol = anyMonthCol(st);
-          pool = pool.filter(r => monthFilter(r[acol]) && monthFilter(r.CTM));
-        } else {
-          const acol = anyMonthCol(st);
-          pool = pool.filter(r => monthFilter(r[acol]));
-        }
-      }
+      const pool = applyMonthMode(sub.filter(r => r.leadStatus===st), anyMonthCol(st), mode);
       obj[st] = pool.length; total += pool.length;
     }
     obj.Total = total;
@@ -967,13 +968,6 @@ function landingPageStatusBreakdown(){
     return a.localeCompare(b);
   });
 
-  const applyMode = (pool, acol) => {
-    if(isAllMonths()) return pool;
-    if(mode==='AnyMonth')   return pool.filter(r => monthFilter(r[acol]) && !monthFilter(r.CTM));
-    if(mode==='SameMonth')  return pool.filter(r => monthFilter(r[acol]) && monthFilter(r.CTM));
-    return pool.filter(r => monthFilter(r[acol]));
-  };
-
   const out = [];
   for(const lp of sortedLPs){
     const sub = lpMap.get(lp);
@@ -982,7 +976,7 @@ function landingPageStatusBreakdown(){
     const campaign = Object.entries(campCounts).sort((a,b)=>b[1]-a[1])[0]?.[0] || '';
     const obj = {'Landing Page': lp || '(Blank)', 'Campaign': campaign || '(Blank)'}; let total = 0;
     for(const st of STATUSES){
-      const pool = applyMode(sub.filter(r => r.leadStatus===st), anyMonthCol(st));
+      const pool = applyMonthMode(sub.filter(r => r.leadStatus===st), anyMonthCol(st), mode);
       obj[st] = pool.length; total += pool.length;
     }
     obj.Total = total;
