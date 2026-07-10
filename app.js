@@ -1103,6 +1103,7 @@ function costSummaryByCampaign(){
   const out = []; let totLeads=0, totCost=0, totQual=0, totConv=0;
   for(let i=1;i<cpc.length;i++){
     const row = cpc[i]; const name = row[0];
+    if(!name || !String(name).trim()) continue;
     let leads = STATE.raw.filter(r => r['Campaign Name']===name && monthFilter(r.CTM)).length;
     let qual  = STATE.raw.filter(r => r['Campaign Name']===name && ((r.leadStatus==='CONVERTED' && monthFilter(r.CM)) || (r.leadStatus==='IN PROCESS' && monthFilter(r.LPM)))).length;
     let conv  = STATE.raw.filter(r => r['Campaign Name']===name && r.leadStatus==='CONVERTED' && monthFilter(r.CM)).length;
