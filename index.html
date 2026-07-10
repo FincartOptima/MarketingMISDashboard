@@ -6,34 +6,53 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <style>
 /* ============================================================
-   2D SHARP FLAT DESIGN — Orange primary, multicolour accents
-   No gradients. No shadows. Sharp corners.
+   SOFT SLATE & CORPORATE BLUE — enterprise dashboard theme.
+   Primary action stays behind the historical --orange token name for
+   backward compatibility with every call site in this file and app-*.js.
+   Semantic accents are desaturated for restrained, low-noise data display.
    ============================================================ */
 :root{
-  --bg:      #f1f5f9;
-  --panel:   #ffffff;
-  --panel2:  #f8fafc;
-  --line:    #cbd5e1;
-  --text:    #0f172a;
-  --muted:   #64748b;
-  /* accent palette */
-  --orange:  #f97316;
-  --red:     #ef4444;
-  --yellow:  #eab308;
-  --pink:    #ec4899;
-  --blue:    #3b82f6;
-  --green:   #22c55e;
-  --violet:  #8b5cf6;
-  --cyan:    #06b6d4;
-  /* derived/misc — repeated literal colors, centralized here */
-  --orange-tint:       #fff7ed;
-  --orange-hover:      #ea580c;
-  --border-strong:     #e2e8f0;
-  --amber:             #d97706;
+  /* Backdrops */
+  --bg:      #f8fafc;   /* ultra-light slate — global body */
+  --panel:   #ffffff;   /* crisp white — cards, modals, tables */
+  --panel2:  #f1f5f9;   /* subtle secondary — table headers, muted panels */
+
+  /* Boundaries */
+  --line:              #e5e7eb;   /* softened, low-noise dividers */
+  --border-strong:     #cbd5e1;   /* used sparingly for stronger separation */
+
+  /* Text */
+  --text:    #1e293b;   /* deep soft slate — high contrast, gentle on eyes */
+  --muted:   #64748b;   /* neutral secondary text */
+
+  /* Primary action (name kept for compatibility with all existing call sites) */
+  --orange:            #2563eb;   /* commanding corporate blue */
+  --orange-tint:       #eff6ff;   /* light blue backdrop for hover/active */
+  --orange-hover:      #1d4ed8;   /* deeper blue for hover states */
+
+  /* Semantic accents — desaturated, pastel-leaning */
+  --red:     #e11d48;   /* rose-tinted, softer than pure red */
+  --yellow:  #ca8a04;   /* rich amber — avoids neon glare */
+  --pink:    #db2777;
+  --blue:    #3b82f6;   /* distinct from primary — for KPI/status tiles */
+  --green:   #16a34a;
+  --violet:  #7c3aed;
+  --cyan:    #0891b2;
+  --amber:   #b45309;
+
+  /* Special */
   --table-header-dark: #334155;
 }
 *{box-sizing:border-box;margin:0;padding:0}
-html,body{background:var(--bg);color:var(--text);font:14px/1.5 system-ui,'Segoe UI',Inter,sans-serif}
+html,body{
+  background:var(--bg);color:var(--text);
+  font:14px/1.5 system-ui,'Segoe UI',Inter,sans-serif;
+  -webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;
+}
+h1,h2,h3,h4,h5,h6{color:var(--text);margin:0}
+a{color:var(--orange);text-decoration:none}
+a:hover{color:var(--orange-hover);text-decoration:underline}
+hr{border:0;border-top:1px solid var(--line);margin:12px 0}
 
 /* ---------- BUTTONS ---------- */
 button{
