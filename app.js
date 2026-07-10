@@ -178,6 +178,13 @@ function tabNotUploaded(contentSelector, key){
 }
 
 // ---- bootstrap ----
+
+// Case/whitespace-insensitive lookup key for RM/team names, used wherever a
+// raw name needs to match a lookup table key (RM Master Mapping, team maps).
+function normalizeNameKey(name){
+  return (name || '').toString().trim().toLowerCase();
+}
+
 function loadEmployeeFromStorage(){
   try{
     const saved = localStorage.getItem(CONFIG.STORAGE_KEYS.EMPREF);
@@ -189,12 +196,12 @@ function rebuildTeamMap(){
   STATE.teamMap = {};
   for(let i=1;i<STATE.empref.length;i++){
     const r = STATE.empref[i]; if(!r) continue;
-    const name = (r[2]||'').toString().trim().toLowerCase();
+    const name = normalizeNameKey(r[2]);
     const team = (r[1]||'').toString().trim();
     if(name) STATE.teamMap[name] = team;
   }
   for(const row of STATE.raw){
-    const key = (row.currentRmName||'').toString().trim().toLowerCase();
+    const key = normalizeNameKey(row.currentRmName);
     const existingTeam = (row.Team||'').toString().trim();
     if(row._hasSourceTeam){
       row.Team = existingTeam || 'SV';
@@ -219,7 +226,7 @@ function buildRMMasterLookup(){
   STATE.rmMasterTeam = {};
   for(let i=1;i<STATE.rmMaster.length;i++){
     const r = STATE.rmMaster[i]; if(!r) continue;
-    const src = (r[0]||'').toString().trim().toLowerCase();
+    const src = normalizeNameKey(r[0]);
     const correct = (r[1]||'').toString().trim();
     const team = (r[2]||'').toString().trim();
     if(src && correct) STATE.rmMasterLookup[src] = correct;
@@ -227,7 +234,7 @@ function buildRMMasterLookup(){
   }
 }
 function mapRM(rawName){
-  const k = (rawName||'').toString().trim().toLowerCase();
+  const k = normalizeNameKey(rawName);
   if(!k) return '';
   return STATE.rmMasterLookup[k] || (rawName||'').toString().trim();
 }
@@ -1325,7 +1332,7 @@ function rmPerformance(){
     (r.leadStatus==='CONVERTED' && monthMatch(r.CM)) ||
     (r.leadStatus==='IN PROCESS' && monthMatch(r.LPM))
   )).length;
-  const rmEq = (a, b) => (a||'').trim().toLowerCase() === (b||'').trim().toLowerCase();
+  const rmEq = (a, b) => normalizeNameKey(a) === normalizeNameKey(b);
   const fpForRM = rm => {
     const fy = STATE.fy.filter(r => rmEq(r.mappedRM, rm) && monthMatch(r.Month) && lsOK(r.leadSource)).length;
     const pa = STATE.pa.filter(r => rmEq(r.mappedRM, rm) && r.clientType.toUpperCase()==='NEW' && monthMatch(r.Month) && lsOK(r.leadSource)).length;
@@ -1364,7 +1371,7 @@ function rmPerformance(){
   //   3) fall back to "Unmatched" so the grand total still reconciles
   const teamForRevRow = r => {
     const mapped = revMappedRm(r);
-    const k = (mapped||'').toString().trim().toLowerCase();
+    const k = normalizeNameKey(mapped);
     return STATE.rmMasterTeam[k] || STATE.teamMap[k] || 'Unmatched';
   };
   const revTeamAgg = {};
@@ -2595,7 +2602,7 @@ function renderProcessed(){
 
 function rawCellValue(row, col){
   if(col === 'Team of FirstRM'){
-    const key = (row.firstRmName||'').toString().trim().toLowerCase();
+    const key = normalizeNameKey(row.firstRmName);
     return key ? (STATE.teamMap[key] || 'SV') : '';
   }
   return String(row[col] ?? '');
