@@ -807,6 +807,22 @@ function activateTab(id){
 }
 
 // ---- aggregators ----
+
+// Shared by every aggregator that appends a "Grand Total" row: sums each
+// dynamic column (a month, a campaign name, a platform, etc.) across all
+// data rows, optionally accumulating a running total field. Mathematically
+// equivalent to summing each row's own total field, since a row's total is
+// itself the sum of its dynamic columns.
+function buildGrandTotalRow(labelField, labelValue, dynamicKeys, rows, totalField){
+  const gt = { [labelField]: labelValue, _tot: true };
+  if(totalField) gt[totalField] = 0;
+  for(const key of dynamicKeys){
+    gt[key] = rows.reduce((sum, row) => sum + (row[key] || 0), 0);
+    if(totalField) gt[totalField] += gt[key];
+  }
+  return gt;
+}
+
 function applyRefColdFilter(rows){
   const mode = rcFilter(STATE.filterRefCold);
   if(mode === 'Exclude')
@@ -872,10 +888,7 @@ function leadsByPlatformMonth(){
     });
     return o;
   });
-  const gt = {Platform:'Grand Total', total:0, _tot:true};
-  months.forEach(m => gt[m] = out.reduce((s,r)=>s+r[m],0));
-  gt.total = out.reduce((s,r)=>s+r.total,0);
-  out.push(gt);
+  out.push(buildGrandTotalRow('Platform', 'Grand Total', months, out, 'total'));
   return out;
 }
 
@@ -926,10 +939,7 @@ function platformStatusBreakdown(){
     obj.LCR = total>0 ? obj.CONVERTED/total : 0;
     out.push(obj);
   }
-  const gt = {Platform:'Grand Total', _tot:true};
-  let tot = 0;
-  STATUSES.forEach(st => { gt[st] = out.reduce((s,r)=>s+r[st],0); tot += gt[st]; });
-  gt.Total = tot;
+  const gt = buildGrandTotalRow('Platform', 'Grand Total', STATUSES, out, 'Total');
   gt.LCR = null;
   out.push(gt);
   return out;
@@ -980,9 +990,10 @@ function landingPageStatusBreakdown(){
     obj.QLCR = total>0 ? ((obj.CONVERTED||0)+(obj['IN PROCESS']||0))/total : 0;
     out.push(obj);
   }
-  const gt = {'Landing Page':'Grand Total', 'Campaign':'', _tot:true}; let tot=0;
-  STATUSES.forEach(st=>{ gt[st]=out.reduce((s,r)=>s+r[st],0); tot+=gt[st]; });
-  gt.Total=tot; gt.LCR=null; gt.QLCR=null;
+  const gt = buildGrandTotalRow('Landing Page', 'Grand Total', STATUSES, out, 'Total');
+  gt.Campaign = '';
+  gt.LCR = null;
+  gt.QLCR = null;
   out.push(gt);
   return out;
 }
@@ -1086,12 +1097,7 @@ function campaignByTeam(){
     obj.Total = total;
     return obj;
   });
-  const gt = {Team:'Grand Total', _tot:true, Total:0};
-  for(const c of campaigns){
-    gt[c] = rows.reduce((s,r)=>s+(r[c]||0),0);
-    gt.Total += gt[c];
-  }
-  rows.push(gt);
+  rows.push(buildGrandTotalRow('Team', 'Grand Total', campaigns, rows, 'Total'));
   return {campaigns, rows};
 }
 
@@ -1272,9 +1278,7 @@ function inProcessDataset(){
     obj.Total = total;
     return obj;
   });
-  const gt = {Team:'Grand Total', _tot:true, Total:0};
-  statuses.forEach(st => { gt[st] = out.reduce((s,r)=>s+r[st],0); gt.Total += gt[st]; });
-  out.push(gt);
+  out.push(buildGrandTotalRow('Team', 'Grand Total', statuses, out, 'Total'));
   return {statuses, data: out};
 }
 
@@ -1300,9 +1304,7 @@ function convertedDataset(){
     obj.Total = total;
     return obj;
   });
-  const gt = {Team:'Grand Total', _tot:true, Total:0};
-  statuses.forEach(st => { gt[st] = out.reduce((s,r)=>s+r[st],0); gt.Total += gt[st]; });
-  out.push(gt);
+  out.push(buildGrandTotalRow('Team', 'Grand Total', statuses, out, 'Total'));
   return {statuses, data: out};
 }
 
@@ -1502,9 +1504,7 @@ function b2bByRMStatus(){
     return obj;
   });
   if(!out.length) return {statuses: B2B_STATUSES, data: []};
-  const gt = {RM:'Grand Total', _tot:true, Total:0};
-  B2B_STATUSES.forEach(st => { gt[st] = out.reduce((s,r)=>s+r[st],0); gt.Total += gt[st]; });
-  out.push(gt);
+  out.push(buildGrandTotalRow('RM', 'Grand Total', B2B_STATUSES, out, 'Total'));
   return {statuses: B2B_STATUSES, data: out};
 }
 
@@ -1741,9 +1741,7 @@ function processedPlatform(){
     months.forEach(m => { o[m] = rows.filter(x => b.match(x) && x.CTM===m).length; o.total += o[m]; });
     return o;
   });
-  const gt = {Platform:'Grand Total', total:0, _tot:true};
-  months.forEach(m => gt[m] = out.reduce((s,r)=>s+r[m],0));
-  gt.total = out.reduce((s,r)=>s+r.total,0); out.push(gt);
+  out.push(buildGrandTotalRow('Platform', 'Grand Total', months, out, 'total'));
   return out;
 }
 function processedStatus(){
