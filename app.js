@@ -1143,7 +1143,7 @@ function costSummaryByCampaign(){
   const cpc = STATE.cost; const header = cpc[0]||[];
   const monthCols = header.slice(1).map(toMmmYyyy);
   const refMode = rcFilter(STATE.filterRefCold);
-  const out = []; let totLeads=0, totCost=0, totQual=0, totConv=0;
+  const out = [];
   for(let i=1;i<cpc.length;i++){
     const row = cpc[i]; const name = row[0];
     if(!name || !String(name).trim()) continue;
@@ -1156,11 +1156,12 @@ function costSummaryByCampaign(){
     const cpql = qual>0  ? cost/qual  : 0;
     const cac  = conv>0  ? cost/conv  : 0;
     out.push({Campaign:name, Leads:leads, 'Cost (₹)':cost, 'CPL (₹)':cpl, 'Quality Leads':qual, 'CPQL (₹)':cpql, 'Converted Leads':conv, 'CAC (₹)':cac});
-    totLeads += leads; totCost += cost; totQual += qual; totConv += conv;
   }
-  out.push({Campaign:'Grand Total', Leads:totLeads, 'Cost (₹)':totCost, 'CPL (₹)':totLeads>0?totCost/totLeads:0,
-    'Quality Leads':totQual, 'CPQL (₹)':totQual>0?totCost/totQual:0,
-    'Converted Leads':totConv, 'CAC (₹)':totConv>0?totCost/totConv:0, _tot:true});
+  const gt = buildGrandTotalRow('Campaign', 'Grand Total', ['Leads', 'Cost (₹)', 'Quality Leads', 'Converted Leads'], out);
+  gt['CPL (₹)']  = gt.Leads>0 ? gt['Cost (₹)']/gt.Leads : 0;
+  gt['CPQL (₹)'] = gt['Quality Leads']>0 ? gt['Cost (₹)']/gt['Quality Leads'] : 0;
+  gt['CAC (₹)']  = gt['Converted Leads']>0 ? gt['Cost (₹)']/gt['Converted Leads'] : 0;
+  out.push(gt);
   return out;
 }
 
@@ -2989,10 +2990,10 @@ function renderRMRev(){
     ? { Team: r.Team, '# Revenue-Based': fmtIN(r.RevBased), '# Not Eligible': fmtIN(r.NotEligible), 'Total Revenue (₹)': fmtINR(r.Total) }
     : { RM: r.RM, Team: r.Team, '# Revenue-Based': fmtIN(r.RevBased), '# Not Eligible': fmtIN(r.NotEligible), 'Total Revenue (₹)': fmtINR(r.Total) }
   );
-  const tot = data.reduce((s,r)=>s+r.Total,0);
+  const gt = buildGrandTotalRow(isTeamView ? 'Team' : 'RM', 'Grand Total', ['RevBased', 'NotEligible', 'Total'], data);
   const gtRow = isTeamView
-    ? { Team:'Grand Total', '# Revenue-Based': fmtIN(data.reduce((s,r)=>s+r.RevBased,0)), '# Not Eligible': fmtIN(data.reduce((s,r)=>s+r.NotEligible,0)), 'Total Revenue (₹)': fmtINR(tot), _tot:true }
-    : { RM:'Grand Total', Team:'', '# Revenue-Based': fmtIN(data.reduce((s,r)=>s+r.RevBased,0)), '# Not Eligible': fmtIN(data.reduce((s,r)=>s+r.NotEligible,0)), 'Total Revenue (₹)': fmtINR(tot), _tot:true };
+    ? { Team: gt.Team, '# Revenue-Based': fmtIN(gt.RevBased), '# Not Eligible': fmtIN(gt.NotEligible), 'Total Revenue (₹)': fmtINR(gt.Total), _tot:true }
+    : { RM: gt.RM, Team:'', '# Revenue-Based': fmtIN(gt.RevBased), '# Not Eligible': fmtIN(gt.NotEligible), 'Total Revenue (₹)': fmtINR(gt.Total), _tot:true };
   rows.push(gtRow);
   renderTable('#tbl-rmrev', headers, rows);
   drawRevChart();
