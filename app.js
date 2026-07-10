@@ -435,13 +435,20 @@ function setLoadingStatus(text){
 // FY2026.xlsx, Plan Approval.xlsx) is loaded via a plain <script> tag before app.js,
 // so window.MARKETING_DATA is already available here — no in-browser XLSX parsing.
 async function loadAllFromRepo(){
+  // #upload-screen and #app both start with display:none in CSS — without this,
+  // the page stays completely blank (no spinner, no error) for the entire loading
+  // and render pass, which can take well over a minute on a large dataset.
+  showUpload();
   STATE.filesLoaded = { fin23: false, rev: false, b2b: false, fy: false, pa: false };
 
   loadEmployeeFromStorage();
   loadCostFromStorage();
   loadRMMasterFromStorage();
 
-  setLoadingStatus('Loading data.js…');
+  setLoadingStatus('Processing data.js…');
+  // Yield one frame so the loading screen actually paints before the heavy
+  // synchronous work below (buildRawData + renderAll) blocks the main thread.
+  await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
   const d = window.MARKETING_DATA || {};
 
   if(d.fin23 && d.fin23.length){
@@ -501,6 +508,10 @@ async function loadAllFromRepo(){
   reconcileCostMonths();
   initFilters();
   initRevFilters();
+
+  setLoadingStatus(`Rendering dashboard (${STATE.raw.length.toLocaleString()} leads)… this can take a minute for large files.`);
+  await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+
   renderAll();
   showApp();
 }
