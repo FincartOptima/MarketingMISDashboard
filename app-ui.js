@@ -234,9 +234,12 @@ async function publishToGitHub(){
 
 async function syncCostFromSheets(silent){
   const s = loadSettings();
-  if(!s.gsUrl) return false;
+  // Prefer the user's own configured URL, otherwise fall back to CONFIG.DEFAULT_GS_URL
+  // so every visitor gets live cost data — not just whoever set gsUrl in Settings.
+  const url = s.gsUrl || CONFIG.DEFAULT_GS_URL;
+  if(!url) return false;
   try{
-    const res = await fetch(s.gsUrl + (s.gsUrl.includes('?')?'&':'?') + '_=' + Date.now());
+    const res = await fetch(url + (url.includes('?')?'&':'?') + '_=' + Date.now());
     if(!res.ok) throw new Error('HTTP ' + res.status);
     const txt = await res.text();
     const rows = parseCsv(txt);
@@ -247,6 +250,10 @@ async function syncCostFromSheets(silent){
     return true;
   }catch(e){
     if(!silent) setSettingsStatus('✗ Sheets sync failed: ' + e.message, 'err');
+    // Silent path: still surface *something* — most failures on the default URL
+    // are caused by the sheet being share-restricted (redirects to Google login,
+    // which comes back as a network error rather than a status code).
+    else console.warn('[MIS] Cost Per Campaign live sync failed — sheet may not be shared publicly. Falling back to bundled snapshot.', e);
     return false;
   }
 }

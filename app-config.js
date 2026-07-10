@@ -32,6 +32,14 @@ const CONFIG = {
   // The FY start month business rule — the one genuinely "hardcoded" value
   // in this block, kept most discoverable since it changes once a year.
   FY_CUTOFF_MONTH: 'Apr-2026',
+  // Default Google Sheets CSV export URL for Cost Per Campaign — used so that
+  // *every* visitor gets live cost data, not just the person who set gsUrl in
+  // their own Settings. Overridden by per-user gsUrl in localStorage settings
+  // when present. Requires the sheet to be shared as "Anyone with the link
+  // → Viewer" (this is how the /export?format=csv endpoint stays fetchable
+  // without auth). Regenerate this URL from any sheet by replacing the
+  // spreadsheet ID between /d/ and /edit.
+  DEFAULT_GS_URL: 'https://docs.google.com/spreadsheets/d/1thf21bXFL6I3iNyQElwycHg6uzFGUMAXaYbqcjD57Lg/export?format=csv&gid=0',
   STORAGE_KEYS: {
     EMPREF: 'empref_override',
     RM_MASTER: 'rmmaster_override',
