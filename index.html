@@ -928,7 +928,7 @@ table.data.editable td input:focus{outline:2px solid var(--orange);background:va
   (function(){
     var t = Date.now();
     var parent = document.currentScript.parentNode;
-    ['data.js','snapshot.js','app.js'].forEach(function(src){
+    ['data.js','snapshot.js','app-config.js','app-dateutils.js','app-state.js','app-dataload.js','app-filters.js','app-aggregators.js','app-rmperf.js','app-tables.js','app-renderers.js','app-ui.js','app-bootstrap.js'].forEach(function(src){
       var s = document.createElement('script');
       s.src = src + '?t=' + t;
       s.async = false;
