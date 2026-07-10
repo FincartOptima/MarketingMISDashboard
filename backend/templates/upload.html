@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Marketing MIS — Data Upload</title>
+<style>
+  body{font-family:Arial,Helvetica,sans-serif;background:#e2e8f0;margin:0;padding:40px 16px;}
+  .card{background:#fff;border:3px solid #ff7a00;max-width:640px;margin:0 auto;padding:32px 36px;}
+  h1{font-size:24px;margin:0 0 4px;}
+  h1 .accent{color:#ff7a00}
+  .sub{color:#64748b;font-size:13px;margin:0 0 20px;}
+  label{display:block;font-weight:bold;font-size:13px;margin:16px 0 4px;}
+  label .opt{font-weight:normal;color:#64748b;}
+  input[type=file]{width:100%;padding:6px 0;font-size:13px;}
+  input[type=password]{width:100%;box-sizing:border-box;padding:8px;font-size:14px;border:1px solid #cbd5e1;}
+  button{margin-top:24px;background:#ff7a00;color:#fff;border:none;padding:12px 24px;font-size:15px;font-weight:bold;cursor:pointer;}
+  button:hover{background:#e56d00;}
+  .msg{padding:12px 14px;margin-bottom:16px;font-size:13px;}
+  .msg.error{background:#fee2e2;border:1px solid #ef4444;color:#991b1b;}
+  .msg.success{background:#dcfce7;border:1px solid #22c55e;color:#166534;}
+  .status{margin-top:28px;border-top:2px solid #e2e8f0;padding-top:16px;}
+  .status table{width:100%;border-collapse:collapse;font-size:13px;}
+  .status td{padding:4px 0;border-bottom:1px solid #f1f5f9;}
+  .status td:last-child{text-align:right;color:#64748b;}
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>Marketing <span class="accent">MIS</span> — Data Upload</h1>
+  <p class="sub">Upload the source files to refresh the dashboard. Only B2C is required.</p>
+
+  {% if error %}<div class="msg error">{{ error }}</div>{% endif %}
+  {% if success %}<div class="msg success">{{ success }}</div>{% endif %}
+
+  <form method="POST" enctype="multipart/form-data">
+    <label>B2C — FIN23 Lead Management <strong>[REQUIRED]</strong></label>
+    <input type="file" name="fin23" accept=".xlsx" required>
+
+    <label>Revenue Input <span class="opt">(optional)</span></label>
+    <input type="file" name="rev" accept=".xlsx">
+
+    <label>B2B Corporate Leads <span class="opt">(optional)</span></label>
+    <input type="file" name="b2b" accept=".xlsx">
+
+    <label>FY2026 Financial Plans <span class="opt">(optional)</span></label>
+    <input type="file" name="fy" accept=".xlsx">
+
+    <label>Plan Approval Sheet <span class="opt">(optional)</span></label>
+    <input type="file" name="pa" accept=".xlsx">
+
+    <label>Upload Password</label>
+    <input type="password" name="password" required>
+
+    <button type="submit">Process &amp; Store</button>
+  </form>
+
+  {% if status %}
+  <div class="status">
+    <strong>Current data on server:</strong>
+    <table>
+      {% for key in sources %}
+      <tr>
+        <td>{{ key }}</td>
+        <td>{% if status[key] %}{{ status[key].rows }} rows &middot; updated {{ status[key].updated_at }}{% else %}not uploaded{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </table>
+  </div>
+  {% endif %}
+</div>
+</body>
+</html>
