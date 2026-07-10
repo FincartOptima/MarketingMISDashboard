@@ -4,6 +4,7 @@
 # and stores the result in SQLite on disk. The dashboard (hosted separately on
 # GitHub Pages) reads GET /api/data instead of a static data.js file — same
 # JSON shape, so app.js's calculation logic is untouched.
+import io
 import json
 import os
 import sqlite3
@@ -113,6 +114,12 @@ def upload_form():
     return render_template('upload.html', status=status, sources=SOURCES)
 
 
+def _bytes(file_storage):
+    # werkzeug wraps uploads in a SpooledTemporaryFile, which on Python < 3.11
+    # lacks .seekable() that openpyxl/zipfile requires. Read into BytesIO instead.
+    return io.BytesIO(file_storage.read())
+
+
 @app.route('/upload', methods=['POST'])
 def upload_submit():
     password = request.form.get('password', '')
@@ -131,7 +138,7 @@ def upload_submit():
 
     try:
         results['fin23'] = extract_lib.load_sheet_rows(
-            fin23_file.stream, sheet_names=['RAW_DATA', 'RawData'],
+            _bytes(fin23_file), sheet_names=['RAW_DATA', 'RawData'],
             column_allowlist=extract_lib.FIN23_COLUMNS)
     except Exception as e:
         errors.append(f'B2C (FIN23): {e}')
@@ -139,28 +146,28 @@ def upload_submit():
     rev_file = request.files.get('rev')
     if rev_file and rev_file.filename:
         try:
-            results['rev'] = extract_lib.load_revenue_input_rows(rev_file.stream)
+            results['rev'] = extract_lib.load_revenue_input_rows(_bytes(rev_file))
         except Exception as e:
             errors.append(f'Revenue Input: {e}')
 
     b2b_file = request.files.get('b2b')
     if b2b_file and b2b_file.filename:
         try:
-            results['b2b'] = extract_lib.load_sheet_rows(b2b_file.stream)
+            results['b2b'] = extract_lib.load_sheet_rows(_bytes(b2b_file))
         except Exception as e:
             errors.append(f'B2B: {e}')
 
     fy_file = request.files.get('fy')
     if fy_file and fy_file.filename:
         try:
-            results['fy'] = extract_lib.load_sheet_rows(fy_file.stream)
+            results['fy'] = extract_lib.load_sheet_rows(_bytes(fy_file))
         except Exception as e:
             errors.append(f'FY2026: {e}')
 
     pa_file = request.files.get('pa')
     if pa_file and pa_file.filename:
         try:
-            results['pa'] = extract_lib.load_sheet_rows(pa_file.stream)
+            results['pa'] = extract_lib.load_sheet_rows(_bytes(pa_file))
         except Exception as e:
             errors.append(f'Plan Approval: {e}')
 
