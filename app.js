@@ -1615,8 +1615,7 @@ function renderRMPerformance(){
 
   // Summary table (team level)
   const sHeaders = ['Team','Total Leads','Quality Leads','Financial Plans Made','Revenue >15K Clients','Transactional Clients','Total Revenue (₹)'];
-  applyHeat(summary, 'leads');
-  renderHeatLegend('#legend-rmperf-summary', 'Row heat by Total Leads');
+  applyHeatAndLegend(summary, 'leads', '#legend-rmperf-summary', 'Row heat by Total Leads');
   const sRows = summary.map(r => ({
     Team: r.team,
     'Total Leads': fmtIN(r.leads),
@@ -1641,8 +1640,7 @@ function renderRMPerformance(){
 
   // Detail table (team × RM) with team subtotals
   const dHeaders = ['Team','RM Name','Total Leads','Quality Leads','Financial Plans Made','Revenue >15K Clients','Transactional Clients','Total Revenue (₹)'];
-  applyHeat(detail, 'leads');
-  renderHeatLegend('#legend-rmperf-detail', 'Row heat by Total Leads (excludes Team Totals)');
+  applyHeatAndLegend(detail, 'leads', '#legend-rmperf-detail', 'Row heat by Total Leads (excludes Team Totals)');
   const dRows = [];
   const byTeam = {};
   detail.forEach(r => (byTeam[r.team] = byTeam[r.team]||[]).push(r));
@@ -1917,6 +1915,14 @@ function applyHeat(rows, heatBy, opts={}){
   }
   return rows;
 }
+// Every heated table applies the quartile heat tiers to its rows, then
+// renders the matching legend, immediately before rendering the table
+// itself. Consolidates that 2-call idiom (13 call sites).
+function applyHeatAndLegend(rows, heatByField, legendSelector, legendLabel, invert=false){
+  applyHeat(rows, heatByField, {invert});
+  renderHeatLegend(legendSelector, legendLabel, invert);
+}
+
 function renderHeatLegend(host, metricLabel, invert){
   const el = typeof host==='string' ? $(host) : host;
   if(!el) return;
@@ -2097,8 +2103,7 @@ function renderPlatformMonth(){
   const gt = data[data.length-1].total || 1;
   const months = filteredMonths();
   data.forEach((r,i) => r._tot = (i===data.length-1));
-  applyHeat(data, 'total');
-  renderHeatLegend('#legend-platform-month', 'Row heat by Total leads');
+  applyHeatAndLegend(data, 'total', '#legend-platform-month', 'Row heat by Total leads');
   const rows = data.map((r,i) => {
     const o = {Platform:r.Platform};
     months.forEach(m => o[m] = fmtIN(r[m]));
@@ -2128,13 +2133,11 @@ function renderStatusMonth(){
     return o;
   });
   const mapped = statusByMonth('non-SV');
-  applyHeat(mapped, 'total');
-  renderHeatLegend('#legend-status-month-mapped', 'Row heat by Total');
+  applyHeatAndLegend(mapped, 'total', '#legend-status-month-mapped', 'Row heat by Total');
   renderTable('#tbl-status-month-mapped', headers, fmt(mapped));
 
   const sv = statusByMonth('SV');
-  applyHeat(sv, 'total');
-  renderHeatLegend('#legend-status-month-sv', 'Row heat by Total');
+  applyHeatAndLegend(sv, 'total', '#legend-status-month-sv', 'Row heat by Total');
   renderTable('#tbl-status-month-sv', headers, fmt(sv));
 }
 
@@ -2160,8 +2163,7 @@ function renderPlatformStatus(){
   }
 
   const data = platformStatusBreakdown();
-  applyHeat(data, 'Total');
-  renderHeatLegend('#legend-platform-status', 'Row heat by Total');
+  applyHeatAndLegend(data, 'Total', '#legend-platform-status', 'Row heat by Total');
   const headers = ['Platform', ...STATUSES, 'Total', 'LCR', 'QLCR'];
   const rows = data.map(r => {
     const o = {Platform:r.Platform};
@@ -2294,8 +2296,7 @@ function renderLandingPageStatus(){
   }
 
   const data = landingPageStatusBreakdown();
-  applyHeat(data, 'Total');
-  renderHeatLegend('#legend-lp-status', 'Row heat by Total');
+  applyHeatAndLegend(data, 'Total', '#legend-lp-status', 'Row heat by Total');
   const headers = ['Landing Page', 'Campaign', ...STATUSES, 'Total'];
   const rows = data.map(r => {
     const o = {'Landing Page': r['Landing Page'], 'Campaign': r['Campaign'] || ''};
@@ -2322,8 +2323,7 @@ function renderCampaignByTeam(){
   }
   const {campaigns, rows} = campaignByTeam();
   const headers = ['Team', ...campaigns, 'Total'];
-  applyHeat(rows, 'Total');
-  renderHeatLegend('#legend-campaign-team', 'Row heat by Total Leads');
+  applyHeatAndLegend(rows, 'Total', '#legend-campaign-team', 'Row heat by Total Leads');
   const data = rows.map(r => {
     const o = {Team:r.Team, _tot:r._tot, _heat:r._heat};
     campaigns.forEach(c => o[c] = fmtIN(r[c]));
@@ -2347,8 +2347,7 @@ function renderTeam(){
   }
   const data = teamPerformance();
   const headers = ['Team', 'Total Leads', 'CONVERTED', 'Conv. Rate', 'IN PROCESS', 'FOLLOW UP', 'ASSIGNED', 'RE-ASSIGNED', 'ON HOLD', 'DEAD'];
-  applyHeat(data, 'Total Leads');
-  renderHeatLegend('#legend-team', 'Row heat by Total Leads');
+  applyHeatAndLegend(data, 'Total Leads', '#legend-team', 'Row heat by Total Leads');
   const rows = data.map(r => ({
     Team: r.Team,
     'Total Leads': fmtIN(r['Total Leads']),
@@ -2427,8 +2426,7 @@ function renderRmTransfer(){
 function renderIncome(){
   if(!STATE.filesLoaded.fin23){ setNotUploaded('#tbl-income','fin23'); $('#legend-income').innerHTML=''; return; }
   const data = incomeSegment();
-  applyHeat(data, 'Leads');
-  renderHeatLegend('#legend-income', 'Row heat by Leads');
+  applyHeatAndLegend(data, 'Leads', '#legend-income', 'Row heat by Leads');
   renderTable('#tbl-income',
     ['Income Band','Leads','Converted','In Process','Quality Leads','Conv. Rate','QLCR','Share %'],
     data.map(r => ({
@@ -2447,8 +2445,7 @@ function renderIncome(){
 function renderCostSummary(){
   if(!STATE.filesLoaded.fin23){ setNotUploaded('#tbl-cost-summary','fin23'); $('#legend-cost-summary').innerHTML=''; return; }
   const data = costSummaryByCampaign();
-  applyHeat(data, 'Leads');
-  renderHeatLegend('#legend-cost-summary', 'Row heat by Leads');
+  applyHeatAndLegend(data, 'Leads', '#legend-cost-summary', 'Row heat by Leads');
   renderTable('#tbl-cost-summary', ['Campaign','Leads','Cost (₹)','CPL (₹)','Quality Leads','CPQL (₹)','Converted Leads','CAC (₹)'], data.map(r => ({
     Campaign:r.Campaign, Leads:fmtIN(r.Leads), 'Cost (₹)':fmtINR(r['Cost (₹)']), 'CPL (₹)':fmtINR(r['CPL (₹)']),
     'Quality Leads':fmtIN(r['Quality Leads']), 'CPQL (₹)':fmtINR(r['CPQL (₹)']),
@@ -2468,8 +2465,7 @@ function renderCplRm(){
   if(!STATE.filesLoaded.fin23){ setNotUploaded('#tbl-cpl-rm','fin23'); $('#legend-cpl-rm').innerHTML=''; return; }
   const data = costPerLeadPerRMWithTotals();
   data.forEach(r => { r.totalLeadsVal = r.totalLeads; });
-  applyHeat(data, 'totalLeadsVal');
-  renderHeatLegend('#legend-cpl-rm', 'Row heat by Total Leads');
+  applyHeatAndLegend(data, 'totalLeadsVal', '#legend-cpl-rm', 'Row heat by Total Leads');
   const headers = ['Team','RM','Total Leads','Total Cost (INR)','CPL (INR)','Quality Leads','CPQL (INR)'];
   const rows = data.map(r => ({
     Team:r.Team,
