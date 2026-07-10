@@ -25,6 +25,12 @@
   --green:   #22c55e;
   --violet:  #8b5cf6;
   --cyan:    #06b6d4;
+  /* derived/misc — repeated literal colors, centralized here */
+  --orange-tint:       #fff7ed;
+  --orange-hover:      #ea580c;
+  --border-strong:     #e2e8f0;
+  --amber:             #d97706;
+  --table-header-dark: #334155;
 }
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{background:var(--bg);color:var(--text);font:14px/1.5 system-ui,'Segoe UI',Inter,sans-serif}
@@ -35,10 +41,10 @@ button{
   border-radius:0;padding:7px 16px;font:600 13px/1 inherit;cursor:pointer;
   transition:background .12s,color .12s;
 }
-button:hover{background:#ea580c;border-color:#ea580c}
+button:hover{background:var(--orange-hover);border-color:var(--orange-hover)}
 button:disabled{opacity:.4;cursor:default}
 button.secondary{background:#fff;color:var(--orange);border-color:var(--orange)}
-button.secondary:hover{background:#fff7ed}
+button.secondary:hover{background:var(--orange-tint)}
 button.btn-green{background:var(--green);border-color:var(--green)}
 button.btn-green:hover{background:#16a34a;border-color:#16a34a}
 button.btn-blue{background:var(--blue);border-color:var(--blue)}
@@ -60,7 +66,7 @@ select{min-width:120px}
 /* ============ UPLOAD SCREEN ============ */
 #upload-screen{
   position:fixed;inset:0;display:none;align-items:center;justify-content:center;
-  background:#e2e8f0;
+  background:var(--border-strong);
 }
 .upload-card{
   background:#fff;border:3px solid var(--orange);
@@ -106,7 +112,7 @@ header.app .spacer{flex:1}
 #tabs{
   display:flex;background:#fff;border-bottom:2px solid var(--line);
   overflow-x:auto;flex-wrap:nowrap;
-  scrollbar-width:thin;scrollbar-color:var(--orange) #e2e8f0;
+  scrollbar-width:thin;scrollbar-color:var(--orange) var(--border-strong);
 }
 #tabs::-webkit-scrollbar{height:4px}
 #tabs::-webkit-scrollbar-thumb{background:var(--orange)}
@@ -116,8 +122,8 @@ header.app .spacer{flex:1}
   padding:12px 18px;font:600 13px/1 inherit;cursor:pointer;
   transition:color .1s,border-color .1s,background .1s;
 }
-.tab:hover{color:var(--orange);background:#fff7ed}
-.tab.active{color:var(--orange);border-bottom-color:var(--orange);background:#fff7ed}
+.tab:hover{color:var(--orange);background:var(--orange-tint)}
+.tab.active{color:var(--orange);border-bottom-color:var(--orange);background:var(--orange-tint)}
 .tab.primary{color:#1e40af}
 .tab.primary.active{color:var(--blue);border-bottom-color:var(--blue);background:#eff6ff}
 
@@ -170,7 +176,7 @@ header.app .spacer{flex:1}
 .file-not-uploaded{
   display:flex;align-items:flex-start;gap:12px;
   padding:18px 20px;margin:8px 0;
-  background:#fff7ed;border:2px solid var(--orange);
+  background:var(--orange-tint);border:2px solid var(--orange);
   color:#92400e;font-size:13px;line-height:1.6;
 }
 .file-not-uploaded .fnu-icon{font-size:20px;flex-shrink:0;margin-top:1px;}
@@ -259,7 +265,7 @@ tr.heat-vlow td{background:rgba(239,68,68,.16) !important}
 .kpi-green {border-left-color:var(--green)} .kpi-green .kpi-value {color:var(--green)}
 .kpi-violet{border-left-color:var(--violet)}.kpi-violet .kpi-value{color:var(--violet)}
 .kpi-cyan  {border-left-color:var(--cyan)}  .kpi-cyan .kpi-value  {color:var(--cyan)}
-.kpi-amber {border-left-color:#d97706}      .kpi-amber .kpi-value {color:#d97706}
+.kpi-amber {border-left-color:var(--amber)}      .kpi-amber .kpi-value {color:var(--amber)}
 
 /* ============ LIVE DATA BAND ============ */
 #live-kpis{margin-bottom:16px}
@@ -298,13 +304,13 @@ table.data thead th{
   position:sticky;top:0;z-index:2;border-bottom:2px solid var(--orange);
 }
 table.data thead th:first-child{background:var(--text)}
-table.data tbody tr:hover{background:#fff7ed}
+table.data tbody tr:hover{background:var(--orange-tint)}
 table.data tbody tr.grand td{
-  font-weight:800;background:#fff7ed;color:var(--orange);
+  font-weight:800;background:var(--orange-tint);color:var(--orange);
   border-top:2px solid var(--orange);border-bottom:2px solid var(--orange);
 }
 table.data.editable td input{width:100%;background:transparent;border:0;color:var(--text);text-align:right;padding:2px 4px}
-table.data.editable td input:focus{outline:2px solid var(--orange);background:#fff7ed}
+table.data.editable td input:focus{outline:2px solid var(--orange);background:var(--orange-tint)}
 
 /* raw data filter */
 .raw-data-table{border-collapse:collapse}
@@ -327,7 +333,7 @@ table.data.editable td input:focus{outline:2px solid var(--orange);background:#f
 .raw-filter-actions button:last-child{border-right:0}
 .raw-filter-options{overflow-y:auto;flex:1}
 .raw-filter-option{display:flex;align-items:center;gap:8px;padding:6px 12px;cursor:pointer;font-size:12px}
-.raw-filter-option:hover{background:#fff7ed}
+.raw-filter-option:hover{background:var(--orange-tint)}
 .raw-filter-option input{accent-color:var(--orange);cursor:pointer}
 .raw-filter-option span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .raw-filter-empty{padding:10px 12px;color:var(--muted);font-size:12px}
@@ -337,11 +343,11 @@ table.data.editable td input:focus{outline:2px solid var(--orange);background:#f
 
 /* ============ TRANSFER TABLE ============ */
 .transfer-team-row{cursor:pointer;transition:background .1s}
-.transfer-team-row:hover{background:#fff7ed !important}
+.transfer-team-row:hover{background:var(--orange-tint) !important}
 .transfer-team-row .toggle-icon{color:var(--orange);font-size:12px;width:20px;text-align:center}
 .transfer-detail-cell{padding:4px 0 12px 0 !important;background:#f8fafc !important}
 .transfer-detail-cell table.data{border:2px solid var(--line);margin:0}
-.transfer-detail-cell table.data thead th{background:#334155}
+.transfer-detail-cell table.data thead th{background:var(--table-header-dark)}
 
 /* ============ TOGGLE BUTTONS ============ */
 .toggle-group{display:inline-flex;border:2px solid var(--line);margin-left:10px}
@@ -352,7 +358,7 @@ table.data.editable td input:focus{outline:2px solid var(--orange);background:#f
 }
 .toggle-group .tg-btn:last-child{border-right:0}
 .toggle-group .tg-btn.active{background:var(--orange);color:#fff}
-.toggle-group .tg-btn:hover:not(.active){background:#fff7ed;color:var(--orange)}
+.toggle-group .tg-btn:hover:not(.active){background:var(--orange-tint);color:var(--orange)}
 
 /* ============ CHART ============ */
 #rev-chart-wrap{background:#fff;border:2px solid var(--line);padding:16px;height:400px;margin-bottom:16px}
@@ -398,13 +404,7 @@ table.data.editable td input:focus{outline:2px solid var(--orange);background:#f
 <!-- ============ LOADING ============ -->
 <div id="upload-screen">
   <div class="upload-card">
-    <div class="upload-logo">Marketing <span>MIS</span></div>
-    <div class="upload-sub">Loading data directly from the repository — no upload needed.</div>
-    <div class="upload-divider"></div>
-    <div id="loading-status" class="hint muted" style="text-align:center;font-size:13px;padding:10px 0">Starting…</div>
-    <div class="hint muted" style="margin-top:14px;font-size:12px;border-top:2px solid var(--line);padding-top:10px">
-      Data comes from <strong>data.js</strong>, generated offline by running <code>python extract.py</code> — it will ask for a path to each source file (B2C is required; Revenue Input, B2B, FY2026, and Plan Approval are optional). To refresh data: run the script again with updated files, then commit and push the new data.js.
-    </div>
+    <div class="upload-logo">Loading The Fincart Marketing <span>MIS</span> Dashboard</div>
   </div>
 </div>
 
@@ -424,6 +424,7 @@ table.data.editable td input:focus{outline:2px solid var(--orange);background:#f
         <label>Ref+Cold</label>
         <div id="filter-refcold-wrap"></div>
       </span>
+      <a class="secondary" id="feedback-link" href="#" target="_blank" rel="noopener" title="Suggest an improvement" style="text-decoration:none;display:inline-flex;align-items:center;padding:6px 12px;font-size:13px">💡 Suggest an Improvement</a>
       <button class="secondary" id="settings-btn" title="Settings">⚙️</button>
       <button class="btn-blue" id="download-json-btn">↓ Webpage</button>
     </div>
@@ -862,7 +863,9 @@ table.data.editable td input:focus{outline:2px solid var(--orange);background:#f
     <div id="share-result" style="display:none;margin-top:14px">
       <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:4px">Your shareable link:</label>
       <div style="display:flex;gap:6px">
-        <input type="text" id="share-result-url" readonly style="flex:1;font-size:11px;background:var(--surface2)">
+        <!-- background intentionally omitted: previously referenced an undefined
+             --surface2 variable (no-op), so this keeps current rendered output. -->
+        <input type="text" id="share-result-url" readonly style="flex:1;font-size:11px">
         <button id="share-copy-btn" class="btn-green">Copy</button>
       </div>
       <p class="muted" style="font-size:11px;margin-top:6px">Anyone who opens this link will see the dashboard pre-loaded with your data.</p>
