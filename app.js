@@ -2246,6 +2246,9 @@ function renderLandingPageStatus(){
   }
 
   // ---- Landing Page filter (multi-select) ----
+  // Hand-rolled rather than buildMultiSelect: this filter allows deselecting
+  // every option to show nothing ("None selected"), which buildMultiSelect
+  // deliberately disallows (it auto-reverts to 'All' once selection hits 0).
   const lpWrap = $('#lp-lp-filter-wrap');
   if(lpWrap){
     let base = applyRefColdFilter(STATE.raw);
