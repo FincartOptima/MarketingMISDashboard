@@ -4,11 +4,49 @@
    Months:   detected dynamically from RAW_DATA — Dashboard/MTD/Processed/Cost auto-extend.
 */
 
-const MONTHS_3 = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-const STATUSES = ['CONVERTED','IN PROCESS','ASSIGNED','RE-ASSIGNED','FOLLOW UP','ON HOLD','DEAD'];
-const FIXED_TEAMS = ['Akanksha','Ankit S','Anmol G','Ratan P','Ravi S','Vidhi','Vivek S','Yash T','SV','Ambika S'];
-const RAW_COLUMNS = ['currentRmName','Team','clientName','landingPage','platformName','Campaign Name','userId','createdDate','CTM','lastStatusDate','LSM','leadInProcessDate','LPM','leadHead','leadStatus','convertedDate','CM','firstRmName','Team of FirstRM','convertedByName','annualIncome','clientCategory','FMONTH'];
-const B2B_RAW_COLUMNS = ['name','email','phone','companyName','companyEmail','leadHead','currentRmName','firstRmName','createdDate','CreateMonth','brokerName','brokerEmail','leadStatus','platformName','categoryName','landingPage','enquiryType'];
+// Centralized configuration: business-rule constants, external endpoints, and
+// reference data used across the file. A few large/positional entries
+// (CONFIG.TABLE_INFO) are filled in further down, right where the rest of
+// their section lives, but always onto this same object.
+const CONFIG = {
+  MONTHS_3: ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'],
+  STATUSES: ['CONVERTED','IN PROCESS','ASSIGNED','RE-ASSIGNED','FOLLOW UP','ON HOLD','DEAD'],
+  FIXED_TEAMS: ['Akanksha','Ankit S','Anmol G','Ratan P','Ravi S','Vidhi','Vivek S','Yash T','SV','Ambika S'],
+  RAW_COLUMNS: ['currentRmName','Team','clientName','landingPage','platformName','Campaign Name','userId','createdDate','CTM','lastStatusDate','LSM','leadInProcessDate','LPM','leadHead','leadStatus','convertedDate','CM','firstRmName','Team of FirstRM','convertedByName','annualIncome','clientCategory','FMONTH'],
+  B2B_RAW_COLUMNS: ['name','email','phone','companyName','companyEmail','leadHead','currentRmName','firstRmName','createdDate','CreateMonth','brokerName','brokerEmail','leadStatus','platformName','categoryName','landingPage','enquiryType'],
+  // Google Form (Name + Suggestion) linked to a Google Sheet.
+  FEEDBACK_FORM_URL: 'https://docs.google.com/forms/d/e/1FAIpQLSeee0xpyNQvoG2ULnAR0xPbG23wwcmhERKCMwKT6dw8dWp4eA/viewform?usp=publish-editor',
+  DATA_API_URL: 'https://fincart.pythonanywhere.com/api/data',
+  PREMIUM_TABS: ['rmperf', 'rmrev'],
+  PREMIUM_PASSWORD: 'Password',
+  FILE_LABELS: {
+    fin23: 'FIN23 Lead Management file (B2C.xlsx)',
+    rev:   'Revenue Input file (Revenue Input.xlsx)',
+    b2b:   'B2B Corporate Lead file (B2B.xlsx)',
+    fy:    'FY2026 file (FY2026.xlsx)',
+    pa:    'Plan Approval file (Plan Approval.xlsx)',
+  },
+  // The FY start month business rule — the one genuinely "hardcoded" value
+  // in this block, kept most discoverable since it changes once a year.
+  FY_CUTOFF_MONTH: 'Apr-2026',
+  STORAGE_KEYS: {
+    EMPREF: 'empref_override',
+    RM_MASTER: 'rmmaster_override',
+    COST: 'cpc_override',
+    SETTINGS: 'mis_settings_v1',
+  },
+};
+
+const MONTHS_3 = CONFIG.MONTHS_3;
+const STATUSES = CONFIG.STATUSES;
+const FIXED_TEAMS = CONFIG.FIXED_TEAMS;
+const RAW_COLUMNS = CONFIG.RAW_COLUMNS;
+const B2B_RAW_COLUMNS = CONFIG.B2B_RAW_COLUMNS;
+const FEEDBACK_FORM_URL = CONFIG.FEEDBACK_FORM_URL;
+const DATA_API_URL = CONFIG.DATA_API_URL;
+const PREMIUM_TABS = CONFIG.PREMIUM_TABS;
+const PREMIUM_PASSWORD = CONFIG.PREMIUM_PASSWORD;
+const FILE_LABELS = CONFIG.FILE_LABELS;
 
 const $  = sel => document.querySelector(sel);
 const $$ = sel => Array.from(document.querySelectorAll(sel));
@@ -127,16 +165,6 @@ const STATE = {
   campaignTeamMode: 'current',
 };
 
-const PREMIUM_TABS = ['rmperf', 'rmrev'];
-const PREMIUM_PASSWORD = 'Password';
-
-const FILE_LABELS = {
-  fin23: 'FIN23 Lead Management file (B2C.xlsx)',
-  rev:   'Revenue Input file (Revenue Input.xlsx)',
-  b2b:   'B2B Corporate Lead file (B2B.xlsx)',
-  fy:    'FY2026 file (FY2026.xlsx)',
-  pa:    'Plan Approval file (Plan Approval.xlsx)',
-};
 function notUploadedHTML(key){
   return `<div class="file-not-uploaded"><span class="fnu-icon">&#9888;</span><strong>${FILE_LABELS[key]}</strong> was not found in the repository.<br>Add/update this file in the repo and refresh the page.</div>`;
 }
@@ -152,7 +180,7 @@ function tabNotUploaded(contentSelector, key){
 // ---- bootstrap ----
 function loadEmployeeFromStorage(){
   try{
-    const saved = localStorage.getItem('empref_override');
+    const saved = localStorage.getItem(CONFIG.STORAGE_KEYS.EMPREF);
     if(saved){ STATE.empref = JSON.parse(saved); return; }
   }catch(e){}
   STATE.empref = (window.SNAPSHOT && window.SNAPSHOT.EMPLOYEE_REF) ? JSON.parse(JSON.stringify(window.SNAPSHOT.EMPLOYEE_REF)) : [['Emp Code','Team','Name']];
@@ -178,7 +206,7 @@ function rebuildTeamMap(){
 
 function loadRMMasterFromStorage(){
   try{
-    const saved = localStorage.getItem('rmmaster_override');
+    const saved = localStorage.getItem(CONFIG.STORAGE_KEYS.RM_MASTER);
     if(saved){ STATE.rmMaster = JSON.parse(saved); buildRMMasterLookup(); return; }
   }catch(e){}
   STATE.rmMaster = (window.SNAPSHOT && window.SNAPSHOT['RM Master Mapping'])
@@ -204,12 +232,12 @@ function mapRM(rawName){
   return STATE.rmMasterLookup[k] || (rawName||'').toString().trim();
 }
 function persistRMMaster(){
-  try{ localStorage.setItem('rmmaster_override', JSON.stringify(STATE.rmMaster)); }catch(e){}
+  try{ localStorage.setItem(CONFIG.STORAGE_KEYS.RM_MASTER, JSON.stringify(STATE.rmMaster)); }catch(e){}
 }
 
 function loadCostFromStorage(){
   try{
-    const saved = localStorage.getItem('cpc_override');
+    const saved = localStorage.getItem(CONFIG.STORAGE_KEYS.COST);
     if(saved){ STATE.cost = JSON.parse(saved); return; }
   }catch(e){}
   const c = window.SNAPSHOT && window.SNAPSHOT['Cost Per Campaign'];
@@ -431,9 +459,9 @@ function setLoadingStatus(text){
   if(el) el.textContent = text;
 }
 
-// data.js (built offline by extract.py from B2C.xlsx, Revenue Input.xlsx, B2B.xlsx,
-// FY2026.xlsx, Plan Approval.xlsx) is loaded via a plain <script> tag before app.js,
-// so window.MARKETING_DATA is already available here — no in-browser XLSX parsing.
+// Data is fetched from the hosted backend API (PythonAnywhere) instead of a static
+// data.js bundle — the /upload form there replaces the local extract.py + git push
+// workflow. Falls back to window.MARKETING_DATA (data.js) if the API is unreachable.
 async function loadAllFromRepo(){
   // #upload-screen and #app both start with display:none in CSS — without this,
   // the page stays completely blank (no spinner, no error) for the entire loading
@@ -445,11 +473,20 @@ async function loadAllFromRepo(){
   loadCostFromStorage();
   loadRMMasterFromStorage();
 
-  setLoadingStatus('Processing data.js…');
+  setLoadingStatus('Fetching latest data…');
   // Yield one frame so the loading screen actually paints before the heavy
   // synchronous work below (buildRawData + renderAll) blocks the main thread.
   await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
-  const d = window.MARKETING_DATA || {};
+
+  let d = {};
+  try {
+    const res = await fetch(DATA_API_URL, { cache: 'no-store' });
+    if(!res.ok) throw new Error(`API returned ${res.status}`);
+    d = await res.json();
+  } catch(e) {
+    console.warn('[MIS] Failed to fetch data from API, falling back to data.js', e);
+    d = window.MARKETING_DATA || {};
+  }
 
   if(d.fin23 && d.fin23.length){
     STATE.raw = buildRawData(d.fin23);
@@ -542,7 +579,7 @@ function updateDataSubtitle(){
 }
 
 // ---- filters / tabs ----
-const FY_CUTOFF = monthKey('Apr-2026');
+const FY_CUTOFF = monthKey(CONFIG.FY_CUTOFF_MONTH);
 function filteredMonths(){ return STATE.months.filter(m => monthKey(m) >= FY_CUTOFF); }
 
 // Multi-select helpers
@@ -2526,7 +2563,7 @@ function renderCPC(){
   $$('.cpc-input').forEach(inp => {
     inp.oninput = () => {
       STATE.cost[+inp.dataset.r][+inp.dataset.c] = +inp.value || 0;
-      try{ localStorage.setItem('cpc_override', JSON.stringify(STATE.cost)); }catch(e){}
+      try{ localStorage.setItem(CONFIG.STORAGE_KEYS.COST, JSON.stringify(STATE.cost)); }catch(e){}
       renderCostSummary(); renderCplRm(); renderMTD();
     };
   });
@@ -2880,7 +2917,7 @@ function renderEmployee(){
   });
 }
 function persistEmployee(){
-  try{ localStorage.setItem('empref_override', JSON.stringify(STATE.empref)); }catch(e){}
+  try{ localStorage.setItem(CONFIG.STORAGE_KEYS.EMPREF, JSON.stringify(STATE.empref)); }catch(e){}
 }
 
 function renderRMMaster(){
@@ -3132,7 +3169,7 @@ function generateShareLink(){
 }
 
 // ============ SETTINGS (GitHub + Google Sheets) ============
-const SETTINGS_KEY = 'mis_settings_v1';
+const SETTINGS_KEY = CONFIG.STORAGE_KEYS.SETTINGS;
 function loadSettings(){
   try{ return JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}'); }catch(e){ return {}; }
 }
@@ -3240,7 +3277,7 @@ async function syncCostFromSheets(silent){
     const rows = parseCsv(txt);
     if(!rows.length || !rows[0].length) throw new Error('Sheet is empty');
     STATE.cost = rows;
-    try{ localStorage.setItem('cpc_override', JSON.stringify(STATE.cost)); }catch(e){}
+    try{ localStorage.setItem(CONFIG.STORAGE_KEYS.COST, JSON.stringify(STATE.cost)); }catch(e){}
     if(!silent) setSettingsStatus(`✓ Loaded ${rows.length-1} campaign rows from Google Sheets`, 'ok');
     return true;
   }catch(e){
@@ -3397,6 +3434,12 @@ function closeDownloadModal(){
 }
 
 function bindUI(){
+  const fbLink = $('#feedback-link');
+  if(fbLink){
+    if(FEEDBACK_FORM_URL) fbLink.href = FEEDBACK_FORM_URL;
+    else fbLink.style.display = 'none';
+  }
+
   $('#download-json-btn').onclick = openDownloadModal;
   $('#confirm-download').onclick = downloadAsWebpage;
 
@@ -3467,7 +3510,7 @@ function bindUI(){
   $('#b2b-clear-filters').onclick = () => { STATE.b2bFilters = {}; renderB2BRawData(); };
 
   $('#reset-cpc').onclick = () => {
-    try{ localStorage.removeItem('cpc_override'); }catch(e){}
+    try{ localStorage.removeItem(CONFIG.STORAGE_KEYS.COST); }catch(e){}
     loadCostFromStorage(); reconcileCostMonths();
     renderCPC(); renderCostSummary(); renderCplRm(); renderMTD();
   };
@@ -3477,7 +3520,7 @@ function bindUI(){
     persistEmployee(); rebuildTeamMap(); renderEmployee();
   };
   $('#emp-reset').onclick = () => {
-    try{ localStorage.removeItem('empref_override'); }catch(e){}
+    try{ localStorage.removeItem(CONFIG.STORAGE_KEYS.EMPREF); }catch(e){}
     loadEmployeeFromStorage(); rebuildTeamMap();
     renderEmployee(); renderAffectedByTeamChange();
   };
@@ -3602,7 +3645,7 @@ function bindUI(){
     persistRMMaster(); buildRMMasterLookup(); renderRMMaster();
   };
   $('#rmm-reset').onclick = () => {
-    try{ localStorage.removeItem('rmmaster_override'); }catch(e){}
+    try{ localStorage.removeItem(CONFIG.STORAGE_KEYS.RM_MASTER); }catch(e){}
     loadRMMasterFromStorage(); buildRMMasterLookup();
     if(STATE.fy && STATE.fy.length) STATE.fy.forEach(r => { r.mappedRM = mapRM(r.rmName); });
     if(STATE.pa && STATE.pa.length) STATE.pa.forEach(r => { r.mappedRM = mapRM(r.advisor); });
@@ -3776,6 +3819,7 @@ const TABLE_INFO = {
     source: 'Revenue Input sheet, RM Master Mapping sheet'
   },
 };
+CONFIG.TABLE_INFO = TABLE_INFO;
 
 function showInfoPopup(key){
   const info = TABLE_INFO[key];
