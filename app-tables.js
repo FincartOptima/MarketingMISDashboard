@@ -1,5 +1,134 @@
-// app-tables.js — Generic table renderer, heat-tier coloring, sortable tables.
+// app-tables.js — Generic table renderer, heat-tier coloring, sortable tables,
+// and the shared breakdown-chart wrapper.
 // Part of the app.js split (classic script, shares global scope with the other app-*.js files).
+
+/* ============================================================
+   BREAKDOWN CHARTS
+   Shared Chart.js wrapper for the dashboard's cross-tab sections. Callers pass
+   the SAME already-aggregated rows that feed the table beside them, so a chart
+   can never silently disagree with its own table.
+   ============================================================ */
+
+// Warm categorical palette, ordered so adjacent series stay distinguishable.
+const CHART_COLORS = [
+  '#C85A32','#3F7D5C','#3A6B8A','#B87333','#A85572','#6B5B8A',
+  '#A97C1E','#3A7D8A','#B3402F','#5C7D3F','#7A5C3F','#8A857D',
+];
+const CHART_MUTED = '#8A857D';
+const CHART_GRID  = 'rgba(28,29,27,.07)';
+const CHART_LINE  = '#E5E0D8';
+
+/**
+ * Render (or re-render) a stacked/grouped bar chart.
+ * @param {string} canvasSel  CSS selector for the <canvas>
+ * @param {string} key        STATE.charts registry key — prevents instance leaks
+ * @param {object} opts
+ * @param {string[]} opts.labels      category-axis labels
+ * @param {{label:string,data:number[]}[]} opts.series  one entry per segment
+ * @param {boolean} [opts.horizontal] horizontal bars — use for long labels
+ * @param {boolean} [opts.stacked]    stack segments (default true)
+ */
+function renderBreakdownChart(canvasSel, key, opts){
+  const canvas = $(canvasSel);
+  if(!canvas || !window.Chart) return;
+  if(!STATE.charts) STATE.charts = {};
+  if(STATE.charts[key]){ STATE.charts[key].destroy(); delete STATE.charts[key]; }
+
+  const {labels, series, horizontal=false, stacked=true} = opts;
+  if(!labels.length || !series.length) return;
+
+  STATE.charts[key] = new Chart(canvas.getContext('2d'), {
+    type:'bar',
+    data:{
+      labels,
+      datasets: series.map((s,i) => ({
+        label: s.label,
+        data: s.data,
+        backgroundColor: CHART_COLORS[i % CHART_COLORS.length],
+        borderWidth: 0,
+        borderRadius: 0,
+        maxBarThickness: horizontal ? 20 : 44,
+      })),
+    },
+    options:{
+      indexAxis: horizontal ? 'y' : 'x',
+      responsive:true,
+      maintainAspectRatio:false,
+      // Six charts re-animating on every filter change is visible jank on a
+      // page that already renders thousands of table rows synchronously.
+      animation:false,
+      interaction:{mode:'index', intersect:false},
+      layout:{padding:{top:6,right:10,left:2,bottom:0}},
+      plugins:{
+        // Datalabels collide badly inside stacked segments, and the exact
+        // figures are already one glance away in the table below — so the
+        // chart stays clean and the tooltip carries the detail.
+        datalabels:{display:false},
+        legend:{
+          display: series.length > 1,
+          position:'bottom',
+          labels:{boxWidth:9,boxHeight:9,padding:11,color:CHART_MUTED,font:{size:10.5}},
+        },
+        tooltip:{
+          backgroundColor:'#211F1C',padding:10,cornerRadius:0,
+          titleFont:{size:11.5},bodyFont:{size:11.5},
+          callbacks:{label: c => `${c.dataset.label}: ${fmtIN(c.raw)}`},
+        },
+      },
+      scales:{
+        x:{
+          stacked,
+          ticks:{
+            color:CHART_MUTED,font:{size:10.5},maxRotation:0,autoSkip:true,
+            callback: horizontal
+              ? (v => fmtIN(v))
+              : function(v){ const l=this.getLabelForValue(v); return l.length>14 ? l.slice(0,13)+'…' : l; },
+          },
+          grid:{display:horizontal,color:CHART_GRID,drawTicks:false},
+          border:{color:CHART_LINE},
+        },
+        y:{
+          stacked,
+          beginAtZero:true,
+          ticks:{
+            color:CHART_MUTED,font:{size:10.5},
+            callback: horizontal
+              ? function(v){ const l=this.getLabelForValue(v); return l.length>22 ? l.slice(0,21)+'…' : l; }
+              : (v => fmtIN(v)),
+          },
+          grid:{display:!horizontal,color:CHART_GRID,drawTicks:false},
+          border:{color:CHART_LINE},
+        },
+      },
+    },
+  });
+}
+
+/**
+ * Reshape cross-tab rows into {labels, series} for renderBreakdownChart.
+ * Always drops the Grand Total row — charting it would dwarf every real bar.
+ * @param {object[]} rows          the table's own row objects
+ * @param {string} labelField      field holding the category name
+ * @param {string[]} seriesKeys    fields to plot as stacked segments
+ * @param {object} [opts]
+ * @param {number} [opts.topN]     keep only the N largest categories
+ * @param {string} [opts.sortKey]  field to rank by when topN is set
+ */
+function crossTabToSeries(rows, labelField, seriesKeys, opts={}){
+  let body = rows.filter(r => !r._tot);
+  if(opts.topN && opts.sortKey && body.length > opts.topN){
+    body = [...body]
+      .sort((a,b) => (Number(b[opts.sortKey])||0) - (Number(a[opts.sortKey])||0))
+      .slice(0, opts.topN);
+  }
+  return {
+    labels: body.map(r => String(r[labelField] ?? '')),
+    series: seriesKeys.map(k => ({
+      label: String(k),
+      data: body.map(r => Number(r[k])||0),
+    })),
+  };
+}
 
 // ---- table renderer ----
 function renderTable(host, headers, rows, opts={}){

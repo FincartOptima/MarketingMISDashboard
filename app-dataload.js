@@ -191,6 +191,26 @@ function setLoadingStatus(text){
   if(el) el.textContent = text;
 }
 
+/**
+ * Yield until the browser has had a chance to paint, so the loading screen is
+ * actually on-screen before the heavy synchronous work that follows blocks the
+ * main thread.
+ *
+ * requestAnimationFrame does NOT fire while the tab is hidden, so a bare
+ * double-rAF await hangs forever if the dashboard is opened in a background
+ * tab — leaving a permanently blank screen until the user focuses it. Racing
+ * against a timer guarantees the pipeline always continues; when the tab is
+ * visible the rAF path still wins and we get a real painted frame.
+ */
+function yieldToPaint(){
+  return new Promise(resolve => {
+    let settled = false;
+    const finish = () => { if(!settled){ settled = true; resolve(); } };
+    requestAnimationFrame(() => requestAnimationFrame(finish));
+    setTimeout(finish, 200);
+  });
+}
+
 // Data is fetched from the hosted backend API (PythonAnywhere) instead of a static
 // data.js bundle — the /upload form there replaces the local extract.py + git push
 // workflow. Falls back to window.MARKETING_DATA (data.js) if the API is unreachable.
@@ -206,9 +226,7 @@ async function loadAllFromRepo(){
   loadRMMasterFromStorage();
 
   setLoadingStatus('Fetching latest data…');
-  // Yield one frame so the loading screen actually paints before the heavy
-  // synchronous work below (buildRawData + renderAll) blocks the main thread.
-  await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+  await yieldToPaint();
 
   let d = {};
   try {
@@ -279,7 +297,7 @@ async function loadAllFromRepo(){
   initRevFilters();
 
   setLoadingStatus(`Rendering dashboard (${STATE.raw.length.toLocaleString()} leads)… this can take a minute for large files.`);
-  await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+  await yieldToPaint();
 
   renderAll();
   showApp();

@@ -36,6 +36,10 @@ const STATE = {
   lpLandingPages: [],
   revChart: null,
   statusChart: null,
+  // Chart.js instances for the dashboard breakdown visualisations, keyed by
+  // section id. Registered and destroyed via renderBreakdownChart() in
+  // app-tables.js so repeated renders don't leak canvases.
+  charts: {},
   rawFilters: {},
   premiumUnlocked: false,
   teamPerfMode: 'current',

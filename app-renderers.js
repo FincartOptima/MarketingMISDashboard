@@ -121,6 +121,15 @@ function renderPlatformMonth(){
     return o;
   });
   renderTable('#tbl-platform-month', ['Platform', ...months, 'Total', 'Share %'], rows);
+
+  // Months on the category axis so the bars read as a trend, stacked by
+  // platform to show mix. Built from `data` (raw numbers), not `rows`
+  // (fmtIN-formatted strings).
+  renderBreakdownChart('#chart-platform-month', 'platformMonth', {
+    labels: months,
+    series: data.filter(r => !r._tot)
+                .map(r => ({label:r.Platform, data:months.map(m => Number(r[m])||0)})),
+  });
 }
 
 function renderStatusMonth(){
@@ -140,13 +149,22 @@ function renderStatusMonth(){
     o._heat = r._heat;
     return o;
   });
+  // Months on the category axis, stacked by status — same shape for both
+  // panels so mapped vs. SV can be compared at a glance.
+  const chartFor = (rowsArr, canvasSel, key) => renderBreakdownChart(canvasSel, key, {
+    labels: months,
+    series: rowsArr.map(r => ({label:r.Status, data:months.map(m => Number(r[m])||0)})),
+  });
+
   const mapped = statusByMonth('non-SV');
   applyHeatAndLegend(mapped, 'total', '#legend-status-month-mapped', 'Row heat by Total');
   renderTable('#tbl-status-month-mapped', headers, fmt(mapped));
+  chartFor(mapped, '#chart-status-month-mapped', 'statusMonthMapped');
 
   const sv = statusByMonth('SV');
   applyHeatAndLegend(sv, 'total', '#legend-status-month-sv', 'Row heat by Total');
   renderTable('#tbl-status-month-sv', headers, fmt(sv));
+  chartFor(sv, '#chart-status-month-sv', 'statusMonthSV');
 }
 
 function renderPlatformStatus(){
@@ -184,6 +202,12 @@ function renderPlatformStatus(){
     return o;
   });
   makeSortableTable('#tbl-platform-status', headers, rows, renderPlatformStatus);
+
+  // Horizontal so platform names stay readable without rotation.
+  renderBreakdownChart('#chart-platform-status', 'platformStatus', {
+    ...crossTabToSeries(data, 'Platform', STATUSES, {topN:12, sortKey:'Total'}),
+    horizontal: true,
+  });
 }
 
 function renderLandingPageStatus(){
@@ -317,6 +341,13 @@ function renderLandingPageStatus(){
     return o;
   });
   makeSortableTable('#tbl-lp-status', headers, rows, renderLandingPageStatus);
+
+  // Landing page names are long and there can be dozens — horizontal bars,
+  // capped to the 12 highest-volume pages so the chart stays legible.
+  renderBreakdownChart('#chart-lp-status', 'lpStatus', {
+    ...crossTabToSeries(data, 'Landing Page', STATUSES, {topN:12, sortKey:'Total'}),
+    horizontal: true,
+  });
 }
 
 function renderCampaignByTeam(){
@@ -342,6 +373,11 @@ function renderCampaignByTeam(){
     return o;
   });
   makeSortableTable('#tbl-campaign-team', headers, data, renderCampaignByTeam);
+
+  // Teams on the category axis, stacked by campaign. Built from `rows` (raw
+  // numbers) rather than `data`, which holds fmtIN-formatted strings.
+  renderBreakdownChart('#chart-campaign-team', 'campaignTeam',
+    crossTabToSeries(rows, 'Team', campaigns));
 }
 
 function renderTeam(){

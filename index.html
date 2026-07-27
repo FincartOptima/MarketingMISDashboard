@@ -549,6 +549,25 @@ table.data.editable td input:focus{outline:1px solid var(--orange);background:va
 /* ============ STATUS CHART ============ */
 #status-dist-chart-wrap{height:220px;background:var(--panel);border:1px solid var(--line);padding:12px;margin-bottom:16px}
 
+/* ---- breakdown chart wrappers (see renderBreakdownChart in app-tables.js) ---- */
+/* Flex column so the canvas claims exactly the space left after the caption.
+   Chart.js (maintainAspectRatio:false) sizes to its parent box, so without
+   flex:1 + min-height:0 it would size to the full wrapper and overflow by the
+   caption's height. */
+.chart-wrap{
+  position:relative;height:250px;background:var(--panel);
+  border:1px solid var(--line);padding:12px 14px 8px;margin-bottom:14px;
+  display:flex;flex-direction:column;
+}
+.chart-wrap.short{height:212px}
+.chart-wrap.tall {height:330px}
+.chart-wrap canvas{flex:1 1 auto;min-height:0;width:100%}
+.chart-cap{
+  flex:0 0 auto;
+  font:500 9px/1 var(--font-sans);text-transform:uppercase;letter-spacing:.18em;
+  color:var(--muted);margin-bottom:10px;
+}
+
 /* ============ PREMIUM TAB LOCK ============ */
 .premium-lock{display:none}
 .tab-panel.locked .premium-content{display:none}
@@ -631,6 +650,10 @@ table.data.editable td input:focus{outline:1px solid var(--orange);background:va
       <h2>Leads Generated · Platform × Month
         <button class="info-btn" data-info="platform-month" title="Table info">i</button>
       </h2>
+      <div class="chart-wrap">
+        <div class="chart-cap">Leads by platform, stacked per month</div>
+        <canvas id="chart-platform-month"></canvas>
+      </div>
       <div id="legend-platform-month"></div>
       <div class="table-wrap" id="tbl-platform-month"></div>
     </div>
@@ -641,6 +664,10 @@ table.data.editable td input:focus{outline:1px solid var(--orange);background:va
         <h2>Status Distribution · Mapped Teams
           <button class="info-btn" data-info="status-month-mapped" title="Table info">i</button>
         </h2>
+        <div class="chart-wrap short">
+          <div class="chart-cap">Status mix per month</div>
+          <canvas id="chart-status-month-mapped"></canvas>
+        </div>
         <div id="legend-status-month-mapped"></div>
         <div class="table-wrap" id="tbl-status-month-mapped"></div>
       </div>
@@ -648,6 +675,10 @@ table.data.editable td input:focus{outline:1px solid var(--orange);background:va
         <h2>Status Distribution · SV (Unmapped)
           <button class="info-btn" data-info="status-month-sv" title="Table info">i</button>
         </h2>
+        <div class="chart-wrap short">
+          <div class="chart-cap">Status mix per month</div>
+          <canvas id="chart-status-month-sv"></canvas>
+        </div>
         <div id="legend-status-month-sv"></div>
         <div class="table-wrap" id="tbl-status-month-sv"></div>
       </div>
@@ -667,6 +698,10 @@ table.data.editable td input:focus{outline:1px solid var(--orange);background:va
         </span>
       </h2>
       <div id="ps-team-filter-wrap" style="margin-bottom:6px"></div>
+      <div class="chart-wrap">
+        <div class="chart-cap">Status composition per platform</div>
+        <canvas id="chart-platform-status"></canvas>
+      </div>
       <div id="legend-platform-status"></div>
       <div class="table-wrap" id="tbl-platform-status"></div>
     </div>
@@ -684,6 +719,10 @@ table.data.editable td input:focus{outline:1px solid var(--orange);background:va
         <div id="lp-team-filter-wrap" style="display:flex;align-items:center"></div>
         <div id="lp-campaign-filter-wrap" style="display:flex;align-items:center"></div>
         <div id="lp-lp-filter-wrap" style="display:flex;align-items:center;position:relative"></div>
+      </div>
+      <div class="chart-wrap tall">
+        <div class="chart-cap">Status composition · top 12 landing pages by volume</div>
+        <canvas id="chart-lp-status"></canvas>
       </div>
       <div id="legend-lp-status"></div>
       <div class="table-wrap" id="tbl-lp-status"></div>
@@ -717,6 +756,10 @@ table.data.editable td input:focus{outline:1px solid var(--orange);background:va
           <span id="hdr-campaign-team" style="color:var(--muted);font-size:11px"></span>
         </span>
       </h2>
+      <div class="chart-wrap">
+        <div class="chart-cap">Campaign mix per team</div>
+        <canvas id="chart-campaign-team"></canvas>
+      </div>
       <div id="legend-campaign-team"></div>
       <div class="table-wrap" id="tbl-campaign-team"></div>
       <div class="hint">Rows = teams, columns = campaigns. Counts use <strong>CreateMonth (CTM)</strong>. Honors global Month + Ref/Cold filter.</div>
