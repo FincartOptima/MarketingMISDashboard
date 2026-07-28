@@ -123,11 +123,15 @@ function renderPlatformMonth(){
   renderTable('#tbl-platform-month', ['Platform', ...months, 'Total', 'Share %'], rows);
 
   // Months on the category axis so the bars read as a trend, stacked by
-  // platform to show mix. Built from `data` (raw numbers), not `rows`
-  // (fmtIN-formatted strings).
+  // platform to show mix. The multi-select above the chart narrows to the
+  // subset of platforms the user has picked (default = Brand Marketing if
+  // it exists, first platform otherwise). The TABLE always shows every row.
+  const platforms = data.filter(r => !r._tot).map(r => r.Platform);
+  const selected = resolveChartFilterDefault('platformMonth', platforms, ['Brand Marketing','Branding']);
+  renderChartFilter('#filter-platform-month', 'Platform', platforms, selected, renderPlatformMonth);
   renderBreakdownChart('#chart-platform-month', 'platformMonth', {
     labels: months,
-    series: data.filter(r => !r._tot)
+    series: data.filter(r => !r._tot && selected.has(r.Platform))
                 .map(r => ({label:r.Platform, data:months.map(m => Number(r[m])||0)})),
   });
 }
@@ -149,22 +153,29 @@ function renderStatusMonth(){
     o._heat = r._heat;
     return o;
   });
-  // Months on the category axis, stacked by status — same shape for both
-  // panels so mapped vs. SV can be compared at a glance.
-  const chartFor = (rowsArr, canvasSel, key) => renderBreakdownChart(canvasSel, key, {
-    labels: months,
-    series: rowsArr.map(r => ({label:r.Status, data:months.map(m => Number(r[m])||0)})),
-  });
+  // Months on the category axis, stacked by status. Each panel gets its own
+  // multi-select (default = CONVERTED) so mapped vs. SV can be compared
+  // filtered to the same status set.
+  const chartFor = (rowsArr, canvasSel, filterSel, key) => {
+    const statusOpts = rowsArr.map(r => r.Status);
+    const selected = resolveChartFilterDefault(key, statusOpts, ['CONVERTED']);
+    renderChartFilter(filterSel, 'Status', statusOpts, selected, renderStatusMonth);
+    renderBreakdownChart(canvasSel, key, {
+      labels: months,
+      series: rowsArr.filter(r => selected.has(r.Status))
+                     .map(r => ({label:r.Status, data:months.map(m => Number(r[m])||0)})),
+    });
+  };
 
   const mapped = statusByMonth('non-SV');
   applyHeatAndLegend(mapped, 'total', '#legend-status-month-mapped', 'Row heat by Total');
   renderTable('#tbl-status-month-mapped', headers, fmt(mapped));
-  chartFor(mapped, '#chart-status-month-mapped', 'statusMonthMapped');
+  chartFor(mapped, '#chart-status-month-mapped', '#filter-status-month-mapped', 'statusMonthMapped');
 
   const sv = statusByMonth('SV');
   applyHeatAndLegend(sv, 'total', '#legend-status-month-sv', 'Row heat by Total');
   renderTable('#tbl-status-month-sv', headers, fmt(sv));
-  chartFor(sv, '#chart-status-month-sv', 'statusMonthSV');
+  chartFor(sv, '#chart-status-month-sv', '#filter-status-month-sv', 'statusMonthSV');
 }
 
 function renderPlatformStatus(){
@@ -203,9 +214,13 @@ function renderPlatformStatus(){
   });
   makeSortableTable('#tbl-platform-status', headers, rows, renderPlatformStatus);
 
-  // Horizontal so platform names stay readable without rotation.
+  // Horizontal so platform names stay readable without rotation. Status
+  // filter above the chart (default CONVERTED) — the table keeps every column.
+  const selected = resolveChartFilterDefault('platformStatus', STATUSES, ['CONVERTED']);
+  renderChartFilter('#filter-platform-status', 'Status', STATUSES, selected, renderPlatformStatus);
+  const seriesKeys = STATUSES.filter(s => selected.has(s));
   renderBreakdownChart('#chart-platform-status', 'platformStatus', {
-    ...crossTabToSeries(data, 'Platform', STATUSES, {topN:12, sortKey:'Total'}),
+    ...crossTabToSeries(data, 'Platform', seriesKeys, {topN:12, sortKey:'Total'}),
     horizontal: true,
   });
 }
@@ -344,8 +359,12 @@ function renderLandingPageStatus(){
 
   // Landing page names are long and there can be dozens — horizontal bars,
   // capped to the 12 highest-volume pages so the chart stays legible.
+  // Status filter above the chart (default CONVERTED).
+  const lpSelected = resolveChartFilterDefault('lpStatus', STATUSES, ['CONVERTED']);
+  renderChartFilter('#filter-lp-status', 'Status', STATUSES, lpSelected, renderLandingPageStatus);
+  const lpSeriesKeys = STATUSES.filter(s => lpSelected.has(s));
   renderBreakdownChart('#chart-lp-status', 'lpStatus', {
-    ...crossTabToSeries(data, 'Landing Page', STATUSES, {topN:12, sortKey:'Total'}),
+    ...crossTabToSeries(data, 'Landing Page', lpSeriesKeys, {topN:12, sortKey:'Total'}),
     horizontal: true,
   });
 }
@@ -374,10 +393,14 @@ function renderCampaignByTeam(){
   });
   makeSortableTable('#tbl-campaign-team', headers, data, renderCampaignByTeam);
 
-  // Teams on the category axis, stacked by campaign. Built from `rows` (raw
-  // numbers) rather than `data`, which holds fmtIN-formatted strings.
+  // Teams on the category axis, stacked by the campaign(s) the user picks
+  // (default = Branding). Built from `rows` (raw numbers) not `data` (fmtIN
+  // strings). Table still shows every campaign column.
+  const ctSelected = resolveChartFilterDefault('campaignTeam', campaigns, ['Branding','Brand Marketing']);
+  renderChartFilter('#filter-campaign-team', 'Campaign', campaigns, ctSelected, renderCampaignByTeam);
+  const ctKeys = campaigns.filter(c => ctSelected.has(c));
   renderBreakdownChart('#chart-campaign-team', 'campaignTeam',
-    crossTabToSeries(rows, 'Team', campaigns));
+    crossTabToSeries(rows, 'Team', ctKeys));
 }
 
 function renderTeam(){

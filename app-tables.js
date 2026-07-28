@@ -60,18 +60,41 @@ function renderBreakdownChart(canvasSel, key, opts){
       interaction:{mode:'index', intersect:false},
       layout:{padding:{top:6,right:10,left:2,bottom:0}},
       plugins:{
-        // Datalabels collide badly inside stacked segments, and the exact
-        // figures are already one glance away in the table below — so the
-        // chart stays clean and the tooltip carries the detail.
-        datalabels:{display:false},
+        // Show a datalabel per bar segment, but only if the value is big
+        // enough that the label won't collide with adjacent segments. On a
+        // stacked bar we skip anything under 5% of the tallest bar; on a
+        // single-series chart we always show. Below a threshold the value
+        // still lives in the tooltip.
+        datalabels: window.ChartDataLabels ? {
+          display: (ctx) => {
+            const v = ctx.dataset.data[ctx.dataIndex];
+            if(!v) return false;
+            if(series.length === 1) return true;
+            // Sum this bar across all datasets to get the stack total
+            let stackSum = 0;
+            for(const ds of ctx.chart.data.datasets) stackSum += (ds.data[ctx.dataIndex] || 0);
+            return stackSum > 0 && (v / stackSum) >= 0.06;
+          },
+          color: '#FFFFFF',
+          anchor: 'center',
+          align: 'center',
+          font: {size:11, weight:'600', family:'ui-monospace, "SF Mono", Consolas, monospace'},
+          formatter: v => {
+            if(v >= 100000) return (v/1000).toFixed(0)+'k';
+            if(v >= 10000)  return (v/1000).toFixed(1)+'k';
+            return fmtIN(v);
+          },
+          textShadowColor: 'rgba(0,0,0,.35)',
+          textShadowBlur: 3,
+        } : {display:false},
         legend:{
           display: series.length > 1,
           position:'bottom',
-          labels:{boxWidth:9,boxHeight:9,padding:11,color:CHART_MUTED,font:{size:10.5}},
+          labels:{boxWidth:11,boxHeight:11,padding:13,color:CHART_MUTED,font:{size:12}},
         },
         tooltip:{
-          backgroundColor:'#211F1C',padding:10,cornerRadius:0,
-          titleFont:{size:11.5},bodyFont:{size:11.5},
+          backgroundColor:'#211F1C',padding:11,cornerRadius:0,
+          titleFont:{size:12.5},bodyFont:{size:12.5},
           callbacks:{label: c => `${c.dataset.label}: ${fmtIN(c.raw)}`},
         },
       },
@@ -91,7 +114,7 @@ function renderBreakdownChart(canvasSel, key, opts){
           stacked,
           beginAtZero:true,
           ticks:{
-            color:CHART_MUTED,font:{size:10.5},
+            color:CHART_MUTED,font:{size:12},
             callback: horizontal
               ? function(v){ const l=this.getLabelForValue(v); return l.length>22 ? l.slice(0,21)+'…' : l; }
               : (v => fmtIN(v)),
@@ -101,7 +124,95 @@ function renderBreakdownChart(canvasSel, key, opts){
         },
       },
     },
+    plugins: window.ChartDataLabels ? [window.ChartDataLabels] : [],
   });
+}
+
+/**
+ * Resolve the initial selection for a per-chart series filter.
+ * Returns the persisted Set from STATE.chartFilters[key] if present, otherwise
+ * seeds it with the caller's requested defaults filtered down to what actually
+ * exists in `options`. Falls back to the first option if none of the defaults
+ * match (e.g. user said "Brand Marketing" but the data has "Facebook" etc.).
+ */
+function resolveChartFilterDefault(key, options, wantedDefaults){
+  if(!STATE.chartFilters) STATE.chartFilters = {};
+  const existing = STATE.chartFilters[key];
+  if(existing instanceof Set){
+    // Prune any options that no longer exist in the dataset
+    const opts = new Set(options);
+    const cleaned = new Set([...existing].filter(v => opts.has(v)));
+    if(cleaned.size > 0){ STATE.chartFilters[key] = cleaned; return cleaned; }
+  }
+  const optSet = new Set(options);
+  const wanted = (wantedDefaults||[]).filter(v => optSet.has(v));
+  const seed = new Set(wanted.length ? wanted : (options.length ? [options[0]] : []));
+  STATE.chartFilters[key] = seed;
+  return seed;
+}
+
+/**
+ * Render a chart-scoped multi-select filter above a chart. Reuses the .ms-wrap
+ * styles from the header multi-selects so it inherits the theme automatically.
+ * @param {string} hostSel       CSS selector for the container to fill
+ * @param {string} label         Label shown to the left of the button
+ * @param {string[]} options     All possible values
+ * @param {Set<string>} selected Currently-selected values (mutated in place)
+ * @param {function} onChange    Called after each toggle with the new Set
+ */
+function renderChartFilter(hostSel, label, options, selected, onChange){
+  const host = $(hostSel);
+  if(!host) return;
+  const selCount = selected.size;
+  const btnLabel = selCount === 0 ? 'None selected'
+                 : selCount === options.length ? 'All'
+                 : selCount === 1 ? [...selected][0]
+                 : selCount + ' selected';
+  host.innerHTML = '';
+  const wrap = document.createElement('div');
+  wrap.className = 'chart-filter';
+  const lab = document.createElement('label');
+  lab.textContent = label;
+  wrap.appendChild(lab);
+
+  const ms = document.createElement('div');
+  ms.className = 'ms-wrap';
+  const btn = document.createElement('div');
+  btn.className = 'ms-btn';
+  btn.innerHTML = '<span class="cf-btn-label">'+escHtml(btnLabel)+'</span><span class="ms-arrow">▼</span>';
+  btn.onclick = e => { e.stopPropagation(); ms.classList.toggle('open'); };
+  const dd = document.createElement('div');
+  dd.className = 'ms-dropdown';
+
+  const mkOpt = (val, extraCls, checked) => {
+    const opt = document.createElement('label');
+    opt.className = 'ms-opt' + (extraCls ? ' '+extraCls : '');
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.checked = checked;
+    cb.onchange = () => {
+      if(val === '__all__'){
+        selected.clear();
+        if(cb.checked) options.forEach(o => selected.add(o));
+      } else {
+        if(cb.checked) selected.add(val); else selected.delete(val);
+      }
+      onChange(selected);
+    };
+    opt.appendChild(cb);
+    opt.appendChild(document.createTextNode(' ' + (val === '__all__' ? 'All' : val)));
+    return opt;
+  };
+
+  dd.appendChild(mkOpt('__all__', 'ms-all', selected.size === options.length));
+  for(const o of options) dd.appendChild(mkOpt(o, selected.has(o) ? 'ms-selected' : '', selected.has(o)));
+
+  ms.appendChild(btn); ms.appendChild(dd);
+  wrap.appendChild(ms);
+  host.appendChild(wrap);
+
+  // One-shot outside-click closer; the {once:true} means we don't leak listeners.
+  document.addEventListener('click', () => ms.classList.remove('open'), {once:true});
 }
 
 /**

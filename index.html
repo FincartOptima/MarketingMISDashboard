@@ -63,7 +63,7 @@
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{
   background:var(--bg);color:var(--text);
-  font:14px/1.55 var(--font-sans);
+  font:16px/1.55 var(--font-sans);
   -webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;
   font-feature-settings:"tnum";   /* tabular numerals — columns stop shimmering */
 }
@@ -74,7 +74,7 @@ hr{border:0;border-top:1px solid var(--line);margin:12px 0}
 
 /* Wide-tracked uppercase micro-label — the workhorse of the hierarchy */
 .eyebrow{
-  font:500 10px/1 var(--font-sans);text-transform:uppercase;
+  font:500 12px/1 var(--font-sans);text-transform:uppercase;
   letter-spacing:.18em;color:var(--orange);
 }
 /* Status pulse dot */
@@ -88,7 +88,7 @@ hr{border:0;border-top:1px solid var(--line);margin:12px 0}
 button{
   background:var(--orange);color:#FFF;border:1px solid var(--orange);
   border-radius:0;padding:8px 16px;cursor:pointer;
-  font:500 10px/1 var(--font-sans);text-transform:uppercase;letter-spacing:.14em;
+  font:500 12px/1 var(--font-sans);text-transform:uppercase;letter-spacing:.14em;
   transition:background .15s ease-out,color .15s ease-out,border-color .15s ease-out;
 }
 button:hover{background:var(--orange-hover);border-color:var(--orange-hover)}
@@ -106,12 +106,12 @@ input[type=file]{padding:8px;background:var(--panel);color:var(--text);border:1p
 input[type=text],input[type=number],select{
   background:var(--panel);color:var(--text);
   border:1px solid var(--line);
-  padding:7px 10px;font:13px/1.2 var(--font-sans);
+  padding:7px 10px;font:15px/1.2 var(--font-sans);
 }
 input[type=text]:focus,input[type=number]:focus,select:focus{
   outline:none;border-color:var(--orange);
 }
-input[type=text]::placeholder{font-family:var(--font-mono);font-size:12px;color:var(--dust)}
+input[type=text]::placeholder{font-family:var(--font-mono);font-size:14px;color:var(--dust)}
 select{min-width:120px}
 
 /* ============ LOADING SCREEN ============ */
@@ -124,14 +124,14 @@ select{min-width:120px}
   padding:32px 36px;max-width:640px;width:92%;text-align:center;
 }
 .upload-logo{
-  font:400 34px/1.2 var(--font-serif);letter-spacing:-.01em;
+  font:400 36px/1.2 var(--font-serif);letter-spacing:-.01em;
   color:var(--text);margin-bottom:4px;
 }
 .upload-logo span{color:var(--orange)}
-.upload-sub{color:var(--muted);margin-bottom:20px;font-size:13px}
+.upload-sub{color:var(--muted);margin-bottom:20px;font-size:15px}
 .upload-row{margin-bottom:14px}
 .upload-row label{
-  display:block;margin-bottom:5px;font-size:11px;font-weight:700;
+  display:block;margin-bottom:5px;font-size:13px;font-weight:700;
   color:var(--text);text-transform:uppercase;letter-spacing:.5px;
 }
 .upload-divider{height:2px;background:var(--line);margin:18px 0}
@@ -151,10 +151,10 @@ select{min-width:120px}
 }
 .side-brand{padding:26px 24px 22px;border-bottom:1px solid rgba(255,255,255,.07)}
 .side-brand .sb-mark{
-  font:400 25px/1 var(--font-serif);color:var(--rail-text);letter-spacing:-.01em;
+  font:400 27px/1 var(--font-serif);color:var(--rail-text);letter-spacing:-.01em;
 }
 .side-brand .sb-sub{
-  margin-top:9px;font:500 9px/1.4 var(--font-sans);
+  margin-top:9px;font:500 11px/1.4 var(--font-sans);
   text-transform:uppercase;letter-spacing:.2em;color:var(--rail-muted);
 }
 .side-foot{
@@ -162,11 +162,11 @@ select{min-width:120px}
 }
 .side-foot .sf-row{display:flex;align-items:center;gap:8px}
 .side-foot .sf-label{
-  font:500 9px/1 var(--font-sans);text-transform:uppercase;letter-spacing:.16em;
+  font:500 11px/1 var(--font-sans);text-transform:uppercase;letter-spacing:.16em;
   color:var(--rail-muted);
 }
 .side-foot .sf-meta{
-  margin-top:7px;font:11px/1 var(--font-mono);color:#6E6A63;
+  margin-top:7px;font:13px/1 var(--font-mono);color:#6E6A63;
 }
 
 .main-col{margin-left:232px;min-width:0}
@@ -179,16 +179,16 @@ header.app{
 .header-logo{display:none}  /* wordmark now lives in the rail */
 .header-brand-wrap{display:flex;flex-direction:column;justify-content:center}
 header.app .brand{
-  font:400 30px/1.1 var(--font-serif);color:var(--text);letter-spacing:-.015em;
+  font:400 32px/1.1 var(--font-serif);color:var(--text);letter-spacing:-.015em;
 }
 header.app .brand em{color:var(--text);font-style:normal}
 header.app .subtitle{
-  color:var(--muted);font-size:12px;margin-top:7px;
+  color:var(--muted);font-size:14px;margin-top:7px;
 }
 header.app .spacer{flex:1}
 .filters{display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap}
 .filters label{
-  font:500 9px/1 var(--font-sans);color:var(--muted);
+  font:500 11px/1 var(--font-sans);color:var(--muted);
   text-transform:uppercase;letter-spacing:.18em;white-space:nowrap;
 }
 /* dashboard month/refcold group — label stacked above its control */
@@ -212,14 +212,14 @@ header.app .spacer{flex:1}
   border:0;border-left:2px solid transparent;
   padding:10px 24px 10px 22px;cursor:pointer;text-align:left;
   display:flex;align-items:baseline;gap:12px;
-  font:400 13px/1.2 var(--font-sans);text-transform:none;letter-spacing:0;
+  font:400 15px/1.2 var(--font-sans);text-transform:none;letter-spacing:0;
   transition:color .15s ease-out,border-color .15s ease-out,background .15s ease-out;
 }
 /* auto-numbered nav, no JS change required */
 .tab::before{
   counter-increment:navitem;
   content:counter(navitem,decimal-leading-zero);
-  font:400 10px/1 var(--font-mono);color:#5C574F;letter-spacing:.06em;
+  font:400 12px/1 var(--font-mono);color:#5C574F;letter-spacing:.06em;
   flex-shrink:0;transition:color .15s ease-out;
 }
 .tab:hover{color:var(--rail-text);background:rgba(255,255,255,.035)}
@@ -256,7 +256,7 @@ header.app .spacer{flex:1}
   padding:20px 22px;margin-bottom:20px;border-top:1px solid var(--line);
 }
 .section h2{
-  font:400 17px/1.25 var(--font-serif);letter-spacing:-.01em;
+  font:400 19px/1.25 var(--font-serif);letter-spacing:-.01em;
   text-transform:none;color:var(--text);
   margin-bottom:16px;padding-bottom:11px;border-bottom:1px solid var(--line);
   position:relative;
@@ -273,11 +273,11 @@ header.app .spacer{flex:1}
 .section.bar-violet h2::before{background:var(--violet)}
 .section.bar-cyan   h2::before{background:var(--cyan)}
 
-.section .hint{color:var(--muted);font-size:11.5px;margin-top:12px}
+.section .hint{color:var(--muted);font-size:13.5px;margin-top:12px}
 .info-btn{
   display:inline-flex;align-items:center;justify-content:center;
   width:18px;height:18px;border-radius:0;border:1px solid var(--border-strong);
-  background:transparent;color:var(--muted);font-size:11px;font-weight:400;
+  background:transparent;color:var(--muted);font-size:13px;font-weight:400;
   cursor:pointer;vertical-align:middle;margin-left:8px;padding:0;
   font-family:var(--font-serif);font-style:italic;line-height:1;
   transition:border-color .15s ease-out,color .15s ease-out;
@@ -290,17 +290,17 @@ header.app .spacer{flex:1}
   border:1px solid var(--border-strong);color:var(--text);
 }
 .info-popup h3{
-  margin:0 0 14px;font:400 19px/1.25 var(--font-serif);color:var(--text);
+  margin:0 0 14px;font:400 21px/1.25 var(--font-serif);color:var(--text);
   padding-bottom:11px;border-bottom:1px solid var(--line);
 }
-.info-popup p{margin:5px 0;font-size:13px;line-height:1.6;color:var(--text)}
+.info-popup p{margin:5px 0;font-size:15px;line-height:1.6;color:var(--text)}
 .info-popup .info-label{
-  font:500 9px/1 var(--font-sans);color:var(--muted);text-transform:uppercase;
+  font:500 11px/1 var(--font-sans);color:var(--muted);text-transform:uppercase;
   letter-spacing:.18em;margin-top:14px;display:block;
 }
 .info-popup .close-info{
   position:absolute;top:14px;right:16px;background:none;border:none;
-  font-size:16px;cursor:pointer;color:var(--muted);line-height:1;padding:0;
+  font-size:18px;cursor:pointer;color:var(--muted);line-height:1;padding:0;
 }
 .info-popup .close-info:hover{color:var(--orange);background:none}
 .info-overlay{position:fixed;inset:0;z-index:9998;background:rgba(28,29,27,.35)}
@@ -309,9 +309,9 @@ header.app .spacer{flex:1}
   padding:18px 20px;margin:8px 0;
   background:var(--orange-tint);border:1px solid var(--line);
   border-left:2px solid var(--orange);
-  color:var(--muted);font-size:13px;line-height:1.6;
+  color:var(--muted);font-size:15px;line-height:1.6;
 }
-.file-not-uploaded .fnu-icon{font-size:18px;flex-shrink:0;margin-top:1px;}
+.file-not-uploaded .fnu-icon{font-size:20px;flex-shrink:0;margin-top:1px;}
 .file-not-uploaded strong{color:var(--text);display:block;margin-bottom:2px;}
 .tab-not-uploaded{padding:40px 24px;}
 .tab-not-uploaded .file-not-uploaded{max-width:520px;}
@@ -324,16 +324,16 @@ tr.heat-vlow td{background:rgba(179,64,47,.13) !important}
 /* ---- custom multi-select ---- */
 .ms-wrap{position:relative;display:inline-block;min-width:110px}
 .ms-btn{display:flex;align-items:center;justify-content:space-between;gap:6px;padding:0 10px;height:32px;
-  border:1px solid var(--line);border-radius:0;background:var(--panel);cursor:pointer;font-size:12.5px;
+  border:1px solid var(--line);border-radius:0;background:var(--panel);cursor:pointer;font-size:14.5px;
   min-width:110px;color:var(--text);user-select:none;transition:border-color .15s ease-out}
 .ms-btn:hover{border-color:var(--border-strong)}
 .ms-wrap.open .ms-btn{border-color:var(--orange)}
-.ms-btn .ms-arrow{font-size:9px;opacity:.45;margin-left:4px}
+.ms-btn .ms-arrow{font-size:11px;opacity:.45;margin-left:4px}
 .ms-dropdown{display:none;position:absolute;top:calc(100% + 3px);left:0;z-index:9999;
   background:var(--panel);border:1px solid var(--border-strong);border-radius:0;
   min-width:170px;max-height:260px;overflow-y:auto;padding:4px 0}
 .ms-wrap.open .ms-dropdown{display:block}
-.ms-opt{display:flex;align-items:center;gap:8px;padding:7px 12px;cursor:pointer;font-size:12.5px;
+.ms-opt{display:flex;align-items:center;gap:8px;padding:7px 12px;cursor:pointer;font-size:14.5px;
   transition:background .12s ease-out}
 .ms-opt:hover{background:var(--panel2)}
 .ms-opt input[type=checkbox]{width:13px;height:13px;accent-color:var(--orange);cursor:pointer;flex-shrink:0}
@@ -341,7 +341,7 @@ tr.heat-vlow td{background:rgba(179,64,47,.13) !important}
 .ms-opt.ms-selected{background:var(--orange-tint)}
 
 .heat-legend{
-  display:flex;flex-wrap:wrap;gap:16px;font-size:10px;color:var(--muted);
+  display:flex;flex-wrap:wrap;gap:16px;font-size:12px;color:var(--muted);
   margin:0 0 12px;padding:0;background:transparent;border:0;
   text-transform:uppercase;letter-spacing:.14em;
 }
@@ -353,13 +353,13 @@ tr.heat-vlow td{background:rgba(179,64,47,.13) !important}
 .hl-sw.hl-vlow{background:rgba(179,64,47,.75)}
 
 /* ===== RM Performance in-tab uploads ===== */
-.rmperf-banner{display:flex;flex-wrap:wrap;gap:16px;align-items:center;margin-bottom:12px;font-size:12px}
+.rmperf-banner{display:flex;flex-wrap:wrap;gap:16px;align-items:center;margin-bottom:12px;font-size:14px}
 .rmperf-banner .rmperf-ok{color:var(--green);font-weight:600}
 .rmperf-banner .rmperf-miss{color:var(--red);font-weight:600}
 .rmperf-banner .rmperf-hint{color:var(--muted)}
 .rmperf-uploads{display:flex;flex-wrap:wrap;gap:20px}
 .rmperf-upload-row{display:flex;flex-direction:column;gap:6px}
-.rmperf-upload-row label{font-size:12px;font-weight:600;color:var(--text)}
+.rmperf-upload-row label{font-size:14px;font-weight:600;color:var(--text)}
 
 /* ===== Conversion Funnel ===== */
 .funnel{display:flex;flex-direction:column;align-items:center;gap:0;padding:8px 0;width:100%}
@@ -369,10 +369,10 @@ tr.heat-vlow td{background:rgba(179,64,47,.13) !important}
   height:48px;min-width:280px;max-width:100%;padding:0 22px;box-sizing:border-box;
   color:#fff;transition:width .35s ease;
 }
-.funnel-bar .funnel-label{font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.3px;white-space:nowrap}
-.funnel-bar .funnel-value{font-size:20px;font-weight:900;letter-spacing:-.5px;white-space:nowrap}
-.funnel-conv{font-size:11px;color:var(--muted);margin:2px 0 4px;font-weight:600;text-align:center}
-.funnel-arrow{color:var(--muted);font-size:16px;line-height:1;text-align:center;width:100%;margin:2px 0}
+.funnel-bar .funnel-label{font-size:15px;font-weight:700;text-transform:uppercase;letter-spacing:.3px;white-space:nowrap}
+.funnel-bar .funnel-value{font-size:22px;font-weight:900;letter-spacing:-.5px;white-space:nowrap}
+.funnel-conv{font-size:13px;color:var(--muted);margin:2px 0 4px;font-weight:600;text-align:center}
+.funnel-arrow{color:var(--muted);font-size:18px;line-height:1;text-align:center;width:100%;margin:2px 0}
 
 /* ============ GRID ============ */
 .grid{display:grid;gap:16px}
@@ -395,11 +395,11 @@ tr.heat-vlow td{background:rgba(179,64,47,.13) !important}
 }
 .kpi:hover{background:#FEFDFB}
 .kpi-value{
-  font:300 27px/1 var(--font-mono);letter-spacing:-.025em;
+  font:300 29px/1 var(--font-mono);letter-spacing:-.025em;
   color:var(--text);font-variant-numeric:tabular-nums;
 }
 .kpi-label{
-  font:500 9px/1.3 var(--font-sans);text-transform:uppercase;letter-spacing:.18em;
+  font:500 11px/1.3 var(--font-sans);text-transform:uppercase;letter-spacing:.18em;
   color:var(--muted);margin-top:10px;
 }
 
@@ -418,7 +418,7 @@ tr.heat-vlow td{background:rgba(179,64,47,.13) !important}
 /* ============ LIVE DATA BAND ============ */
 #live-kpis{margin-bottom:20px}
 .live-band-header{
-  font:500 9px/1 var(--font-sans);text-transform:uppercase;letter-spacing:.2em;
+  font:500 11px/1 var(--font-sans);text-transform:uppercase;letter-spacing:.2em;
   color:var(--muted);border-left:0;
   padding-left:0;margin-bottom:10px;
 }
@@ -440,8 +440,8 @@ tr.heat-vlow td{background:rgba(179,64,47,.13) !important}
 .mtd-block .table-wrap{max-height:280px}
 
 /* ============ TABLES ============ */
-table.data{border-collapse:collapse;width:100%;font-size:12.5px;background:var(--panel)}
-table.data.compact{font-size:12px}
+table.data{border-collapse:collapse;width:100%;font-size:14.5px;background:var(--panel)}
+table.data.compact{font-size:14px}
 table.data th,table.data td{
   padding:9px 12px;border-bottom:1px solid var(--line);
   text-align:right;white-space:nowrap;
@@ -455,7 +455,7 @@ table.data th:first-child,table.data td:first-child{
 table.data thead th{
   /* light warm header instead of the old inverted charcoal block */
   background:var(--panel2);color:var(--muted);
-  font:500 9px/1.2 var(--font-sans);text-transform:uppercase;letter-spacing:.16em;
+  font:500 11px/1.2 var(--font-sans);text-transform:uppercase;letter-spacing:.16em;
   position:sticky;top:0;z-index:2;border-bottom:1px solid var(--border-strong);
 }
 table.data thead th:first-child{background:var(--panel2)}
@@ -468,7 +468,7 @@ table.data tbody tr.grand td{
 }
 table.data tbody tr.grand td:first-child{
   background:var(--panel2);color:var(--muted);
-  font:500 9px/1.2 var(--font-sans);text-transform:uppercase;letter-spacing:.16em;
+  font:500 11px/1.2 var(--font-sans);text-transform:uppercase;letter-spacing:.16em;
 }
 table.data.editable td input{
   width:100%;background:transparent;border:0;color:var(--text);text-align:right;
@@ -481,34 +481,34 @@ table.data.editable td input:focus{outline:1px solid var(--orange);background:va
 .raw-filter-head{display:flex;align-items:center;gap:4px;justify-content:flex-start}
 .raw-filter-btn{
   background:transparent;border:1px solid var(--line);color:var(--muted);
-  padding:1px 5px;font-size:10px;cursor:pointer;line-height:1;min-width:20px;
+  padding:1px 5px;font-size:12px;cursor:pointer;line-height:1;min-width:20px;
 }
 .raw-filter-btn.active{background:var(--orange);border-color:var(--orange);color:#fff}
-.raw-filter-selected{font-size:10px;color:var(--orange);font-weight:700;margin-top:2px;max-width:120px;overflow:hidden;text-overflow:ellipsis}
+.raw-filter-selected{font-size:12px;color:var(--orange);font-weight:700;margin-top:2px;max-width:120px;overflow:hidden;text-overflow:ellipsis}
 .raw-filter-menu{
   position:fixed;background:var(--panel);border:1px solid var(--border-strong);z-index:200;
   max-height:340px;display:flex;flex-direction:column;overflow:hidden;
 }
-.raw-filter-title{font:700 12px/1 inherit;padding:10px 12px;border-bottom:1px solid var(--line);color:var(--orange)}
+.raw-filter-title{font:700 14px/1 inherit;padding:10px 12px;border-bottom:1px solid var(--line);color:var(--orange)}
 .raw-filter-search{border:0;border-bottom:2px solid var(--line);padding:7px 12px;font:inherit;outline:none}
 .raw-filter-search:focus{border-bottom-color:var(--orange)}
 .raw-filter-actions{display:flex;gap:0;border-bottom:1px solid var(--line)}
-.raw-filter-actions button{flex:1;border:0;border-right:1px solid var(--line);padding:6px;font-size:12px}
+.raw-filter-actions button{flex:1;border:0;border-right:1px solid var(--line);padding:6px;font-size:14px}
 .raw-filter-actions button:last-child{border-right:0}
 .raw-filter-options{overflow-y:auto;flex:1}
-.raw-filter-option{display:flex;align-items:center;gap:8px;padding:6px 12px;cursor:pointer;font-size:12px}
+.raw-filter-option{display:flex;align-items:center;gap:8px;padding:6px 12px;cursor:pointer;font-size:14px}
 .raw-filter-option:hover{background:var(--orange-tint)}
 .raw-filter-option input{accent-color:var(--orange);cursor:pointer}
 .raw-filter-option span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.raw-filter-empty{padding:10px 12px;color:var(--muted);font-size:12px}
+.raw-filter-empty{padding:10px 12px;color:var(--muted);font-size:14px}
 .raw-filter-footer{display:flex;gap:0;border-top:1px solid var(--line)}
-.raw-filter-footer button{flex:1;border:0;border-right:1px solid var(--line);padding:8px;font-size:12px}
+.raw-filter-footer button{flex:1;border:0;border-right:1px solid var(--line);padding:8px;font-size:14px}
 .raw-filter-footer button:last-child{border-right:0}
 
 /* ============ TRANSFER TABLE ============ */
 .transfer-team-row{cursor:pointer;transition:background .1s}
 .transfer-team-row:hover{background:var(--orange-tint) !important}
-.transfer-team-row .toggle-icon{color:var(--orange);font-size:12px;width:20px;text-align:center}
+.transfer-team-row .toggle-icon{color:var(--orange);font-size:14px;width:20px;text-align:center}
 .transfer-detail-cell{padding:4px 0 12px 0 !important;background:var(--panel2) !important}
 .transfer-detail-cell table.data{border:2px solid var(--line);margin:0}
 .transfer-detail-cell table.data thead th{background:var(--table-header-dark)}
@@ -517,7 +517,7 @@ table.data.editable td input:focus{outline:1px solid var(--orange);background:va
 .toggle-group{display:inline-flex;border:2px solid var(--line);margin-left:10px}
 .toggle-group .tg-btn{
   background:var(--panel);color:var(--muted);border:0;border-right:1px solid var(--line);
-  padding:4px 14px;font:600 11px/1 inherit;cursor:pointer;text-transform:uppercase;
+  padding:4px 14px;font:600 13px/1 inherit;cursor:pointer;text-transform:uppercase;
   letter-spacing:.3px;transition:background .1s,color .1s;
 }
 .toggle-group .tg-btn:last-child{border-right:0}
@@ -529,19 +529,19 @@ table.data.editable td input:focus{outline:1px solid var(--orange);background:va
 
 /* ============ MTD ============ */
 .mtd-block{margin-bottom:16px}
-.mtd-block h3{font-size:13px;font-weight:800;color:var(--orange);text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px;border-left:4px solid var(--orange);padding-left:8px}
+.mtd-block h3{font-size:15px;font-weight:800;color:var(--orange);text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px;border-left:4px solid var(--orange);padding-left:8px}
 
 /* ============ MISC ============ */
-.pill{display:inline-block;padding:2px 8px;border:1px solid var(--line);font-size:11px;font-weight:600;color:var(--muted)}
+.pill{display:inline-block;padding:2px 8px;border:1px solid var(--line);font-size:13px;font-weight:600;color:var(--muted)}
 .muted{color:var(--muted)}
-.meta{color:var(--muted);font-size:12px;margin-bottom:6px}
+.meta{color:var(--muted);font-size:14px;margin-bottom:6px}
 .scroll-x{overflow-x:auto}
 
 /* ============ MODAL ============ */
 .modal{display:none;position:fixed;inset:0;background:rgba(15,23,42,.5);z-index:1000;align-items:center;justify-content:center}
 .modal.active{display:flex}
 .modal-content{background:var(--panel);border:1px solid var(--line);padding:28px;max-width:420px;width:90%}
-.modal-content h3{font-size:16px;font-weight:800;color:var(--orange);margin-bottom:14px;text-transform:uppercase;letter-spacing:.4px}
+.modal-content h3{font-size:18px;font-weight:800;color:var(--orange);margin-bottom:14px;text-transform:uppercase;letter-spacing:.4px}
 .modal-content input{width:100%;margin-bottom:12px}
 .modal-actions{display:flex;gap:8px;margin-top:18px}
 .modal-actions button{flex:1}
@@ -550,22 +550,37 @@ table.data.editable td input:focus{outline:1px solid var(--orange);background:va
 #status-dist-chart-wrap{height:220px;background:var(--panel);border:1px solid var(--line);padding:12px;margin-bottom:16px}
 
 /* ---- breakdown chart wrappers (see renderBreakdownChart in app-tables.js) ---- */
-/* Flex column so the canvas claims exactly the space left after the caption.
-   Chart.js (maintainAspectRatio:false) sizes to its parent box, so without
-   flex:1 + min-height:0 it would size to the full wrapper and overflow by the
-   caption's height. */
+/* Flex column so the canvas claims exactly the space left after the caption
+   and the filter row. Chart.js (maintainAspectRatio:false) sizes to its parent
+   box, so without flex:1 + min-height:0 it would overflow by the caption's
+   height. */
 .chart-wrap{
-  position:relative;height:250px;background:var(--panel);
+  position:relative;height:300px;background:var(--panel);
   border:1px solid var(--line);padding:12px 14px 8px;margin-bottom:14px;
   display:flex;flex-direction:column;
 }
-.chart-wrap.short{height:212px}
-.chart-wrap.tall {height:330px}
+.chart-wrap.short{height:260px}
+.chart-wrap.tall {height:380px}
 .chart-wrap canvas{flex:1 1 auto;min-height:0;width:100%}
 .chart-cap{
   flex:0 0 auto;
-  font:500 9px/1 var(--font-sans);text-transform:uppercase;letter-spacing:.18em;
+  font:500 13px/1 var(--font-sans);text-transform:uppercase;letter-spacing:.18em;
   color:var(--muted);margin-bottom:10px;
+}
+
+/* Chart-scoped multi-select filter (see renderChartFilter in app-tables.js). */
+.chart-filter{
+  flex:0 0 auto;display:flex;align-items:center;gap:10px;margin-bottom:10px;
+  flex-wrap:wrap;
+}
+.chart-filter + .chart-filter{margin-top:-4px}
+.chart-filter label{
+  font:500 13px/1 var(--font-sans);color:var(--muted);
+  text-transform:uppercase;letter-spacing:.16em;
+}
+.chart-filter .ms-btn{min-width:180px;max-width:260px;height:30px;font-size:15px}
+.chart-filter .cf-btn-label{
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:200px;
 }
 
 /* ============ PREMIUM TAB LOCK ============ */
@@ -573,13 +588,13 @@ table.data.editable td input:focus{outline:1px solid var(--orange);background:va
 .tab-panel.locked .premium-content{display:none}
 .tab-panel.locked .premium-lock{display:flex;align-items:center;justify-content:center;min-height:420px}
 .lock-box{background:var(--panel);border:1px solid var(--line);padding:32px 36px;max-width:380px;width:92%;text-align:center}
-.lock-box .lock-icon{font-size:36px;margin-bottom:10px}
-.lock-box h3{font-size:16px;font-weight:800;color:var(--text);margin-bottom:6px;text-transform:none;letter-spacing:normal}
-.lock-box p{color:var(--muted);font-size:12px;margin-bottom:16px}
+.lock-box .lock-icon{font-size:38px;margin-bottom:10px}
+.lock-box h3{font-size:18px;font-weight:800;color:var(--text);margin-bottom:6px;text-transform:none;letter-spacing:normal}
+.lock-box p{color:var(--muted);font-size:14px;margin-bottom:16px}
 .lock-box input[type=password]{width:100%;margin-bottom:10px;text-align:center;box-sizing:border-box}
 .lock-box button{width:100%}
-.lock-box .lock-error{color:var(--red);font-size:12px;margin-top:8px;min-height:16px;font-weight:600}
-.lock-box .lock-hint{color:var(--muted);font-size:11px;margin-top:14px;font-style:italic}
+.lock-box .lock-error{color:var(--red);font-size:14px;margin-top:8px;min-height:16px;font-weight:600}
+.lock-box .lock-hint{color:var(--muted);font-size:13px;margin-top:14px;font-style:italic}
 </style>
 </head>
 <body>
@@ -652,6 +667,7 @@ table.data.editable td input:focus{outline:1px solid var(--orange);background:va
       </h2>
       <div class="chart-wrap">
         <div class="chart-cap">Leads by platform, stacked per month</div>
+        <div id="filter-platform-month"></div>
         <canvas id="chart-platform-month"></canvas>
       </div>
       <div id="legend-platform-month"></div>
@@ -666,6 +682,7 @@ table.data.editable td input:focus{outline:1px solid var(--orange);background:va
         </h2>
         <div class="chart-wrap short">
           <div class="chart-cap">Status mix per month</div>
+          <div id="filter-status-month-mapped"></div>
           <canvas id="chart-status-month-mapped"></canvas>
         </div>
         <div id="legend-status-month-mapped"></div>
@@ -677,6 +694,7 @@ table.data.editable td input:focus{outline:1px solid var(--orange);background:va
         </h2>
         <div class="chart-wrap short">
           <div class="chart-cap">Status mix per month</div>
+          <div id="filter-status-month-sv"></div>
           <canvas id="chart-status-month-sv"></canvas>
         </div>
         <div id="legend-status-month-sv"></div>
@@ -700,6 +718,7 @@ table.data.editable td input:focus{outline:1px solid var(--orange);background:va
       <div id="ps-team-filter-wrap" style="margin-bottom:6px"></div>
       <div class="chart-wrap">
         <div class="chart-cap">Status composition per platform</div>
+        <div id="filter-platform-status"></div>
         <canvas id="chart-platform-status"></canvas>
       </div>
       <div id="legend-platform-status"></div>
@@ -722,6 +741,7 @@ table.data.editable td input:focus{outline:1px solid var(--orange);background:va
       </div>
       <div class="chart-wrap tall">
         <div class="chart-cap">Status composition · top 12 landing pages by volume</div>
+        <div id="filter-lp-status"></div>
         <canvas id="chart-lp-status"></canvas>
       </div>
       <div id="legend-lp-status"></div>
@@ -758,6 +778,7 @@ table.data.editable td input:focus{outline:1px solid var(--orange);background:va
       </h2>
       <div class="chart-wrap">
         <div class="chart-cap">Campaign mix per team</div>
+        <div id="filter-campaign-team"></div>
         <canvas id="chart-campaign-team"></canvas>
       </div>
       <div id="legend-campaign-team"></div>
@@ -814,6 +835,12 @@ table.data.editable td input:focus{outline:1px solid var(--orange);background:va
       <h2 id="b2b-table-title">B2B Corp Leads — RM × Status
         <button class="info-btn" data-info="b2b" title="Table info">i</button>
       </h2>
+      <div class="chart-wrap tall">
+        <div class="chart-cap">B2B lead status by RM · filter both axes independently</div>
+        <div id="filter-b2b-rm"></div>
+        <div id="filter-b2b-status"></div>
+        <canvas id="chart-b2b"></canvas>
+      </div>
       <div class="table-wrap" id="tbl-b2b"></div>
       <div class="hint">Add <strong>B2B.xlsx</strong> to the repo to populate this table.</div>
     </div>
