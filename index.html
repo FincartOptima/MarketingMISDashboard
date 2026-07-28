@@ -549,40 +549,6 @@ table.data.editable td input:focus{outline:1px solid var(--orange);background:va
 /* ============ STATUS CHART ============ */
 #status-dist-chart-wrap{height:220px;background:var(--panel);border:1px solid var(--line);padding:12px;margin-bottom:16px}
 
-/* ---- breakdown chart wrappers (see renderBreakdownChart in app-tables.js) ---- */
-/* Flex column so the canvas claims exactly the space left after the caption
-   and the filter row. Chart.js (maintainAspectRatio:false) sizes to its parent
-   box, so without flex:1 + min-height:0 it would overflow by the caption's
-   height. */
-.chart-wrap{
-  position:relative;height:300px;background:var(--panel);
-  border:1px solid var(--line);padding:12px 14px 8px;margin-bottom:14px;
-  display:flex;flex-direction:column;
-}
-.chart-wrap.short{height:260px}
-.chart-wrap.tall {height:380px}
-.chart-wrap canvas{flex:1 1 auto;min-height:0;width:100%}
-.chart-cap{
-  flex:0 0 auto;
-  font:500 13px/1 var(--font-sans);text-transform:uppercase;letter-spacing:.18em;
-  color:var(--muted);margin-bottom:10px;
-}
-
-/* Chart-scoped multi-select filter (see renderChartFilter in app-tables.js). */
-.chart-filter{
-  flex:0 0 auto;display:flex;align-items:center;gap:10px;margin-bottom:10px;
-  flex-wrap:wrap;
-}
-.chart-filter + .chart-filter{margin-top:-4px}
-.chart-filter label{
-  font:500 13px/1 var(--font-sans);color:var(--muted);
-  text-transform:uppercase;letter-spacing:.16em;
-}
-.chart-filter .ms-btn{min-width:180px;max-width:260px;height:30px;font-size:15px}
-.chart-filter .cf-btn-label{
-  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:200px;
-}
-
 /* ============ PREMIUM TAB LOCK ============ */
 .premium-lock{display:none}
 .tab-panel.locked .premium-content{display:none}
@@ -665,11 +631,6 @@ table.data.editable td input:focus{outline:1px solid var(--orange);background:va
       <h2>Leads Generated · Platform × Month
         <button class="info-btn" data-info="platform-month" title="Table info">i</button>
       </h2>
-      <div class="chart-wrap">
-        <div class="chart-cap">Leads by platform, stacked per month</div>
-        <div id="filter-platform-month"></div>
-        <canvas id="chart-platform-month"></canvas>
-      </div>
       <div id="legend-platform-month"></div>
       <div class="table-wrap" id="tbl-platform-month"></div>
     </div>
@@ -680,11 +641,6 @@ table.data.editable td input:focus{outline:1px solid var(--orange);background:va
         <h2>Status Distribution · Mapped Teams
           <button class="info-btn" data-info="status-month-mapped" title="Table info">i</button>
         </h2>
-        <div class="chart-wrap short">
-          <div class="chart-cap">Status mix per month</div>
-          <div id="filter-status-month-mapped"></div>
-          <canvas id="chart-status-month-mapped"></canvas>
-        </div>
         <div id="legend-status-month-mapped"></div>
         <div class="table-wrap" id="tbl-status-month-mapped"></div>
       </div>
@@ -692,11 +648,6 @@ table.data.editable td input:focus{outline:1px solid var(--orange);background:va
         <h2>Status Distribution · SV (Unmapped)
           <button class="info-btn" data-info="status-month-sv" title="Table info">i</button>
         </h2>
-        <div class="chart-wrap short">
-          <div class="chart-cap">Status mix per month</div>
-          <div id="filter-status-month-sv"></div>
-          <canvas id="chart-status-month-sv"></canvas>
-        </div>
         <div id="legend-status-month-sv"></div>
         <div class="table-wrap" id="tbl-status-month-sv"></div>
       </div>
@@ -716,11 +667,6 @@ table.data.editable td input:focus{outline:1px solid var(--orange);background:va
         </span>
       </h2>
       <div id="ps-team-filter-wrap" style="margin-bottom:6px"></div>
-      <div class="chart-wrap">
-        <div class="chart-cap">Status composition per platform</div>
-        <div id="filter-platform-status"></div>
-        <canvas id="chart-platform-status"></canvas>
-      </div>
       <div id="legend-platform-status"></div>
       <div class="table-wrap" id="tbl-platform-status"></div>
     </div>
@@ -738,11 +684,6 @@ table.data.editable td input:focus{outline:1px solid var(--orange);background:va
         <div id="lp-team-filter-wrap" style="display:flex;align-items:center"></div>
         <div id="lp-campaign-filter-wrap" style="display:flex;align-items:center"></div>
         <div id="lp-lp-filter-wrap" style="display:flex;align-items:center;position:relative"></div>
-      </div>
-      <div class="chart-wrap tall">
-        <div class="chart-cap">Status composition · top 12 landing pages by volume</div>
-        <div id="filter-lp-status"></div>
-        <canvas id="chart-lp-status"></canvas>
       </div>
       <div id="legend-lp-status"></div>
       <div class="table-wrap" id="tbl-lp-status"></div>
@@ -776,11 +717,6 @@ table.data.editable td input:focus{outline:1px solid var(--orange);background:va
           <span id="hdr-campaign-team" style="color:var(--muted);font-size:11px"></span>
         </span>
       </h2>
-      <div class="chart-wrap">
-        <div class="chart-cap">Campaign mix per team</div>
-        <div id="filter-campaign-team"></div>
-        <canvas id="chart-campaign-team"></canvas>
-      </div>
       <div id="legend-campaign-team"></div>
       <div class="table-wrap" id="tbl-campaign-team"></div>
       <div class="hint">Rows = teams, columns = campaigns. Counts use <strong>CreateMonth (CTM)</strong>. Honors global Month + Ref/Cold filter.</div>
@@ -835,12 +771,6 @@ table.data.editable td input:focus{outline:1px solid var(--orange);background:va
       <h2 id="b2b-table-title">B2B Corp Leads — RM × Status
         <button class="info-btn" data-info="b2b" title="Table info">i</button>
       </h2>
-      <div class="chart-wrap tall">
-        <div class="chart-cap">B2B lead status by RM · filter both axes independently</div>
-        <div id="filter-b2b-rm"></div>
-        <div id="filter-b2b-status"></div>
-        <canvas id="chart-b2b"></canvas>
-      </div>
       <div class="table-wrap" id="tbl-b2b"></div>
       <div class="hint">Add <strong>B2B.xlsx</strong> to the repo to populate this table.</div>
     </div>

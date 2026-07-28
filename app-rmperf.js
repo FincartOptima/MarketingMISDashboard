@@ -220,25 +220,6 @@ function renderB2BTable(){
     return o;
   });
   renderTable(host, headers, rows);
-
-  // Chart: RMs on the category axis, stacked by status. Two independent
-  // multi-selects (RM and Status). Defaults follow the user brief where they
-  // exist in the data — CONVERTED isn't a B2B status here (aggregator returns
-  // ASSIGNED/DEAD/FOLLOW UP/ON HOLD/RE-ASSIGNED), so the defensive default
-  // helper falls back to the first available status.
-  const body = data.filter(r => !r._tot);
-  const rmOpts = body.map(r => r.RM);
-  const rmSel     = resolveChartFilterDefault('b2bByRM',     rmOpts,   rmOpts.slice(0, Math.min(8, rmOpts.length)));
-  const statusSel = resolveChartFilterDefault('b2bByStatus', statuses, ['CONVERTED']);
-  renderChartFilter('#filter-b2b-rm',     'RM',     rmOpts,   rmSel,     renderB2BTable);
-  renderChartFilter('#filter-b2b-status', 'Status', statuses, statusSel, renderB2BTable);
-  const shownStatuses = statuses.filter(s => statusSel.has(s));
-  const shownBody = body.filter(r => rmSel.has(r.RM));
-  renderBreakdownChart('#chart-b2b', 'b2bRmStatus', {
-    labels: shownBody.map(r => r.RM),
-    series: shownStatuses.map(s => ({label:s, data:shownBody.map(r => Number(r[s])||0)})),
-    horizontal: true,
-  });
 }
 
 function renderRMPerfFunnel(grand){

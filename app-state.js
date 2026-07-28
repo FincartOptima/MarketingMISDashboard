@@ -36,14 +36,6 @@ const STATE = {
   lpLandingPages: [],
   revChart: null,
   statusChart: null,
-  // Chart.js instances for the dashboard breakdown visualisations, keyed by
-  // section id. Registered and destroyed via renderBreakdownChart() in
-  // app-tables.js so repeated renders don't leak canvases.
-  charts: {},
-  // Per-chart series selections (which columns each chart plots). These narrow
-  // the CHART only — the table beside it always keeps every column. Seeded with
-  // a sensible default on first render by chartSeriesFilter() in app-tables.js.
-  chartFilters: {},
   rawFilters: {},
   premiumUnlocked: false,
   teamPerfMode: 'current',
