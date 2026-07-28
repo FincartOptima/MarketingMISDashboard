@@ -326,9 +326,5 @@ function updateDataSubtitle(){
   const suffix = (d2>=11&&d2<=13)?'th':d1===1?'st':d1===2?'nd':d1===3?'rd':'th';
   STATE.dataTill = `Data till ${day}${suffix} ${mon} ${yr}`;
   el.textContent = STATE.dataTill;
-  // Mirror the coverage date into the rail footer alongside the live-data pulse.
-  const railSync = $('#side-sync');
-  if(railSync) railSync.textContent = `${num2(day)} ${mon.slice(0,3)} ${yr}`;
 }
-const num2 = n => String(n).padStart(2,'0');
 
