@@ -46,8 +46,9 @@ function topKPIs(){
   // it always reflects the full fixed FY period, unfiltered, and only changes when data is reloaded.
   const ytd = STATE.raw.filter(r=>filteredMonths().includes(r.FMONTH)).length;
   const generated = rows.filter(r=>monthFilter(r.CTM)).length;
-  const sc = st => rows.filter(r => r.leadStatus===st && monthFilter(r[statusMonthCol(st)])).length;
-  // CONVERTED uses CM-presence rule (isConvertedLead) — leadStatus ignored.
+  // Any lead with a CM belongs to CONVERTED — it is excluded from every other
+  // leadStatus bucket (per 2026-07-29 rule).
+  const sc = st => rows.filter(r => r.leadStatus===st && !isConvertedLead(r) && monthFilter(r[statusMonthCol(st)])).length;
   const converted = rows.filter(r => isConvertedLead(r, monthFilter)).length;
   const inProcess = sc('IN PROCESS');
   return {
@@ -60,7 +61,7 @@ function topKPIs(){
 
 function liveDataKPIs(){
   let rows = applyRefColdFilter(STATE.raw);
-  const assigned = rows.filter(r=>r.leadStatus==='ASSIGNED' && monthFilter(r.CTM)).length;
+  const assigned = rows.filter(r=>r.leadStatus==='ASSIGNED' && !isConvertedLead(r) && monthFilter(r.CTM)).length;
   if(isAllMonths()) return { assigned, anyConv: null, anyIP: null, sameConv: null, sameIP: null };
   // AnyMonth = status event in selected month(s), lead CREATED outside those month(s)
   // SameMonth = status event in selected month(s), lead CREATED in the same selected month(s)
@@ -68,13 +69,13 @@ function liveDataKPIs(){
     isConvertedLead(r, monthFilter) && !monthFilter(r.CTM)
   ).length;
   const anyIP = rows.filter(r =>
-    r.leadStatus==='IN PROCESS' && monthFilter(r.LPM) && !monthFilter(r.CTM)
+    r.leadStatus==='IN PROCESS' && !isConvertedLead(r) && monthFilter(r.LPM) && !monthFilter(r.CTM)
   ).length;
   const sameConv = rows.filter(r =>
     isConvertedLead(r, monthFilter) && monthFilter(r.CTM)
   ).length;
   const sameIP = rows.filter(r =>
-    r.leadStatus==='IN PROCESS' && monthFilter(r.LPM) && monthFilter(r.CTM)
+    r.leadStatus==='IN PROCESS' && !isConvertedLead(r) && monthFilter(r.LPM) && monthFilter(r.CTM)
   ).length;
   return { assigned, anyConv, anyIP, sameConv, sameIP };
 }
@@ -112,9 +113,10 @@ function statusByMonth(teamFilter){
     months.forEach(m => {
       const col = statusMonthCol(st);
       // CONVERTED counts any lead whose CM matches — leadStatus is not required.
+      // Non-CONVERTED buckets exclude leads with a CM (they now count only under CONVERTED).
       const c = st === 'CONVERTED'
         ? base.filter(x => x.CM === m).length
-        : base.filter(x => x.leadStatus===st && x[col]===m).length;
+        : base.filter(x => x.leadStatus===st && !isConvertedLead(x) && x[col]===m).length;
       r[m] = c; r.total += c;
     });
     return r;
@@ -134,10 +136,11 @@ function platformStatusBreakdown(){
     const obj = {Platform: g.label}; let total = 0;
     for(const st of STATUSES){
       // CONVERTED gate: CM-presence, not leadStatus (per 2026-07-29 rule).
-      // Non-converted rows carry CM='N/A' — exclude those.
+      // Non-converted rows carry CM='N/A' — exclude those. And any lead with a
+      // CM is removed from every other leadStatus bucket.
       const filtered = st === 'CONVERTED'
-        ? sub.filter(r => r.CM && r.CM !== 'N/A')
-        : sub.filter(r => r.leadStatus===st);
+        ? sub.filter(r => isConvertedLead(r))
+        : sub.filter(r => r.leadStatus===st && !isConvertedLead(r));
       const pool = applyMonthMode(filtered, anyMonthCol(st), mode);
       obj[st] = pool.length; total += pool.length;
     }
@@ -182,10 +185,11 @@ function landingPageStatusBreakdown(){
     const obj = {'Landing Page': lp || '(Blank)', 'Campaign': campaign || '(Blank)'}; let total = 0;
     for(const st of STATUSES){
       // CONVERTED gate: CM-presence, not leadStatus (per 2026-07-29 rule).
-      // Non-converted rows carry CM='N/A' — exclude those.
+      // Non-converted rows carry CM='N/A' — exclude those. And any lead with a
+      // CM is removed from every other leadStatus bucket.
       const filtered = st === 'CONVERTED'
-        ? sub.filter(r => r.CM && r.CM !== 'N/A')
-        : sub.filter(r => r.leadStatus===st);
+        ? sub.filter(r => isConvertedLead(r))
+        : sub.filter(r => r.leadStatus===st && !isConvertedLead(r));
       const pool = applyMonthMode(filtered, anyMonthCol(st), mode);
       obj[st] = pool.length; total += pool.length;
     }
@@ -215,9 +219,10 @@ function teamPerformance(){
     const obj = {Team: team, 'Total Leads': totalLeads};
     for(const st of STATUSES){
       // CONVERTED gate: CM-presence, not leadStatus (per 2026-07-29 rule).
+      // Leads with a CM are removed from all other status buckets.
       const pool = st === 'CONVERTED'
         ? rows.filter(r => isConvertedLead(r, monthFilter))
-        : rows.filter(r => r.leadStatus===st && monthFilter(r[statusMonthCol(st)]));
+        : rows.filter(r => r.leadStatus===st && !isConvertedLead(r) && monthFilter(r[statusMonthCol(st)]));
       obj[st] = pool.length;
     }
     obj['Conv. Rate'] = totalLeads>0 ? obj.CONVERTED/totalLeads : 0;
@@ -312,7 +317,7 @@ function incomeSegment(){
   const rows = applyRefColdFilter(STATE.raw);
   const leadRows = rows.filter(r => monthFilter(r.CTM));
   const convRows = rows.filter(r => isConvertedLead(r, monthFilter));
-  const ipRows   = rows.filter(r => r.leadStatus==='IN PROCESS' && monthFilter(r.LPM));
+  const ipRows   = rows.filter(r => r.leadStatus==='IN PROCESS' && !isConvertedLead(r) && monthFilter(r.LPM));
   const preferredOrder = ['Above 20 Lac','15 Lac to 20 Lac','10 Lac to 20 Lac','10 Lac to 15 Lac','5 Lac to 10 Lac','0 to 5 Lac'];
   const preferredSet = new Set(preferredOrder);
   const allBands = new Set(leadRows.map(r => r.annualIncome).filter(v => v && String(v).trim() !== ''));
@@ -355,7 +360,7 @@ function costSummaryByCampaign(){
     const row = cpc[i]; const name = row[0];
     if(!name || !String(name).trim()) continue;
     let leads = STATE.raw.filter(r => r['Campaign Name']===name && monthFilter(r.CTM)).length;
-    let qual  = STATE.raw.filter(r => r['Campaign Name']===name && (isConvertedLead(r, monthFilter) || (r.leadStatus==='IN PROCESS' && monthFilter(r.LPM)))).length;
+    let qual  = STATE.raw.filter(r => r['Campaign Name']===name && (isConvertedLead(r, monthFilter) || (r.leadStatus==='IN PROCESS' && !isConvertedLead(r) && monthFilter(r.LPM)))).length;
     let conv  = STATE.raw.filter(r => r['Campaign Name']===name && isConvertedLead(r, monthFilter)).length;
     const cost = effectiveMonths().reduce((s,m) => { const idx=monthCols.indexOf(m); return s + (idx>=0?(Number(row[idx+1])||0):0); }, 0);
     if(refMode==='Exclude' && (name==='Referral' || name==='Cold Data')){ leads = 0; qual = 0; conv = 0; }
@@ -441,7 +446,7 @@ function costPerLeadPerRMWithTotals(){
   }
   for(const r of scope){
     if(isConvertedLead(r, monthFilter)) ensure(r).qualLeads++;
-    else if(r.leadStatus==='IN PROCESS' && monthFilter(r.LPM)) ensure(r).qualLeads++;
+    else if(r.leadStatus==='IN PROCESS' && !isConvertedLead(r) && monthFilter(r.LPM)) ensure(r).qualLeads++;
   }
 
   const rows = Object.values(groups).map(r => ({

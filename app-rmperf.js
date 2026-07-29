@@ -21,7 +21,7 @@ function rmPerformance(){
   // Quality = CONVERTED (by CM) + IN PROCESS (by LPM) — same column logic as KPI cards
   const qualityForRM = rm => STATE.raw.filter(r => r.currentRmName===rm && campOK(r) && (
     isConvertedLead(r, monthMatch) ||
-    (r.leadStatus==='IN PROCESS' && monthMatch(r.LPM))
+    (r.leadStatus==='IN PROCESS' && !isConvertedLead(r) && monthMatch(r.LPM))
   )).length;
   const rmEq = (a, b) => normalizeNameKey(a) === normalizeNameKey(b);
   const fpForRM = rm => {
@@ -81,7 +81,7 @@ function rmPerformance(){
   // Quality = CONVERTED (by CM) + IN PROCESS (by LPM) — same column logic as KPI cards
   const qualityForTeam = team => STATE.raw.filter(r => r.Team===team && campOK(r) && (
     isConvertedLead(r, monthMatch) ||
-    (r.leadStatus==='IN PROCESS' && monthMatch(r.LPM))
+    (r.leadStatus==='IN PROCESS' && !isConvertedLead(r) && monthMatch(r.LPM))
   )).length;
 
   // Group revenue rows by team → canonical (mapped) RM name so the detail table can
@@ -165,9 +165,10 @@ function rmPerformance(){
   const statusCount = st => {
     const base = STATE.raw.filter(r => campOK(r));
     // CONVERTED gate: CM-presence, not leadStatus (per 2026-07-29 rule).
+    // Leads with a CM are removed from every other status bucket.
     if(st === 'CONVERTED') return base.filter(r => isConvertedLead(r, monthMatch)).length;
     const col = st==='IN PROCESS'?'LPM':'CTM';
-    return base.filter(r=>r.leadStatus===st && monthMatch(r[col])).length;
+    return base.filter(r=>r.leadStatus===st && !isConvertedLead(r) && monthMatch(r[col])).length;
   };
   const kpi = {
     totalLeads: STATE.raw.filter(r => monthMatch(r.CTM) && campOK(r)).length,
@@ -444,9 +445,10 @@ function processedStatus(){
     months.forEach(m => {
       const col = statusMonthCol(st);
       // CONVERTED gate: CM-presence, not leadStatus (per 2026-07-29 rule).
+      // Leads with a CM are removed from all other status buckets.
       r[m] = st === 'CONVERTED'
         ? STATE.raw.filter(x => x.CM === m).length
-        : STATE.raw.filter(x => x.leadStatus===st && x[col]===m).length;
+        : STATE.raw.filter(x => x.leadStatus===st && !isConvertedLead(x) && x[col]===m).length;
       r.total += r[m];
     });
     return r;
