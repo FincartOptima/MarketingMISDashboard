@@ -57,6 +57,17 @@ function statusMonthCol(status){
   if(status === 'IN PROCESS') return 'LPM';
   return 'CTM';
 }
+
+// Whether a lead should be counted as CONVERTED. Per business rule (2026-07-29),
+// presence of a Converted Month (CM) is definitive — leadStatus is ignored. A
+// lead with CM='May-2026' but leadStatus='FOLLOW UP' still counts as converted
+// for May-2026. `monthMatchFn` is the caller's month predicate (monthFilter,
+// rmPerfMonthMatch, etc.); omit to count all CM-present leads regardless of month.
+function isConvertedLead(row, monthMatchFn){
+  const cm = row.CM;
+  if(!cm || cm === 'N/A') return false;
+  return monthMatchFn ? monthMatchFn(cm) : true;
+}
 function dashboardStatusMonthCol(status){
   if(status === 'CONVERTED') return 'CM';
   if(status === 'IN PROCESS') return 'LPM';

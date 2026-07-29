@@ -20,7 +20,7 @@ function rmPerformance(){
   const leadsForRM = rm => STATE.raw.filter(r => r.currentRmName===rm && monthMatch(r.CTM) && campOK(r)).length;
   // Quality = CONVERTED (by CM) + IN PROCESS (by LPM) — same column logic as KPI cards
   const qualityForRM = rm => STATE.raw.filter(r => r.currentRmName===rm && campOK(r) && (
-    (r.leadStatus==='CONVERTED' && monthMatch(r.CM)) ||
+    isConvertedLead(r, monthMatch) ||
     (r.leadStatus==='IN PROCESS' && monthMatch(r.LPM))
   )).length;
   const rmEq = (a, b) => normalizeNameKey(a) === normalizeNameKey(b);
@@ -80,7 +80,7 @@ function rmPerformance(){
   const leadsForTeam = team => STATE.raw.filter(r => r.Team===team && monthMatch(r.CTM) && campOK(r)).length;
   // Quality = CONVERTED (by CM) + IN PROCESS (by LPM) — same column logic as KPI cards
   const qualityForTeam = team => STATE.raw.filter(r => r.Team===team && campOK(r) && (
-    (r.leadStatus==='CONVERTED' && monthMatch(r.CM)) ||
+    isConvertedLead(r, monthMatch) ||
     (r.leadStatus==='IN PROCESS' && monthMatch(r.LPM))
   )).length;
 
@@ -164,7 +164,9 @@ function rmPerformance(){
   // ---- KPI strip ----
   const statusCount = st => {
     const base = STATE.raw.filter(r => campOK(r));
-    const col = st==='CONVERTED'?'CM': st==='IN PROCESS'?'LPM':'CTM';
+    // CONVERTED gate: CM-presence, not leadStatus (per 2026-07-29 rule).
+    if(st === 'CONVERTED') return base.filter(r => isConvertedLead(r, monthMatch)).length;
+    const col = st==='IN PROCESS'?'LPM':'CTM';
     return base.filter(r=>r.leadStatus===st && monthMatch(r[col])).length;
   };
   const kpi = {
@@ -441,7 +443,11 @@ function processedStatus(){
     const r = {Status:st, total:0};
     months.forEach(m => {
       const col = statusMonthCol(st);
-      r[m] = STATE.raw.filter(x => x.leadStatus===st && x[col]===m).length; r.total += r[m];
+      // CONVERTED gate: CM-presence, not leadStatus (per 2026-07-29 rule).
+      r[m] = st === 'CONVERTED'
+        ? STATE.raw.filter(x => x.CM === m).length
+        : STATE.raw.filter(x => x.leadStatus===st && x[col]===m).length;
+      r.total += r[m];
     });
     return r;
   });

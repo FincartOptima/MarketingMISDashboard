@@ -47,7 +47,9 @@ function topKPIs(){
   const ytd = STATE.raw.filter(r=>filteredMonths().includes(r.FMONTH)).length;
   const generated = rows.filter(r=>monthFilter(r.CTM)).length;
   const sc = st => rows.filter(r => r.leadStatus===st && monthFilter(r[statusMonthCol(st)])).length;
-  const converted = sc('CONVERTED'), inProcess = sc('IN PROCESS');
+  // CONVERTED uses CM-presence rule (isConvertedLead) — leadStatus ignored.
+  const converted = rows.filter(r => isConvertedLead(r, monthFilter)).length;
+  const inProcess = sc('IN PROCESS');
   return {
     ytd, generated, assigned: sc('ASSIGNED'), converted, inProcess,
     followUp: sc('FOLLOW UP'), onHold: sc('ON HOLD'), dead: sc('DEAD'),
@@ -63,13 +65,13 @@ function liveDataKPIs(){
   // AnyMonth = status event in selected month(s), lead CREATED outside those month(s)
   // SameMonth = status event in selected month(s), lead CREATED in the same selected month(s)
   const anyConv = rows.filter(r =>
-    r.leadStatus==='CONVERTED' && monthFilter(r.CM) && !monthFilter(r.CTM)
+    isConvertedLead(r, monthFilter) && !monthFilter(r.CTM)
   ).length;
   const anyIP = rows.filter(r =>
     r.leadStatus==='IN PROCESS' && monthFilter(r.LPM) && !monthFilter(r.CTM)
   ).length;
   const sameConv = rows.filter(r =>
-    r.leadStatus==='CONVERTED' && monthFilter(r.CM) && monthFilter(r.CTM)
+    isConvertedLead(r, monthFilter) && monthFilter(r.CTM)
   ).length;
   const sameIP = rows.filter(r =>
     r.leadStatus==='IN PROCESS' && monthFilter(r.LPM) && monthFilter(r.CTM)
@@ -109,7 +111,10 @@ function statusByMonth(teamFilter){
     const r = {Status: st, total: 0};
     months.forEach(m => {
       const col = statusMonthCol(st);
-      const c = base.filter(x => x.leadStatus===st && x[col]===m).length;
+      // CONVERTED counts any lead whose CM matches — leadStatus is not required.
+      const c = st === 'CONVERTED'
+        ? base.filter(x => x.CM === m).length
+        : base.filter(x => x.leadStatus===st && x[col]===m).length;
       r[m] = c; r.total += c;
     });
     return r;
@@ -128,7 +133,12 @@ function platformStatusBreakdown(){
     const sub = rows.filter(g.match);
     const obj = {Platform: g.label}; let total = 0;
     for(const st of STATUSES){
-      const pool = applyMonthMode(sub.filter(r => r.leadStatus===st), anyMonthCol(st), mode);
+      // CONVERTED gate: CM-presence, not leadStatus (per 2026-07-29 rule).
+      // Non-converted rows carry CM='N/A' — exclude those.
+      const filtered = st === 'CONVERTED'
+        ? sub.filter(r => r.CM && r.CM !== 'N/A')
+        : sub.filter(r => r.leadStatus===st);
+      const pool = applyMonthMode(filtered, anyMonthCol(st), mode);
       obj[st] = pool.length; total += pool.length;
     }
     obj.Total = total;
@@ -171,7 +181,12 @@ function landingPageStatusBreakdown(){
     const campaign = Object.entries(campCounts).sort((a,b)=>b[1]-a[1])[0]?.[0] || '';
     const obj = {'Landing Page': lp || '(Blank)', 'Campaign': campaign || '(Blank)'}; let total = 0;
     for(const st of STATUSES){
-      const pool = applyMonthMode(sub.filter(r => r.leadStatus===st), anyMonthCol(st), mode);
+      // CONVERTED gate: CM-presence, not leadStatus (per 2026-07-29 rule).
+      // Non-converted rows carry CM='N/A' — exclude those.
+      const filtered = st === 'CONVERTED'
+        ? sub.filter(r => r.CM && r.CM !== 'N/A')
+        : sub.filter(r => r.leadStatus===st);
+      const pool = applyMonthMode(filtered, anyMonthCol(st), mode);
       obj[st] = pool.length; total += pool.length;
     }
     obj.Total = total;
@@ -199,7 +214,10 @@ function teamPerformance(){
     const totalLeads = rows.filter(r => monthFilter(r.CTM)).length;
     const obj = {Team: team, 'Total Leads': totalLeads};
     for(const st of STATUSES){
-      const pool = rows.filter(r => r.leadStatus===st && monthFilter(r[statusMonthCol(st)]));
+      // CONVERTED gate: CM-presence, not leadStatus (per 2026-07-29 rule).
+      const pool = st === 'CONVERTED'
+        ? rows.filter(r => isConvertedLead(r, monthFilter))
+        : rows.filter(r => r.leadStatus===st && monthFilter(r[statusMonthCol(st)]));
       obj[st] = pool.length;
     }
     obj['Conv. Rate'] = totalLeads>0 ? obj.CONVERTED/totalLeads : 0;
@@ -293,7 +311,7 @@ function campaignByTeam(){
 function incomeSegment(){
   const rows = applyRefColdFilter(STATE.raw);
   const leadRows = rows.filter(r => monthFilter(r.CTM));
-  const convRows = rows.filter(r => r.leadStatus==='CONVERTED' && monthFilter(r.CM));
+  const convRows = rows.filter(r => isConvertedLead(r, monthFilter));
   const ipRows   = rows.filter(r => r.leadStatus==='IN PROCESS' && monthFilter(r.LPM));
   const preferredOrder = ['Above 20 Lac','15 Lac to 20 Lac','10 Lac to 20 Lac','10 Lac to 15 Lac','5 Lac to 10 Lac','0 to 5 Lac'];
   const preferredSet = new Set(preferredOrder);
@@ -337,8 +355,8 @@ function costSummaryByCampaign(){
     const row = cpc[i]; const name = row[0];
     if(!name || !String(name).trim()) continue;
     let leads = STATE.raw.filter(r => r['Campaign Name']===name && monthFilter(r.CTM)).length;
-    let qual  = STATE.raw.filter(r => r['Campaign Name']===name && ((r.leadStatus==='CONVERTED' && monthFilter(r.CM)) || (r.leadStatus==='IN PROCESS' && monthFilter(r.LPM)))).length;
-    let conv  = STATE.raw.filter(r => r['Campaign Name']===name && r.leadStatus==='CONVERTED' && monthFilter(r.CM)).length;
+    let qual  = STATE.raw.filter(r => r['Campaign Name']===name && (isConvertedLead(r, monthFilter) || (r.leadStatus==='IN PROCESS' && monthFilter(r.LPM)))).length;
+    let conv  = STATE.raw.filter(r => r['Campaign Name']===name && isConvertedLead(r, monthFilter)).length;
     const cost = effectiveMonths().reduce((s,m) => { const idx=monthCols.indexOf(m); return s + (idx>=0?(Number(row[idx+1])||0):0); }, 0);
     if(refMode==='Exclude' && (name==='Referral' || name==='Cold Data')){ leads = 0; qual = 0; conv = 0; }
     const cpl  = leads>0 ? cost/leads : 0;
@@ -422,7 +440,7 @@ function costPerLeadPerRMWithTotals(){
     g.totalCost += cplMap[r['Campaign Name']] || 0;
   }
   for(const r of scope){
-    if(r.leadStatus==='CONVERTED' && monthFilter(r.CM)) ensure(r).qualLeads++;
+    if(isConvertedLead(r, monthFilter)) ensure(r).qualLeads++;
     else if(r.leadStatus==='IN PROCESS' && monthFilter(r.LPM)) ensure(r).qualLeads++;
   }
 
