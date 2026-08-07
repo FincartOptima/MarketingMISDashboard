@@ -1055,11 +1055,13 @@ function renderWorkshopStatus(){
   if(!STATE.filesLoaded.fin23){ setNotUploaded('#tbl-workshop-status','fin23'); $('#legend-workshop-status').innerHTML=''; return; }
   const data = workshopStatusDistribution();
   applyHeatAndLegend(data, 'Total', '#legend-workshop-status', 'Row heat by Total');
-  const headers = ['Person', ...STATUSES, 'Total'];
+  const headers = ['Person', ...STATUSES, 'Total', 'Lead Conversion Rate', 'Lead (In Process + Converted) Rate'];
   const rows = data.map(r => {
     const o = {Person: r.Person};
     STATUSES.forEach(s => o[s] = fmtIN(r[s]));
     o.Total = fmtIN(r.Total);
+    o['Lead Conversion Rate'] = fmtPct(r['Lead Conversion Rate']);
+    o['Lead (In Process + Converted) Rate'] = fmtPct(r['Quality Lead Rate']);
     o._tot = !!r._tot; o._heat = r._heat;
     return o;
   });

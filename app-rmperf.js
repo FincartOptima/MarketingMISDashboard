@@ -197,24 +197,10 @@ function b2bByRMStatus(){
     const obj = {RM: rm}; let total = 0;
     for(const st of B2B_STATUSES){ obj[st] = sub.filter(r => r.status===st).length; total += obj[st]; }
     obj.Total = total;
-    // Rate denominator is ALL of this RM's B2B leads (sub.length), not just the
-    // 5 statuses above, so these stay correct if CONVERTED/IN PROCESS B2B leads
-    // ever appear (the current B2B file has none of either status yet).
-    const convertedCount = sub.filter(r => r.status === 'CONVERTED').length;
-    const inProcessCount = sub.filter(r => r.status === 'IN PROCESS').length;
-    obj._converted = convertedCount; obj._inProcess = inProcessCount; obj._allLeads = sub.length;
-    obj['Lead Conversion Rate'] = sub.length>0 ? convertedCount/sub.length : 0;
-    obj['Quality Lead Rate']    = sub.length>0 ? (convertedCount+inProcessCount)/sub.length : 0;
     return obj;
   });
   if(!out.length) return {statuses: B2B_STATUSES, data: []};
-  const gt = buildGrandTotalRow('RM', 'Grand Total', B2B_STATUSES, out, 'Total');
-  const gtConverted = out.reduce((s,r)=>s+r._converted,0);
-  const gtInProcess = out.reduce((s,r)=>s+r._inProcess,0);
-  const gtAllLeads  = out.reduce((s,r)=>s+r._allLeads,0);
-  gt['Lead Conversion Rate'] = gtAllLeads>0 ? gtConverted/gtAllLeads : 0;
-  gt['Quality Lead Rate']    = gtAllLeads>0 ? (gtConverted+gtInProcess)/gtAllLeads : 0;
-  out.push(gt);
+  out.push(buildGrandTotalRow('RM', 'Grand Total', B2B_STATUSES, out, 'Total'));
   return {statuses: B2B_STATUSES, data: out};
 }
 
@@ -229,13 +215,11 @@ function renderB2BTable(){
     $(host).innerHTML = '<div class="meta" style="padding:12px">No B2B data — B2B.xlsx was not found in the repo.</div>';
     return;
   }
-  const headers = ['RM', ...statuses, 'Total', 'Lead Conversion Rate', 'Lead (In Process + Converted) Rate'];
+  const headers = ['RM', ...statuses, 'Total'];
   const rows = data.map(r => {
     const o = {RM: r.RM, _tot: !!r._tot};
     statuses.forEach(s => o[s] = fmtIN(r[s]));
     o.Total = fmtIN(r.Total);
-    o['Lead Conversion Rate'] = fmtPct(r['Lead Conversion Rate']);
-    o['Lead (In Process + Converted) Rate'] = fmtPct(r['Quality Lead Rate']);
     return o;
   });
   renderTable(host, headers, rows);

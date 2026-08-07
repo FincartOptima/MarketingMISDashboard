@@ -78,7 +78,7 @@ const TABLE_INFO = {
   },
   'workshop-status': {
     title: 'Workshop Status Distribution',
-    desc: 'Status breakdown for BTL Marketing workshop leads, grouped by the person running the landing page. Landing pages containing "-D" are Devanshi\'s, "-H" are Himanshi\'s, "-S" are Shreya\'s; any BTL Marketing landing page matching none of these falls into Unclassified. Honors the global Month, Ref+Cold, and Status filters.',
+    desc: 'Status breakdown for BTL Marketing workshop leads, grouped by the person running the landing page. Landing pages containing "-D" are Devanshi\'s, "-H" are Himanshi\'s, "-S" are Shreya\'s; any BTL Marketing landing page matching none of these falls into Unclassified. Honors the global Month, Ref+Cold, and Status filters. <strong>Lead Conversion Rate</strong> = CONVERTED ÷ Total. <strong>Lead (In Process + Converted) Rate</strong> = (CONVERTED + IN PROCESS) ÷ Total.',
     cols: 'platformName (= BTL Marketing only) · landingPage (substring match: -D / -H / -S) · leadStatus (CONVERTED / IN PROCESS / ASSIGNED / RE-ASSIGNED / FOLLOW UP / ON HOLD / DEAD) · CTM / LPM / CM (selected months, per status)',
     source: 'RAW_DATA sheet'
   },
@@ -128,10 +128,9 @@ const TABLE_INFO = {
   },
   'b2b': {
     title: 'B2B Corp Leads — RM × Status',
-    desc: 'B2B corporate lead counts by RM and status, filtered by CreateMonth. <strong>Lead Conversion Rate</strong> = CONVERTED ÷ all B2B leads for that RM. <strong>Lead (In Process + Converted) Rate</strong> = (CONVERTED + IN PROCESS) ÷ all B2B leads for that RM — both use every lead for the RM as the denominator, not just the 5 statuses shown as columns. Requires separate B2B file upload.',
+    desc: 'B2B corporate lead counts by RM and status, filtered by CreateMonth. Requires separate B2B file upload.',
     cols: 'currentRmName (all RM names) · leadStatus (all statuses) · CreateMonth (selected months)',
-    source: 'B2B Corporate Lead File',
-    note: 'The current B2B file has no CONVERTED or IN PROCESS leads, so both rate columns will read 0% until such leads appear in a future upload.'
+    source: 'B2B Corporate Lead File'
   },
   'rmperf-funnel': {
     title: 'Conversion Funnel',
