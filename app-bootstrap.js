@@ -128,9 +128,10 @@ const TABLE_INFO = {
   },
   'b2b': {
     title: 'B2B Corp Leads — RM × Status',
-    desc: 'B2B corporate lead counts by RM and status, filtered by CreateMonth. Requires separate B2B file upload.',
+    desc: 'B2B corporate lead counts by RM and status, filtered by CreateMonth. <strong>Lead Conversion Rate</strong> = CONVERTED ÷ all B2B leads for that RM. <strong>Lead (In Process + Converted) Rate</strong> = (CONVERTED + IN PROCESS) ÷ all B2B leads for that RM — both use every lead for the RM as the denominator, not just the 5 statuses shown as columns. Requires separate B2B file upload.',
     cols: 'currentRmName (all RM names) · leadStatus (all statuses) · CreateMonth (selected months)',
-    source: 'B2B Corporate Lead File'
+    source: 'B2B Corporate Lead File',
+    note: 'The current B2B file has no CONVERTED or IN PROCESS leads, so both rate columns will read 0% until such leads appear in a future upload.'
   },
   'rmperf-funnel': {
     title: 'Conversion Funnel',
