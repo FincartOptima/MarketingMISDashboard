@@ -71,10 +71,16 @@ const TABLE_INFO = {
   },
   'team-perf': {
     title: 'Team Performance Matrix',
-    desc: 'Lead and status counts per team. Use the <strong>CurrentRM / FirstRM toggle</strong> to switch how team assignment works:<br>• <strong>CurrentRM</strong> (default): team is determined by the current RM holding the lead (currentRmName → EMPLOYEE_REF).<br>• <strong>FirstRM</strong>: team is determined by the first RM originally assigned (firstRmName → EMPLOYEE_REF).<br>Total Leads uses CTM. Each status uses its own event-date column.',
+    desc: 'Lead and status counts per team. Use the <strong>CurrentRM / FirstRM toggle</strong> to switch how team assignment works:<br>• <strong>CurrentRM</strong> (default): team is determined by the current RM holding the lead (currentRmName → EMPLOYEE_REF).<br>• <strong>FirstRM</strong>: team is determined by the first RM originally assigned (firstRmName → EMPLOYEE_REF).<br>Total Leads uses CTM. Each status uses its own event-date column.<br><br>Use the <strong>Team filter</strong> to drill into a single team: the table switches to one row per RM in that team, with the same status columns.',
     cols: 'currentRmName or firstRmName (→ team, toggled) · leadStatus (CONVERTED / IN PROCESS / ASSIGNED / RE-ASSIGNED / FOLLOW UP / ON HOLD / DEAD) · CTM (selected months, for Total Leads / ASSIGNED / RE-ASSIGNED / FOLLOW UP / ON HOLD / DEAD) · LPM (selected months, for IN PROCESS) · CM (selected months, for CONVERTED)',
     source: 'RAW_DATA sheet, EMPLOYEE_REF sheet',
     note: 'IN PROCESS uses LPM; Total Leads uses CTM — so status columns may not sum to Total Leads. Switching to FirstRM mode shows the original team assignment before any transfers.'
+  },
+  'workshop-status': {
+    title: 'Workshop Status Distribution',
+    desc: 'Status breakdown for BTL Marketing workshop leads, grouped by the person running the landing page. Landing pages containing "-D" are Devanshi\'s, "-H" are Himanshi\'s, "-S" are Shreya\'s; any BTL Marketing landing page matching none of these falls into Unclassified. Honors the global Month, Ref+Cold, and Status filters.',
+    cols: 'platformName (= BTL Marketing only) · landingPage (substring match: -D / -H / -S) · leadStatus (CONVERTED / IN PROCESS / ASSIGNED / RE-ASSIGNED / FOLLOW UP / ON HOLD / DEAD) · CTM / LPM / CM (selected months, per status)',
+    source: 'RAW_DATA sheet'
   },
   'rm-transfer': {
     title: 'FirstRM to CurrentRM Transfer',

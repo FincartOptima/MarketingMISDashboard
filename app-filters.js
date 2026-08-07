@@ -23,6 +23,16 @@ function effectiveMonths(){
 }
 function rcFilter(mode){ const f = STATE.filterRefCold; return Array.isArray(f) ? (f[0] || 'Include') : (f || 'Include'); }
 
+// Universal Status filter (header, alongside Month). CONVERTED uses the same
+// CM-presence rule as isConvertedLead(); every other status also requires
+// !isConvertedLead() so a lead never matches two status buckets at once.
+function statusRowMatch(row){
+  const f = STATE.filterStatus;
+  if(!f || f === 'All' || (Array.isArray(f) && f.length === 0)) return true;
+  const wanted = Array.isArray(f) ? f : [f];
+  return wanted.some(st => st === 'CONVERTED' ? isConvertedLead(row) : (row.leadStatus === st && !isConvertedLead(row)));
+}
+
 // Build a custom multi-select (or single-select) dropdown widget
 // opts.multi=false → radio-style (only one selected at a time)
 function buildMultiSelect(containerId, options, currentVal, onChange, opts={}){
@@ -131,6 +141,8 @@ function initFilters(){
   buildMultiSelect('#filter-refcold-wrap',
     ['Include','Exclude','Only Referral'], STATE.filterRefCold,
     val => { STATE.filterRefCold = val; renderDashboard(); }, {multi: false});
+  buildMultiSelect('#filter-status-wrap', ['All', ...STATUSES], STATE.filterStatus,
+    val => { STATE.filterStatus = val; renderDashboard(); }, {multi: true});
 }
 function isPeriodNewOrModern(period){
   const s = String(period||'').trim();

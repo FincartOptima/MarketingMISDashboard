@@ -169,6 +169,23 @@ header.app .spacer{flex:1}
   color:var(--text);margin-bottom:12px;
 }
 .section .hint{color:var(--muted);font-size:12px;margin-top:8px}
+
+/* ============ SECTION DIVIDER (B2B / Workshop breaks) ============ */
+.section-divider{
+  display:flex;align-items:center;gap:14px;
+  margin:32px 0 16px;
+}
+.section-divider::before,.section-divider::after{
+  content:'';flex:1;height:2px;background:var(--orange);
+}
+.section-divider .sd-label{
+  flex:none;font-size:13px;font-weight:900;letter-spacing:1.5px;
+  text-transform:uppercase;color:#fff;background:var(--orange);
+  padding:6px 18px;
+}
+@media print{
+  .section-divider{break-before:page}
+}
 .info-btn{
   display:inline-flex;align-items:center;justify-content:center;
   width:20px;height:20px;border-radius:0;border:1.5px solid var(--muted);
@@ -442,6 +459,8 @@ table.data.editable td input:focus{outline:2px solid var(--orange);background:va
         <div id="filter-month-wrap"></div>
         <label>Ref+Cold</label>
         <div id="filter-refcold-wrap"></div>
+        <label>Status</label>
+        <div id="filter-status-wrap"></div>
       </span>
       <a class="secondary" id="feedback-link" href="#" target="_blank" rel="noopener" title="Suggest an improvement" style="text-decoration:none;display:inline-flex;align-items:center;padding:6px 12px;font-size:13px">💡 Suggest an Improvement</a>
       <button class="secondary" id="settings-btn" title="Settings">⚙️</button>
@@ -535,7 +554,11 @@ table.data.editable td input:focus{outline:2px solid var(--orange);background:va
     <div class="section bar-green">
       <h2>Team Performance Matrix
         <button class="info-btn" data-info="team-perf" title="Table info">i</button>
-        <span id="team-perf-toggle" style="float:right"></span>
+        <span style="float:right;font-weight:400;text-transform:none;display:flex;align-items:center;gap:10px">
+          <label style="font-size:11px;color:var(--muted)">Team</label>
+          <span id="team-perf-team-filter-wrap"></span>
+          <span id="team-perf-toggle"></span>
+        </span>
       </h2>
       <div id="legend-team"></div>
       <div class="table-wrap" id="tbl-team"></div>
@@ -608,6 +631,9 @@ table.data.editable td input:focus{outline:2px solid var(--orange);background:va
       </div>
     </div>
 
+    <!-- Page break: everything below is B2B corp data, not B2C -->
+    <div class="section-divider"><span class="sd-label">⬇ B2B Corporate Data Below</span></div>
+
     <!-- B2B Corp Leads -->
     <div class="section bar-orange" style="border-top-color:var(--orange)">
       <h2 id="b2b-table-title">B2B Corp Leads — RM × Status
@@ -615,6 +641,19 @@ table.data.editable td input:focus{outline:2px solid var(--orange);background:va
       </h2>
       <div class="table-wrap" id="tbl-b2b"></div>
       <div class="hint">Add <strong>B2B.xlsx</strong> to the repo to populate this table.</div>
+    </div>
+
+    <!-- Page break: back to B2C data for the Workshop breakdown -->
+    <div class="section-divider"><span class="sd-label">⬇ Workshop Status Distribution</span></div>
+
+    <!-- Workshop Status Distribution (BTL Marketing platform, by landing-page owner) -->
+    <div class="section bar-cyan">
+      <h2>Workshop Status Distribution
+        <button class="info-btn" data-info="workshop-status" title="Table info">i</button>
+      </h2>
+      <div id="legend-workshop-status"></div>
+      <div class="table-wrap" id="tbl-workshop-status"></div>
+      <div class="hint">Platform = <strong>BTL Marketing</strong> only. Landing pages containing "-D" → Devanshi, "-H" → Himanshi, "-S" → Shreya.</div>
     </div>
 
   </div>

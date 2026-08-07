@@ -356,6 +356,35 @@ function renderTeam(){
       btn.onclick = () => { STATE.teamPerfMode = btn.dataset.mode; renderTeam(); };
     });
   }
+  const teamFilterWrap = $('#team-perf-team-filter-wrap');
+  if(teamFilterWrap){
+    buildMultiSelect('#team-perf-team-filter-wrap', ['All', ...FIXED_TEAMS], STATE.teamPerfTeamFilter,
+      val => { STATE.teamPerfTeamFilter = val; renderTeam(); }, {multi: false});
+  }
+
+  const selectedTeam = STATE.teamPerfTeamFilter;
+  if(selectedTeam && selectedTeam !== 'All'){
+    // Drill-down: one row per RM in the selected team, same status columns.
+    const data = teamPerformanceByRM(selectedTeam);
+    const headers = ['RM', 'Total Leads', 'CONVERTED', 'Conv. Rate', 'IN PROCESS', 'FOLLOW UP', 'ASSIGNED', 'RE-ASSIGNED', 'ON HOLD', 'DEAD'];
+    applyHeatAndLegend(data, 'Total Leads', '#legend-team', 'Row heat by Total Leads');
+    const rows = data.map(r => ({
+      RM: r.RM,
+      'Total Leads': fmtIN(r['Total Leads']),
+      CONVERTED: fmtIN(r.CONVERTED),
+      'Conv. Rate': fmtPct(r['Conv. Rate']),
+      'IN PROCESS': fmtIN(r['IN PROCESS']),
+      'FOLLOW UP': fmtIN(r['FOLLOW UP']),
+      ASSIGNED: fmtIN(r.ASSIGNED),
+      'RE-ASSIGNED': fmtIN(r['RE-ASSIGNED']),
+      'ON HOLD': fmtIN(r['ON HOLD']),
+      DEAD: fmtIN(r.DEAD),
+      _heat: r._heat, _tot: r._tot,
+    }));
+    makeSortableTable('#tbl-team', headers, rows, renderTeam);
+    return;
+  }
+
   const data = teamPerformance();
   const headers = ['Team', 'Total Leads', 'CONVERTED', 'Conv. Rate', 'IN PROCESS', 'FOLLOW UP', 'ASSIGNED', 'RE-ASSIGNED', 'ON HOLD', 'DEAD'];
   applyHeatAndLegend(data, 'Total Leads', '#legend-team', 'Row heat by Total Leads');
@@ -1018,7 +1047,23 @@ function renderDashboard(){
   renderInProcessDataset();
   renderConvertedDataset();
   renderB2BTable();
+  renderWorkshopStatus();
   requestAnimationFrame(attachAllMirrors);
+}
+
+function renderWorkshopStatus(){
+  if(!STATE.filesLoaded.fin23){ setNotUploaded('#tbl-workshop-status','fin23'); $('#legend-workshop-status').innerHTML=''; return; }
+  const data = workshopStatusDistribution();
+  applyHeatAndLegend(data, 'Total', '#legend-workshop-status', 'Row heat by Total');
+  const headers = ['Person', ...STATUSES, 'Total'];
+  const rows = data.map(r => {
+    const o = {Person: r.Person};
+    STATUSES.forEach(s => o[s] = fmtIN(r[s]));
+    o.Total = fmtIN(r.Total);
+    o._tot = !!r._tot; o._heat = r._heat;
+    return o;
+  });
+  renderTable('#tbl-workshop-status', headers, rows);
 }
 
 function renderAll(){

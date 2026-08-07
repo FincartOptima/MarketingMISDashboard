@@ -31,13 +31,16 @@ function applyMonthMode(pool, anyMonthColName, mode){
   return pool.filter(r => monthFilter(r[anyMonthColName]));
 }
 
+// The base row filter every Dashboard-tab aggregator starts from: Ref+Cold
+// mode, then the universal Status filter (see statusRowMatch in app-filters.js).
 function applyRefColdFilter(rows){
   const mode = rcFilter(STATE.filterRefCold);
+  let out = rows;
   if(mode === 'Exclude')
-    return rows.filter(r => r['Campaign Name']!=='Referral' && r['Campaign Name']!=='Cold Data');
-  if(mode === 'Only Referral')
-    return rows.filter(r => r['Campaign Name']==='Referral');
-  return rows;
+    out = out.filter(r => r['Campaign Name']!=='Referral' && r['Campaign Name']!=='Cold Data');
+  else if(mode === 'Only Referral')
+    out = out.filter(r => r['Campaign Name']==='Referral');
+  return out.filter(statusRowMatch);
 }
 
 function topKPIs(){
@@ -93,7 +96,7 @@ function leadsByPlatformMonth(){
   const out = buckets.map(b => {
     const o = {Platform: b.label, total:0};
     months.forEach(m => {
-      let c = rows.filter(x => b.match(x) && x.CTM===m).length;
+      let c = rows.filter(x => b.match(x) && x.CTM===m && statusRowMatch(x)).length;
       if(refMode==='Exclude' && (b.label==='Referral' || b.label==='Cold Leads')) c = 0;
       o[m] = c; o.total += c;
     });
@@ -105,7 +108,7 @@ function leadsByPlatformMonth(){
 
 function statusByMonth(teamFilter){
   const months = filteredMonths();
-  let base = STATE.raw;
+  let base = STATE.raw.filter(statusRowMatch);
   if(teamFilter === 'SV') base = base.filter(r => (r.Team || 'SV') === 'SV');
   else if(teamFilter === 'non-SV') base = base.filter(r => (r.Team || 'SV') !== 'SV');
   return STATUSES.map(st => {
@@ -228,6 +231,53 @@ function teamPerformance(){
     obj['Conv. Rate'] = totalLeads>0 ? obj.CONVERTED/totalLeads : 0;
     return obj;
   });
+}
+
+// Per-RM drill-down for the Team Performance Matrix's Team filter: same
+// status columns as teamPerformance(), one row per RM in the selected team
+// instead of one row per team.
+function teamPerformanceByRM(team){
+  const base = applyRefColdFilter(STATE.raw);
+  const useFirst = STATE.teamPerfMode === 'first';
+  const rmField = useFirst ? 'firstRmName' : 'currentRmName';
+  const teamRows = useFirst
+    ? base.filter(r => (STATE.teamMap[(r.firstRmName||'').toLowerCase()] || 'SV') === team)
+    : base.filter(r => (r.Team || 'SV') === team);
+
+  // RM roster: everyone in EMPLOYEE_REF for this team, plus any RM appearing
+  // in teamRows but missing from EMPLOYEE_REF, so no lead is silently dropped.
+  const rms = [];
+  const seen = new Set();
+  for(let i=1;i<STATE.empref.length;i++){
+    const er = STATE.empref[i]; if(!er) continue;
+    if((er[1]||'').toString().trim() === team){
+      const nm = (er[2]||'').toString().trim();
+      if(nm && !seen.has(nm.toLowerCase())){ rms.push(nm); seen.add(nm.toLowerCase()); }
+    }
+  }
+  for(const r of teamRows){
+    const nm = (r[rmField]||'').toString().trim() || '(unassigned)';
+    if(!seen.has(nm.toLowerCase())){ rms.push(nm); seen.add(nm.toLowerCase()); }
+  }
+
+  const out = rms.map(rm => {
+    const rmRows = teamRows.filter(r => ((r[rmField]||'').toString().trim() || '(unassigned)') === rm);
+    const totalLeads = rmRows.filter(r => monthFilter(r.CTM)).length;
+    const obj = {RM: rm, 'Total Leads': totalLeads};
+    for(const st of STATUSES){
+      const pool = st === 'CONVERTED'
+        ? rmRows.filter(r => isConvertedLead(r, monthFilter))
+        : rmRows.filter(r => r.leadStatus===st && !isConvertedLead(r) && monthFilter(r[statusMonthCol(st)]));
+      obj[st] = pool.length;
+    }
+    obj['Conv. Rate'] = totalLeads>0 ? obj.CONVERTED/totalLeads : 0;
+    return obj;
+  }).sort((a,b) => b['Total Leads'] - a['Total Leads']);
+
+  const gt = buildGrandTotalRow('RM', team+' Total', [...STATUSES, 'Total Leads'], out);
+  gt['Conv. Rate'] = gt['Total Leads']>0 ? gt.CONVERTED/gt['Total Leads'] : 0;
+  out.push(gt);
+  return out;
 }
 
 function rmTransferData(){
@@ -359,9 +409,9 @@ function costSummaryByCampaign(){
   for(let i=1;i<cpc.length;i++){
     const row = cpc[i]; const name = row[0];
     if(!name || !String(name).trim()) continue;
-    let leads = STATE.raw.filter(r => r['Campaign Name']===name && monthFilter(r.CTM)).length;
-    let qual  = STATE.raw.filter(r => r['Campaign Name']===name && (isConvertedLead(r, monthFilter) || (r.leadStatus==='IN PROCESS' && !isConvertedLead(r) && monthFilter(r.LPM)))).length;
-    let conv  = STATE.raw.filter(r => r['Campaign Name']===name && isConvertedLead(r, monthFilter)).length;
+    let leads = STATE.raw.filter(r => r['Campaign Name']===name && statusRowMatch(r) && monthFilter(r.CTM)).length;
+    let qual  = STATE.raw.filter(r => r['Campaign Name']===name && statusRowMatch(r) && (isConvertedLead(r, monthFilter) || (r.leadStatus==='IN PROCESS' && !isConvertedLead(r) && monthFilter(r.LPM)))).length;
+    let conv  = STATE.raw.filter(r => r['Campaign Name']===name && statusRowMatch(r) && isConvertedLead(r, monthFilter)).length;
     const cost = effectiveMonths().reduce((s,m) => { const idx=monthCols.indexOf(m); return s + (idx>=0?(Number(row[idx+1])||0):0); }, 0);
     if(refMode==='Exclude' && (name==='Referral' || name==='Cold Data')){ leads = 0; qual = 0; conv = 0; }
     const cpl  = leads>0 ? cost/leads : 0;
@@ -427,7 +477,7 @@ function costPerLeadPerRMWithTotals(){
 
   let scope = STATE.raw;
   if(refMode==='Exclude') scope = scope.filter(r => r['Campaign Name']!=='Referral' && r['Campaign Name']!=='Cold Data');
-  scope = scope.filter(r => campaignSet.has(r['Campaign Name']));
+  scope = scope.filter(r => campaignSet.has(r['Campaign Name']) && statusRowMatch(r));
 
   // Total Leads and Total Cost counted by CTM (Created Month); Quality Leads uses the
   // same event-month logic as the Cost Summary table: CONVERTED by CM, IN PROCESS by LPM.
@@ -493,6 +543,35 @@ function inProcessDataset(){
   });
   out.push(buildGrandTotalRow('Team', 'Grand Total', statuses, out, 'Total'));
   return {statuses, data: out};
+}
+
+// Landing pages under the BTL Marketing platform are run by three people;
+// the owner is encoded as a "-D"/"-H"/"-S" suffix in the landing page name.
+function workshopOwnerForLandingPage(lp){
+  const s = (lp || '').toString();
+  if(s.includes('-D')) return 'Devanshi';
+  if(s.includes('-H')) return 'Himanshi';
+  if(s.includes('-S')) return 'Shreya';
+  return 'Unclassified';
+}
+
+function workshopStatusDistribution(){
+  const rows = applyRefColdFilter(STATE.raw).filter(r => r.platformName === 'BTL Marketing');
+  const owners = ['Devanshi','Himanshi','Shreya','Unclassified'];
+  const out = owners.map(owner => {
+    const subset = rows.filter(r => workshopOwnerForLandingPage(r.landingPage) === owner);
+    const obj = {Person: owner}; let total = 0;
+    for(const st of STATUSES){
+      const pool = st === 'CONVERTED'
+        ? subset.filter(r => isConvertedLead(r, monthFilter))
+        : subset.filter(r => r.leadStatus===st && !isConvertedLead(r) && monthFilter(r[statusMonthCol(st)]));
+      obj[st] = pool.length; total += pool.length;
+    }
+    obj.Total = total;
+    return obj;
+  }).filter(r => r.Total > 0 || r.Person !== 'Unclassified');
+  out.push(buildGrandTotalRow('Person', 'Grand Total', STATUSES, out, 'Total'));
+  return out;
 }
 
 function convertedDataset(){
