@@ -27,6 +27,8 @@ const STATE = {
   filterTable: 'All',
   teamPerfTeamFilter: 'All',
   bdQuarterFilter: 'All',
+  bdTeamFilter: 'All',
+  bdPersonFilter: 'All',
   mtdStart: 1,
   mtdEnd: 11,
   mtdFilterRefCold: 'Include',
@@ -40,6 +42,9 @@ const STATE = {
   lpLandingPages: [],
   revChart: null,
   statusChart: null,
+  bdGmeetChart: null,
+  bdFpChart: null,
+  bdStageChart: null,
   rawFilters: {},
   premiumUnlocked: false,
   teamPerfMode: 'current',
@@ -118,6 +123,22 @@ function mapRM(rawName){
   const k = normalizeNameKey(rawName);
   if(!k) return '';
   return STATE.rmMasterLookup[k] || (rawName||'').toString().trim();
+}
+
+// Resolves the BD Accountability Tracker's free-text "Team Leader" column to
+// one of FIXED_TEAMS, reusing the same RM Master Mapping / EMPLOYEE_REF data
+// the main dashboard already maintains (so a name added there — including
+// misspelling fixes — automatically improves BD Performance team resolution
+// too). A few source rows already contain the literal team code instead of a
+// leader's name (e.g. "Vivek S") — passed through directly. Blank or
+// unresolved values fall back to SV, same convention as the main dataset.
+function bdResolveTeam(teamLeaderRaw){
+  const raw = (teamLeaderRaw || '').toString().trim();
+  if(!raw) return 'SV';
+  if(FIXED_TEAMS.includes(raw)) return raw;
+  const canonical = mapRM(raw);
+  const key = normalizeNameKey(canonical);
+  return STATE.rmMasterTeam[key] || STATE.teamMap[key] || 'SV';
 }
 function persistRMMaster(){
   try{ localStorage.setItem(CONFIG.STORAGE_KEYS.RM_MASTER, JSON.stringify(STATE.rmMaster)); }catch(e){}

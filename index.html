@@ -798,12 +798,35 @@ table.data.editable td input:focus{outline:2px solid var(--orange);background:va
     <div class="section bar-violet">
       <h2>BD Performance — Accountability Tracker
         <button class="info-btn" data-info="bdperf" title="Table info">i</button>
-        <span style="float:right;font-weight:400;text-transform:none">
-          <label style="font-size:11px;color:var(--muted);margin-right:6px">Quarter</label>
+        <span style="float:right;font-weight:400;text-transform:none;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+          <label style="font-size:11px;color:var(--muted)">Quarter</label>
           <div id="bdperf-quarter-filter-wrap" style="display:inline-block;vertical-align:middle"></div>
+          <label style="font-size:11px;color:var(--muted);margin-left:6px">Team</label>
+          <div id="bdperf-team-filter-wrap" style="display:inline-block;vertical-align:middle"></div>
+          <label style="font-size:11px;color:var(--muted);margin-left:6px">Person</label>
+          <div id="bdperf-person-filter-wrap" style="display:inline-block;vertical-align:middle"></div>
         </span>
       </h2>
-      <div class="meta">One row per lead in each "&lt;Person&gt; Q&lt;N&gt;" sheet of the BD Accountability Tracker upload — new quarters are picked up automatically by that naming pattern.</div>
+      <div class="meta">One row per lead in each "&lt;Person&gt; Q&lt;N&gt;" sheet of the BD Accountability Tracker upload — new quarters picked up automatically by that naming pattern. By default the table below shows one row per team; selecting a single Team drills down to the RMs under it.</div>
+    </div>
+
+    <div class="grid cols-3">
+      <div class="section bar-green">
+        <h2>GMeet Joined?</h2>
+        <div style="height:260px"><canvas id="bd-gmeet-chart"></canvas></div>
+      </div>
+      <div class="section bar-blue">
+        <h2>Financial Plan Created?</h2>
+        <div style="height:260px"><canvas id="bd-fp-chart"></canvas></div>
+      </div>
+      <div class="section bar-violet">
+        <h2>Current Stage</h2>
+        <div style="height:260px"><canvas id="bd-stage-chart"></canvas></div>
+      </div>
+    </div>
+
+    <div class="section bar-orange">
+      <h2>Team / RM Breakdown</h2>
       <div id="legend-bdperf"></div>
       <div class="table-wrap" id="tbl-bdperf"></div>
       <div class="hint">Add <strong>BD Accountability Tracker.xlsx</strong> to the repo to populate this table.</div>

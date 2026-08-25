@@ -580,8 +580,16 @@ function workshopStatusDistribution(){
 }
 
 // ---- BD Performance (BD Accountability Tracker) ----
+// Team is the primary grouping (mirrors the main dashboard's Team Performance
+// Matrix): default view = one row per team; selecting a team in the Team
+// filter drills down to one row per Assigned RM within it. Person (which BD
+// rep sourced the lead) and Quarter are independent filters layered on top.
 function bdPersonList(){
   return [...new Set(STATE.bd.map(r => r.person).filter(Boolean))].sort();
+}
+function bdTeamList(){
+  const present = new Set(STATE.bd.map(r => r.resolvedTeam));
+  return FIXED_TEAMS.filter(t => present.has(t));
 }
 function bdQuarterList(){
   return [...new Set(STATE.bd.map(r => r.quarter).filter(Boolean))].sort();
@@ -595,26 +603,78 @@ function bdQuarterMatch(q){
   const f = STATE.bdQuarterFilter;
   return Array.isArray(f) ? f.includes(q) : q === f;
 }
+function isAllBdTeams(){
+  const f = STATE.bdTeamFilter;
+  return !f || f === 'All' || (Array.isArray(f) && f.length === 0);
+}
+function bdTeamMatch(team){
+  if(isAllBdTeams()) return true;
+  const f = STATE.bdTeamFilter;
+  return Array.isArray(f) ? f.includes(team) : team === f;
+}
+function isAllBdPersons(){
+  const f = STATE.bdPersonFilter;
+  return !f || f === 'All' || (Array.isArray(f) && f.length === 0);
+}
+function bdPersonMatch(person){
+  if(isAllBdPersons()) return true;
+  const f = STATE.bdPersonFilter;
+  return Array.isArray(f) ? f.includes(person) : person === f;
+}
 function bdFilteredRows(){
-  return STATE.bd.filter(r => bdQuarterMatch(r.quarter));
+  return STATE.bd.filter(r => bdQuarterMatch(r.quarter) && bdTeamMatch(r.resolvedTeam) && bdPersonMatch(r.person));
 }
 
-function bdPerformanceByPerson(){
+function bdSummarize(rows){
+  const obj = {};
+  for(const st of BD_STAGES) obj[st] = rows.filter(r => r.currentStage === st).length;
+  obj.Total = rows.length;
+  obj['GMeet Joined'] = rows.filter(r => r.gmeetJoined === 'Yes').length;
+  obj['Financial Plan Created'] = rows.filter(r => r.financialPlanCreated === 'Yes').length;
+  obj['Conv. Rate'] = rows.length>0 ? (obj['CONVERTED']||0)/rows.length : 0;
+  return obj;
+}
+
+function bdPerformanceByTeam(){
   const rows = bdFilteredRows();
-  const persons = bdPersonList();
-  const out = persons.map(person => {
-    const sub = rows.filter(r => r.person === person);
-    const obj = {Person: person};
-    for(const st of BD_STAGES) obj[st] = sub.filter(r => r.currentStage === st).length;
-    obj.Total = sub.length;
-    obj['GMeet Joined'] = sub.filter(r => r.gmeetJoined === 'Yes').length;
-    obj['Financial Plan Created'] = sub.filter(r => r.financialPlanCreated === 'Yes').length;
-    obj['Conv. Rate'] = sub.length>0 ? (obj['CONVERTED']||0)/sub.length : 0;
-    return obj;
-  });
-  const gt = buildGrandTotalRow('Person', 'Grand Total', [...BD_STAGES,'Total','GMeet Joined','Financial Plan Created'], out);
+  const teams = bdTeamList();
+  const out = teams.map(team => ({Team: team, ...bdSummarize(rows.filter(r => r.resolvedTeam === team))}));
+  const gt = buildGrandTotalRow('Team', 'Grand Total', [...BD_STAGES,'Total','GMeet Joined','Financial Plan Created'], out);
   gt['Conv. Rate'] = gt.Total>0 ? (gt['CONVERTED']||0)/gt.Total : 0;
   out.push(gt);
+  return out;
+}
+
+function bdPerformanceByRM(team){
+  const rows = bdFilteredRows().filter(r => r.resolvedTeam === team);
+  const rms = [...new Set(rows.map(r => (r.assignedRM||'').trim()).filter(Boolean))];
+  const out = rms.map(rm => ({RM: rm, ...bdSummarize(rows.filter(r => (r.assignedRM||'').trim() === rm))}))
+                 .sort((a,b) => b.Total - a.Total);
+  const gt = buildGrandTotalRow('RM', team+' Total', [...BD_STAGES,'Total','GMeet Joined','Financial Plan Created'], out);
+  gt['Conv. Rate'] = gt.Total>0 ? (gt['CONVERTED']||0)/gt.Total : 0;
+  out.push(gt);
+  return out;
+}
+
+// Chart data — all three reflect the currently active Quarter/Team/Person
+// filters via bdFilteredRows(), regardless of whether the table above is
+// showing team-level or RM-drilldown rows.
+function bdGmeetBreakdown(){
+  const rows = bdFilteredRows();
+  const counts = {Yes:0, No:0, Pending:0};
+  for(const r of rows){ if(Object.prototype.hasOwnProperty.call(counts, r.gmeetJoined)) counts[r.gmeetJoined]++; }
+  return counts;
+}
+function bdFinancialPlanBreakdown(){
+  const rows = bdFilteredRows();
+  const counts = {Yes:0, No:0, Pending:0};
+  for(const r of rows){ if(Object.prototype.hasOwnProperty.call(counts, r.financialPlanCreated)) counts[r.financialPlanCreated]++; }
+  return counts;
+}
+function bdStageBreakdown(){
+  const rows = bdFilteredRows();
+  const out = {};
+  for(const st of BD_STAGES) out[st] = rows.filter(r => r.currentStage === st).length;
   return out;
 }
 

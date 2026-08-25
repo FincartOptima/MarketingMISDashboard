@@ -372,23 +372,134 @@ function renderRMPerformance(){
   renderTable('#rmperf-detail', dHeaders, dRows);
 }
 
+// Pie chart: GMeet Joined? split into Yes/No/Pending across the currently
+// filtered BD rows. Blank values (a handful of rows missing this field
+// entirely) are excluded from the pie rather than shown as a 4th slice.
+function renderBDGmeetChart(){
+  if(!window.Chart) return;
+  const canvas = $('#bd-gmeet-chart'); if(!canvas) return;
+  if(STATE.bdGmeetChart){ STATE.bdGmeetChart.destroy(); STATE.bdGmeetChart = null; }
+  const counts = bdGmeetBreakdown();
+  const labels = ['Yes','No','Pending'];
+  const values = labels.map(l => counts[l]);
+  if(!values.some(v => v>0)) return;
+  const colors = ['#16a34a','#e11d48','#b45309'];
+  STATE.bdGmeetChart = new Chart(canvas.getContext('2d'), {
+    type:'pie',
+    plugins: window.ChartDataLabels ? [window.ChartDataLabels] : [],
+    data:{ labels, datasets:[{ data:values, backgroundColor:colors, borderWidth:1, borderColor:'#fff' }] },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{
+        legend:{position:'bottom', labels:{color:'#475569', font:{size:11}}},
+        tooltip:{callbacks:{label:c => `${c.label}: ${fmtIN(c.raw)}`}},
+        datalabels:{
+          color:'#fff', font:{size:11,weight:'bold'},
+          formatter:(v,ctx) => {
+            const total = ctx.chart.data.datasets[0].data.reduce((a,b)=>a+b,0);
+            return v>0 && total>0 ? fmtIN(v)+' ('+((v/total)*100).toFixed(0)+'%)' : '';
+          },
+        },
+      },
+    },
+  });
+}
+
+// Pie chart: Financial Plan Created? — same Yes/No/Pending split, same rules.
+function renderBDFinancialPlanChart(){
+  if(!window.Chart) return;
+  const canvas = $('#bd-fp-chart'); if(!canvas) return;
+  if(STATE.bdFpChart){ STATE.bdFpChart.destroy(); STATE.bdFpChart = null; }
+  const counts = bdFinancialPlanBreakdown();
+  const labels = ['Yes','No','Pending'];
+  const values = labels.map(l => counts[l]);
+  if(!values.some(v => v>0)) return;
+  const colors = ['#16a34a','#e11d48','#b45309'];
+  STATE.bdFpChart = new Chart(canvas.getContext('2d'), {
+    type:'pie',
+    plugins: window.ChartDataLabels ? [window.ChartDataLabels] : [],
+    data:{ labels, datasets:[{ data:values, backgroundColor:colors, borderWidth:1, borderColor:'#fff' }] },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{
+        legend:{position:'bottom', labels:{color:'#475569', font:{size:11}}},
+        tooltip:{callbacks:{label:c => `${c.label}: ${fmtIN(c.raw)}`}},
+        datalabels:{
+          color:'#fff', font:{size:11,weight:'bold'},
+          formatter:(v,ctx) => {
+            const total = ctx.chart.data.datasets[0].data.reduce((a,b)=>a+b,0);
+            return v>0 && total>0 ? fmtIN(v)+' ('+((v/total)*100).toFixed(0)+'%)' : '';
+          },
+        },
+      },
+    },
+  });
+}
+
+// Column chart: Current Stage distribution across the currently filtered rows.
+function renderBDStageChart(){
+  if(!window.Chart) return;
+  const canvas = $('#bd-stage-chart'); if(!canvas) return;
+  if(STATE.bdStageChart){ STATE.bdStageChart.destroy(); STATE.bdStageChart = null; }
+  const counts = bdStageBreakdown();
+  const labels = BD_STAGES;
+  const values = labels.map(l => counts[l]);
+  const colors = ['#3b82f6','#b45309','#0891b2','#16a34a','#7c3aed','#e11d48','#db2777'];
+  STATE.bdStageChart = new Chart(canvas.getContext('2d'), {
+    type:'bar',
+    plugins: window.ChartDataLabels ? [window.ChartDataLabels] : [],
+    data:{
+      labels,
+      datasets:[{ label:'Leads', data:values, backgroundColor:colors, borderColor:colors, borderWidth:1, borderRadius:0, maxBarThickness:58 }],
+    },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      layout:{padding:{top:22,right:8,left:4,bottom:0}},
+      plugins:{
+        legend:{display:false},
+        tooltip:{callbacks:{label:c => `${c.label}: ${fmtIN(c.raw)}`}},
+        datalabels:{ anchor:'end', align:'top', offset:2, color:'#1f2937', font:{size:11,weight:'bold'}, formatter:v => v>0 ? fmtIN(v) : '' },
+      },
+      scales:{
+        x:{ ticks:{color:'#475569',font:{size:10,weight:'600'},maxRotation:30,minRotation:0}, grid:{display:false}, border:{color:'#cbd5e1'} },
+        y:{ beginAtZero:true, ticks:{color:'#64748b',callback:v=>fmtIN(v)}, grid:{color:'rgba(148,163,184,.25)'}, border:{color:'#cbd5e1'} },
+      },
+    },
+  });
+}
+
 function renderBDPerformance(){
   if(!STATE.premiumUnlocked) return;
   if(!STATE.filesLoaded.bd){
     setNotUploaded('#tbl-bdperf','bd');
     $('#legend-bdperf').innerHTML = '';
-    const wrap = $('#bdperf-quarter-filter-wrap'); if(wrap) wrap.innerHTML = '';
+    ['#bdperf-quarter-filter-wrap','#bdperf-team-filter-wrap','#bdperf-person-filter-wrap'].forEach(sel => {
+      const w = $(sel); if(w) w.innerHTML = '';
+    });
     return;
   }
-  const quarters = bdQuarterList();
-  buildMultiSelect('#bdperf-quarter-filter-wrap', ['All', ...quarters], STATE.bdQuarterFilter,
-    val => { STATE.bdQuarterFilter = val; renderBDPerformance(); }, {multi: true});
 
-  const data = bdPerformanceByPerson();
-  applyHeatAndLegend(data, 'Total', '#legend-bdperf', 'Row heat by Total Leads');
+  buildMultiSelect('#bdperf-quarter-filter-wrap', ['All', ...bdQuarterList()], STATE.bdQuarterFilter,
+    val => { STATE.bdQuarterFilter = val; renderBDPerformance(); }, {multi: true});
+  buildMultiSelect('#bdperf-team-filter-wrap', ['All', ...bdTeamList()], STATE.bdTeamFilter,
+    val => { STATE.bdTeamFilter = val; renderBDPerformance(); }, {multi: false});
+  buildMultiSelect('#bdperf-person-filter-wrap', ['All', ...bdPersonList()], STATE.bdPersonFilter,
+    val => { STATE.bdPersonFilter = val; renderBDPerformance(); }, {multi: true});
+
+  renderBDGmeetChart();
+  renderBDFinancialPlanChart();
+  renderBDStageChart();
+
   const headers = ['Person', ...BD_STAGES, 'Total', 'GMeet Joined', 'Financial Plan Created', 'Conv. Rate'];
+  const selectedTeam = STATE.bdTeamFilter;
+  const isSingleTeam = selectedTeam && selectedTeam !== 'All' && !Array.isArray(selectedTeam);
+
+  const data = isSingleTeam ? bdPerformanceByRM(selectedTeam) : bdPerformanceByTeam();
+  const rowLabelField = isSingleTeam ? 'RM' : 'Team';
+  headers[0] = rowLabelField;
+  applyHeatAndLegend(data, 'Total', '#legend-bdperf', 'Row heat by Total Leads');
   const rows = data.map(r => {
-    const o = {Person: r.Person};
+    const o = {[rowLabelField]: r[rowLabelField]};
     BD_STAGES.forEach(s => o[s] = fmtIN(r[s]));
     o.Total = fmtIN(r.Total);
     o['GMeet Joined'] = fmtIN(r['GMeet Joined']);

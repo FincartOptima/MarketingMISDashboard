@@ -285,6 +285,7 @@ async function loadAllFromRepo(){
 
   if(d.bd && d.bd.length){
     STATE.bd = d.bd;
+    STATE.bd.forEach(r => { r.resolvedTeam = bdResolveTeam(r.teamLeader); });
     STATE.filesLoaded.bd = true;
   } else {
     console.warn('[MIS] bd data missing from data.js');
