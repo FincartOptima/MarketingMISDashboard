@@ -109,8 +109,8 @@ function leadsByPlatformMonth(){
 function statusByMonth(teamFilter){
   const months = filteredMonths();
   let base = STATE.raw.filter(statusRowMatch);
-  if(teamFilter === 'SV') base = base.filter(r => (r.Team || 'SV') === 'SV');
-  else if(teamFilter === 'non-SV') base = base.filter(r => (r.Team || 'SV') !== 'SV');
+  if(teamFilter === 'Teamless RMs') base = base.filter(r => (r.Team || 'Teamless RMs') === 'Teamless RMs');
+  else if(teamFilter === 'mapped') base = base.filter(r => (r.Team || 'Teamless RMs') !== 'Teamless RMs');
   return STATUSES.map(st => {
     const r = {Status: st, total: 0};
     months.forEach(m => {
@@ -216,8 +216,8 @@ function teamPerformance(){
 
   return teams.map(team => {
     const rows = useFirst
-      ? base.filter(r => (STATE.teamMap[(r.firstRmName||'').toLowerCase()] || 'SV') === team)
-      : base.filter(r => (r.Team || 'SV') === team);
+      ? base.filter(r => (STATE.teamMap[(r.firstRmName||'').toLowerCase()] || 'Teamless RMs') === team)
+      : base.filter(r => (r.Team || 'Teamless RMs') === team);
     const totalLeads = rows.filter(r => monthFilter(r.CTM)).length;
     const obj = {Team: team, 'Total Leads': totalLeads};
     for(const st of STATUSES){
@@ -241,8 +241,8 @@ function teamPerformanceByRM(team){
   const useFirst = STATE.teamPerfMode === 'first';
   const rmField = useFirst ? 'firstRmName' : 'currentRmName';
   const teamRows = useFirst
-    ? base.filter(r => (STATE.teamMap[(r.firstRmName||'').toLowerCase()] || 'SV') === team)
-    : base.filter(r => (r.Team || 'SV') === team);
+    ? base.filter(r => (STATE.teamMap[(r.firstRmName||'').toLowerCase()] || 'Teamless RMs') === team)
+    : base.filter(r => (r.Team || 'Teamless RMs') === team);
 
   // RM roster: everyone in EMPLOYEE_REF for this team, plus any RM appearing
   // in teamRows but missing from EMPLOYEE_REF, so no lead is silently dropped.
@@ -290,8 +290,8 @@ function rmTransferData(){
     const currentRm = (r.currentRmName || '').trim();
     if(!firstRm && !currentRm) continue;
     if(firstRm.toLowerCase() === currentRm.toLowerCase()) continue;
-    const firstTeam = STATE.teamMap[firstRm.toLowerCase()] || 'SV';
-    const currentTeam = r.Team || 'SV';
+    const firstTeam = STATE.teamMap[firstRm.toLowerCase()] || 'Teamless RMs';
+    const currentTeam = r.Team || 'Teamless RMs';
     transfers.push({ firstRm: firstRm || '(blank)', firstTeam, currentRm: currentRm || '(blank)', currentTeam, campaign: r['Campaign Name'] || '(Blank)', status: r.leadStatus || '(Unknown)' });
   }
 
@@ -343,8 +343,8 @@ function campaignByTeam(){
 
   const useFirst = STATE.campaignTeamMode === 'first';
   const getTeam = useFirst
-    ? r => STATE.teamMap[(r.firstRmName||'').toLowerCase()] || 'SV'
-    : r => r.Team || 'SV';
+    ? r => STATE.teamMap[(r.firstRmName||'').toLowerCase()] || 'Teamless RMs'
+    : r => r.Team || 'Teamless RMs';
 
   const teamSet = new Set(base.map(getTeam));
   const teams = FIXED_TEAMS.filter(t => teamSet.has(t));
@@ -439,7 +439,7 @@ function costPerLeadPerRM(){
   let scope = STATE.raw;
   if(refMode==='Exclude') scope = scope.filter(r => r['Campaign Name']!=='Referral' && r['Campaign Name']!=='Cold Data');
   if(month!=='All') scope = scope.filter(r => r.CTM===month);
-  scope = scope.filter(r => r.Team !== 'SV');
+  scope = scope.filter(r => r.Team !== 'Teamless RMs');
 
   const rms = {};
   for(const r of scope){
@@ -483,9 +483,9 @@ function costPerLeadPerRMWithTotals(){
   // same event-month logic as the Cost Summary table: CONVERTED by CM, IN PROCESS by LPM.
   const groups = {};
   const ensure = r => {
-    const team = r.Team || 'SV';
-    const rm = team === 'SV' ? 'SV Team (Collective)' : (r.currentRmName || '(unassigned)');
-    const key = team === 'SV' ? 'SV' : team + '|' + rm;
+    const team = r.Team || 'Teamless RMs';
+    const rm = team === 'Teamless RMs' ? 'Teamless RMs (Collective)' : (r.currentRmName || '(unassigned)');
+    const key = team === 'Teamless RMs' ? 'Teamless RMs' : team + '|' + rm;
     if(!groups[key]) groups[key] = {Team:team, RM:rm, totalLeads:0, totalCost:0, qualLeads:0};
     return groups[key];
   };
@@ -504,8 +504,8 @@ function costPerLeadPerRMWithTotals(){
     cpl:  r.totalLeads > 0 ? r.totalCost / r.totalLeads : 0,
     cpql: r.qualLeads  > 0 ? r.totalCost / r.qualLeads  : 0,
   })).sort((a,b) => {
-    if(a.Team==='SV' && b.Team!=='SV') return 1;
-    if(a.Team!=='SV' && b.Team==='SV') return -1;
+    if(a.Team==='Teamless RMs' && b.Team!=='Teamless RMs') return 1;
+    if(a.Team!=='Teamless RMs' && b.Team==='Teamless RMs') return -1;
     return a.Team.localeCompare(b.Team) || b.totalLeads-a.totalLeads;
   });
 
