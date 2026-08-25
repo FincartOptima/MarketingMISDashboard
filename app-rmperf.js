@@ -570,7 +570,7 @@ function missingLeads(){
     if(!r['Campaign Name']) reasons.push('No Campaign');
     if(!r.leadStatus) reasons.push('No Status');
     if(!r.createdDate) reasons.push('No Created');
-    if(!r.Team || r.Team==='Teamless RMs') {} // Teamless RMs is default, not missing
+    if(!r.Team || r.Team==='SV') {} // SV is default, not missing
     if(reasons.length){ out.push({...r, Reason: reasons.join(', ')}); }
   }
   return out;

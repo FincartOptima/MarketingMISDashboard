@@ -50,15 +50,15 @@ const TABLE_INFO = {
   },
   'status-month-mapped': {
     title: 'Status Distribution · Mapped Teams',
-    desc: 'Status × Month table restricted to leads where currentRmName maps to a named team (any team except Teamless RMs) via EMPLOYEE_REF.',
-    cols: 'currentRmName (non-Teamless team from EMPLOYEE_REF, via Team) · leadStatus (CONVERTED / IN PROCESS / ASSIGNED / RE-ASSIGNED / FOLLOW UP / ON HOLD / DEAD) · CTM (selected months) · LPM (selected months) · CM (selected months)',
+    desc: 'Status × Month table restricted to leads where currentRmName maps to a named team (any team except SV) via EMPLOYEE_REF.',
+    cols: 'currentRmName (non-SV team from EMPLOYEE_REF, via Team) · leadStatus (CONVERTED / IN PROCESS / ASSIGNED / RE-ASSIGNED / FOLLOW UP / ON HOLD / DEAD) · CTM (selected months) · LPM (selected months) · CM (selected months)',
     source: 'RAW_DATA sheet, EMPLOYEE_REF sheet',
     note: 'IN PROCESS count uses LPM (Lead In-Process Month). RAW_DATA FMONTH for non-converted leads = CTM (Created Month). Leads created before the selected month that moved to IN PROCESS within it are counted here but will not appear in a RAW_DATA filter on FMONTH.'
   },
   'status-month-sv': {
-    title: 'Status Distribution · Teamless RMs (Unmapped)',
-    desc: 'Status × Month table restricted to leads where currentRmName is blank or not found in EMPLOYEE_REF — these default to the Teamless RMs bucket.',
-    cols: 'currentRmName (blank or not in EMPLOYEE_REF → Teamless RMs) · leadStatus (CONVERTED / IN PROCESS / ASSIGNED / RE-ASSIGNED / FOLLOW UP / ON HOLD / DEAD) · CTM (selected months) · LPM (selected months) · CM (selected months)',
+    title: 'Status Distribution · SV (Unmapped)',
+    desc: 'Status × Month table restricted to leads where currentRmName is blank or not found in EMPLOYEE_REF — these default to the SV bucket.',
+    cols: 'currentRmName (blank or not in EMPLOYEE_REF → SV) · leadStatus (CONVERTED / IN PROCESS / ASSIGNED / RE-ASSIGNED / FOLLOW UP / ON HOLD / DEAD) · CTM (selected months) · LPM (selected months) · CM (selected months)',
     source: 'RAW_DATA sheet, EMPLOYEE_REF sheet',
     note: 'IN PROCESS count uses LPM (Lead In-Process Month). RAW_DATA FMONTH for non-converted leads = CTM (Created Month). Leads created before the selected month that moved to IN PROCESS within it are counted here but will not appear in a RAW_DATA filter on FMONTH.'
   },

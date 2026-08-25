@@ -140,13 +140,13 @@ function renderStatusMonth(){
     o._heat = r._heat;
     return o;
   });
-  const mapped = statusByMonth('mapped');
+  const mapped = statusByMonth('non-SV');
   applyHeatAndLegend(mapped, 'total', '#legend-status-month-mapped', 'Row heat by Total');
   renderTable('#tbl-status-month-mapped', headers, fmt(mapped));
 
-  const teamless = statusByMonth('Teamless RMs');
-  applyHeatAndLegend(teamless, 'total', '#legend-status-month-sv', 'Row heat by Total');
-  renderTable('#tbl-status-month-sv', headers, fmt(teamless));
+  const sv = statusByMonth('SV');
+  applyHeatAndLegend(sv, 'total', '#legend-status-month-sv', 'Row heat by Total');
+  renderTable('#tbl-status-month-sv', headers, fmt(sv));
 }
 
 function renderPlatformStatus(){
@@ -636,7 +636,7 @@ function renderProcessed(){
 function rawCellValue(row, col){
   if(col === 'Team of FirstRM'){
     const key = normalizeNameKey(row.firstRmName);
-    return key ? (STATE.teamMap[key] || 'Teamless RMs') : '';
+    return key ? (STATE.teamMap[key] || 'SV') : '';
   }
   return String(row[col] ?? '');
 }
