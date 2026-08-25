@@ -781,6 +781,36 @@ table.data.editable td input:focus{outline:2px solid var(--orange);background:va
     </div>
   </div>
 
+  <!-- ===== BD PERFORMANCE ===== -->
+  <div class="tab-panel" id="tab-bdperf">
+    <div class="premium-lock">
+      <div class="lock-box">
+        <div class="lock-icon">🔒</div>
+        <h3>BD Performance is locked</h3>
+        <p>Enter the password to view this tab.</p>
+        <input type="password" id="bdperf-pw-input" placeholder="Password">
+        <button id="bdperf-pw-submit">Unlock</button>
+        <div class="lock-error" id="bdperf-pw-error"></div>
+        <div class="lock-hint">Hint: The most obvious password is ?</div>
+      </div>
+    </div>
+    <div class="premium-content">
+    <div class="section bar-violet">
+      <h2>BD Performance — Accountability Tracker
+        <button class="info-btn" data-info="bdperf" title="Table info">i</button>
+        <span style="float:right;font-weight:400;text-transform:none">
+          <label style="font-size:11px;color:var(--muted);margin-right:6px">Quarter</label>
+          <div id="bdperf-quarter-filter-wrap" style="display:inline-block;vertical-align:middle"></div>
+        </span>
+      </h2>
+      <div class="meta">One row per lead in each "&lt;Person&gt; Q&lt;N&gt;" sheet of the BD Accountability Tracker upload — new quarters are picked up automatically by that naming pattern.</div>
+      <div id="legend-bdperf"></div>
+      <div class="table-wrap" id="tbl-bdperf"></div>
+      <div class="hint">Add <strong>BD Accountability Tracker.xlsx</strong> to the repo to populate this table.</div>
+    </div>
+    </div>
+  </div>
+
   <!-- ===== COST PER CAMPAIGN ===== -->
   <div class="tab-panel" id="tab-cpc">
     <div class="section bar-yellow">

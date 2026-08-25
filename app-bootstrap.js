@@ -150,6 +150,13 @@ const TABLE_INFO = {
     cols: 'RAW_DATA — currentRmName (all RMs) / CTM (selected months) / leadStatus (CONVERTED) with CM / leadStatus (IN PROCESS) with LPM | FY Sheet — Month (selected months) / mappedRM (all RMs) | Plan Approval — Month (selected months) / mappedRM (all RMs) / clientType (NEW) | Revenue Input — RM (all RMs) / OLD CHECK (selected months) / CLIENT TYPE (REVENUE BASED / NOT ELIGIBLE) / Total | RM Master Mapping — source name (→ canonical RM name)',
     source: 'RAW_DATA, FY 2026-2027, Plan Approval, Revenue Input, EMPLOYEE_REF, RM Master Mapping sheets'
   },
+  'bdperf': {
+    title: 'BD Performance — Accountability Tracker',
+    desc: 'One row per BD rep (Person), counting leads by Current Stage. Each rep\'s leads live in a sheet named "&lt;Person&gt; Q&lt;N&gt;" (e.g. "Himani Q1") in the BD Accountability Tracker upload — new quarters are picked up automatically once a sheet with that name exists, no code change needed. Conv. Rate = CONVERTED ÷ Total. GMeet Joined / Financial Plan Created count rows marked "Yes" (source sheets also use "Pending", which is deliberately excluded from these Yes-only counts).',
+    cols: 'Sheet name (→ Person, Quarter) · Current Stage (LEAD ASSIGNED / IN FOLLOW-UP / IN PROCESS / CONVERTED / ON HOLD/DEAD / DROPPED / TAX FILING DONE) · GMeet Joined? (Yes/No/Pending) · Financial Plan Created? (Yes/No/Pending)',
+    source: 'BD Accountability Tracker file',
+    note: 'Current Stage and Yes/No/Pending values are normalized case- and whitespace-insensitively from the raw sheets (e.g. "assign"/"Lead Assigned" both become LEAD ASSIGNED) — see BD_STAGE_MAP in backend/extract_lib.py.'
+  },
   'lp-status': {
     title: 'Landing Page × Status Breakdown',
     desc: 'Lead counts by landing page and status, filtered by campaign. <strong>Landing pages are dynamically read from uploaded data and mapped to their Campaign Name.</strong> CONVERTED uses CM, IN PROCESS uses LPM, all other statuses use CTM.<br><strong>Same Month:</strong> status column matches selected month(s) AND CTM matches.<br><strong>Any Month:</strong> status column matches selected month(s) but CTM outside (only applies to CONVERTED/IN PROCESS).<br><strong>Default:</strong> status column matches selected month(s).',

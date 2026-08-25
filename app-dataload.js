@@ -283,6 +283,14 @@ async function loadAllFromRepo(){
     STATE.pa = [];
   }
 
+  if(d.bd && d.bd.length){
+    STATE.bd = d.bd;
+    STATE.filesLoaded.bd = true;
+  } else {
+    console.warn('[MIS] bd data missing from data.js');
+    STATE.bd = [];
+  }
+
   if(STATE.fy && STATE.fy.length) STATE.fy.forEach(r => { r.mappedRM = mapRM(r.rmName); });
   if(STATE.pa && STATE.pa.length) STATE.pa.forEach(r => { r.mappedRM = mapRM(r.advisor); });
 

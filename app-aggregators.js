@@ -579,6 +579,45 @@ function workshopStatusDistribution(){
   return out;
 }
 
+// ---- BD Performance (BD Accountability Tracker) ----
+function bdPersonList(){
+  return [...new Set(STATE.bd.map(r => r.person).filter(Boolean))].sort();
+}
+function bdQuarterList(){
+  return [...new Set(STATE.bd.map(r => r.quarter).filter(Boolean))].sort();
+}
+function isAllBdQuarters(){
+  const f = STATE.bdQuarterFilter;
+  return !f || f === 'All' || (Array.isArray(f) && f.length === 0);
+}
+function bdQuarterMatch(q){
+  if(isAllBdQuarters()) return true;
+  const f = STATE.bdQuarterFilter;
+  return Array.isArray(f) ? f.includes(q) : q === f;
+}
+function bdFilteredRows(){
+  return STATE.bd.filter(r => bdQuarterMatch(r.quarter));
+}
+
+function bdPerformanceByPerson(){
+  const rows = bdFilteredRows();
+  const persons = bdPersonList();
+  const out = persons.map(person => {
+    const sub = rows.filter(r => r.person === person);
+    const obj = {Person: person};
+    for(const st of BD_STAGES) obj[st] = sub.filter(r => r.currentStage === st).length;
+    obj.Total = sub.length;
+    obj['GMeet Joined'] = sub.filter(r => r.gmeetJoined === 'Yes').length;
+    obj['Financial Plan Created'] = sub.filter(r => r.financialPlanCreated === 'Yes').length;
+    obj['Conv. Rate'] = sub.length>0 ? (obj['CONVERTED']||0)/sub.length : 0;
+    return obj;
+  });
+  const gt = buildGrandTotalRow('Person', 'Grand Total', [...BD_STAGES,'Total','GMeet Joined','Financial Plan Created'], out);
+  gt['Conv. Rate'] = gt.Total>0 ? (gt['CONVERTED']||0)/gt.Total : 0;
+  out.push(gt);
+  return out;
+}
+
 function convertedDataset(){
   const month = STATE.filterMonth;
   let base = applyRefColdFilter(STATE.raw);

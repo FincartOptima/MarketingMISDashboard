@@ -194,6 +194,7 @@ function initPremiumLock(){
         if(err) err.textContent = '';
         renderRMPerformance();
         renderRMRev();
+        renderBDPerformance();
       } else {
         if(err) err.textContent = 'Incorrect password.';
       }
@@ -210,6 +211,7 @@ function tabBar(){
     {id:'mtd',       label:'MTD Performance',  primary:true},
     {id:'rmperf',    label:'RM Performance',   primary:true},
     {id:'rmrev',     label:'RM Revenue',       primary:true},
+    {id:'bdperf',    label:'BD Performance',   primary:true},
     {id:'cpc',       label:'Cost Per Campaign'},
     {id:'processed', label:'PROCESSED'},
     {id:'rawdata',   label:'RAW_DATA'},
@@ -235,6 +237,7 @@ function activateTab(id){
   if(hf) hf.style.display = id==='dashboard' ? '' : 'none';
   if(id==='rmrev') drawRevChart();
   if(id==='rmperf') renderRMPerformance();
+  if(id==='bdperf') renderBDPerformance();
   requestAnimationFrame(() => {
     const panel = $('#tab-'+id);
     if(panel) panel.querySelectorAll('.table-wrap').forEach(attachMirrorScroll);

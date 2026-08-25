@@ -372,6 +372,34 @@ function renderRMPerformance(){
   renderTable('#rmperf-detail', dHeaders, dRows);
 }
 
+function renderBDPerformance(){
+  if(!STATE.premiumUnlocked) return;
+  if(!STATE.filesLoaded.bd){
+    setNotUploaded('#tbl-bdperf','bd');
+    $('#legend-bdperf').innerHTML = '';
+    const wrap = $('#bdperf-quarter-filter-wrap'); if(wrap) wrap.innerHTML = '';
+    return;
+  }
+  const quarters = bdQuarterList();
+  buildMultiSelect('#bdperf-quarter-filter-wrap', ['All', ...quarters], STATE.bdQuarterFilter,
+    val => { STATE.bdQuarterFilter = val; renderBDPerformance(); }, {multi: true});
+
+  const data = bdPerformanceByPerson();
+  applyHeatAndLegend(data, 'Total', '#legend-bdperf', 'Row heat by Total Leads');
+  const headers = ['Person', ...BD_STAGES, 'Total', 'GMeet Joined', 'Financial Plan Created', 'Conv. Rate'];
+  const rows = data.map(r => {
+    const o = {Person: r.Person};
+    BD_STAGES.forEach(s => o[s] = fmtIN(r[s]));
+    o.Total = fmtIN(r.Total);
+    o['GMeet Joined'] = fmtIN(r['GMeet Joined']);
+    o['Financial Plan Created'] = fmtIN(r['Financial Plan Created']);
+    o['Conv. Rate'] = fmtPct(r['Conv. Rate']);
+    o._tot = !!r._tot; o._heat = r._heat;
+    return o;
+  });
+  renderTable('#tbl-bdperf', headers, rows);
+}
+
 function mtdPerformance(){
   const refMode = STATE.mtdFilterRefCold;
   const allCampaigns = [...new Set(STATE.raw.map(r => r['Campaign Name']).filter(Boolean))].sort();

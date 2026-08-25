@@ -1080,6 +1080,7 @@ function renderAll(){
   renderRMMaster();
   renderMissing();
   renderRMRev();
+  renderBDPerformance();
   requestAnimationFrame(attachAllMirrors);
 }
 

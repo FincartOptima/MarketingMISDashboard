@@ -68,6 +68,14 @@ SOURCE_CONFIGS = [
         'loader': extract_lib.load_sheet_rows,
         'loader_kwargs': {},
     },
+    {
+        'key': 'bd',
+        'form_field': 'bd',
+        'required': False,
+        'human_label': 'BD Accountability Tracker',
+        'loader': extract_lib.load_bd_tracker_rows,
+        'loader_kwargs': {},
+    },
 ]
 SOURCES = [cfg['key'] for cfg in SOURCE_CONFIGS]
 

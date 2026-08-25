@@ -3,6 +3,7 @@
 # Fly.io upload endpoint (app.py). Kept dependency-free (just openpyxl) so it
 # can run in either place unchanged.
 from datetime import datetime
+import re
 import openpyxl
 
 # B2C/FIN23 exports often carry 40+ columns (call logs, UTM tags, health scores, etc.)
@@ -105,3 +106,104 @@ def load_revenue_input_rows(file_like):
             header_idx = i
             break
     return rows_from_header_row(all_rows, header_idx)
+
+
+# ---------- BD Accountability Tracker ----------
+# Each BD rep's leads live in a sheet literally named "<Person> Q<N>" (e.g.
+# "Himani Q1"). New quarters/reps are picked up automatically by this naming
+# pattern alone — no code change needed when "Himani Q3" is added later.
+# Every other sheet in the workbook (dashboards, logs, pivot tables) is
+# ignored since it won't match.
+BD_SHEET_PATTERN = re.compile(r'^(.+?)\s+Q(\d+)$', re.IGNORECASE)
+
+# Source headers are inconsistent across sheets (trailing spaces, "Annual
+# Salary" vs "Annual Income", casing) — matched case/space-insensitively and
+# collapsed onto one canonical key per column.
+BD_TRACKER_COLUMNS = {
+    'dateAssigned':         {'date assigned'},
+    'clientName':           {'client name'},
+    'email':                {'email'},
+    'sourceOfLead':         {'source of lead'},
+    'assignedRM':           {'assigned rm'},
+    'teamLeader':           {'team leader'},
+    'appointmentDate':      {'appointment date'},
+    'annualIncome':         {'annual salary', 'annual income'},
+    'gmeetJoined':          {'gmeet joined?'},
+    'financialPlanCreated': {'financial plan created?'},
+    'currentStage':         {'current stage'},
+    'remarks':              {'remarks'},
+}
+
+# "Current Stage" free-text values seen in the wild, collapsed onto one
+# canonical label per real-world stage. Unrecognized non-blank values pass
+# through upper-cased rather than being silently dropped.
+BD_STAGE_MAP = {
+    'lead assigned': 'LEAD ASSIGNED', 'assign': 'LEAD ASSIGNED',
+    'in follow-up': 'IN FOLLOW-UP', 'follow up': 'IN FOLLOW-UP',
+    'in process': 'IN PROCESS',
+    'dropped': 'DROPPED',
+    'onhold/dead': 'ON HOLD/DEAD',
+    'converted': 'CONVERTED',
+    'tax filling done': 'TAX FILING DONE',
+}
+
+def normalize_bd_stage(v):
+    s = header_text(v).strip().lower()
+    if not s:
+        return ''
+    return BD_STAGE_MAP.get(s, header_text(v).strip().upper())
+
+# GMeet Joined? / Financial Plan Created? collapse onto a 3-state Yes/No/Pending.
+BD_YNP_MAP = {
+    'yes': 'Yes', 'joined': 'Yes',
+    'no': 'No', 'not joined': 'No',
+    'pending': 'Pending',
+}
+
+def normalize_bd_ynp(v):
+    s = header_text(v).strip().lower()
+    return BD_YNP_MAP.get(s, '')
+
+
+def load_bd_tracker_rows(file_like):
+    wb = openpyxl.load_workbook(file_like, read_only=True, data_only=True)
+    out = []
+    for sheet_name in wb.sheetnames:
+        m = BD_SHEET_PATTERN.match(sheet_name.strip())
+        if not m:
+            continue
+        person, quarter_num = m.group(1).strip(), m.group(2)
+        ws = wb[sheet_name]
+        all_rows = list(ws.iter_rows(values_only=True))
+        if not all_rows:
+            continue
+        headers = [header_text(h) for h in all_rows[0]]
+        col_for_idx = {}
+        for i, h in enumerate(headers):
+            key = h.strip().lower()
+            for canon, variants in BD_TRACKER_COLUMNS.items():
+                if key in variants:
+                    col_for_idx[i] = canon
+                    break
+        for row in all_rows[1:]:
+            obj = {}
+            any_val = False
+            for i, canon in col_for_idx.items():
+                v = row[i] if i < len(row) else None
+                if canon == 'currentStage':
+                    v = normalize_bd_stage(v)
+                elif canon in ('gmeetJoined', 'financialPlanCreated'):
+                    v = normalize_bd_ynp(v)
+                else:
+                    v = cell_value(v)
+                obj[canon] = v
+                if v not in ('', None):
+                    any_val = True
+            if not any_val:
+                continue
+            obj['person'] = person
+            obj['quarter'] = 'Q' + quarter_num
+            obj['sourceSheet'] = sheet_name
+            out.append(obj)
+    wb.close()
+    return out
