@@ -812,12 +812,14 @@ table.data.editable td input:focus{outline:2px solid var(--orange);background:va
 
     <div class="grid cols-3">
       <div class="section bar-green">
-        <h2>GMeet Joined?</h2>
+        <h2>GMeet Joined? <span id="bd-gmeet-total" style="font-weight:400;text-transform:none;font-size:12px;color:var(--muted)"></span></h2>
         <div style="height:260px"><canvas id="bd-gmeet-chart"></canvas></div>
+        <div class="hint">Click a slice to filter the other charts &amp; table — click it again to clear.</div>
       </div>
       <div class="section bar-blue">
-        <h2>Financial Plan Created?</h2>
+        <h2>Financial Plan Created? <span id="bd-fp-total" style="font-weight:400;text-transform:none;font-size:12px;color:var(--muted)"></span></h2>
         <div style="height:260px"><canvas id="bd-fp-chart"></canvas></div>
+        <div class="hint">Click a slice to filter the other charts &amp; table — click it again to clear.</div>
       </div>
       <div class="section bar-violet">
         <h2>Current Stage</h2>

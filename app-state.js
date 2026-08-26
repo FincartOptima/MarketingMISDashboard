@@ -29,6 +29,8 @@ const STATE = {
   bdQuarterFilter: 'All',
   bdTeamFilter: 'All',
   bdPersonFilter: 'All',
+  bdGmeetFilter: 'All',
+  bdFpFilter: 'All',
   mtdStart: 1,
   mtdEnd: 11,
   mtdFilterRefCold: 'Include',

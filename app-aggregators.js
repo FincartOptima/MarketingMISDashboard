@@ -621,8 +621,16 @@ function bdPersonMatch(person){
   const f = STATE.bdPersonFilter;
   return Array.isArray(f) ? f.includes(person) : person === f;
 }
+// GMeet/Financial Plan filters are set by clicking a pie slice (see
+// renderBDGmeetChart/renderBDFinancialPlanChart) rather than a dropdown —
+// they fold into the same filtered scope as Quarter/Team/Person, so a click
+// cascades to the other chart, the Current Stage chart, and the table.
 function bdFilteredRows(){
-  return STATE.bd.filter(r => bdQuarterMatch(r.quarter) && bdTeamMatch(r.resolvedTeam) && bdPersonMatch(r.person));
+  return STATE.bd.filter(r =>
+    bdQuarterMatch(r.quarter) && bdTeamMatch(r.resolvedTeam) && bdPersonMatch(r.person) &&
+    (STATE.bdGmeetFilter === 'All' || r.gmeetJoined === STATE.bdGmeetFilter) &&
+    (STATE.bdFpFilter === 'All' || r.financialPlanCreated === STATE.bdFpFilter)
+  );
 }
 
 function bdSummarize(rows){

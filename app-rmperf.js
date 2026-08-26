@@ -375,6 +375,9 @@ function renderRMPerformance(){
 // Pie chart: GMeet Joined? split into Yes/No/Pending across the currently
 // filtered BD rows. Blank values (a handful of rows missing this field
 // entirely) are excluded from the pie rather than shown as a 4th slice.
+// Clicking a slice sets STATE.bdGmeetFilter, which bdFilteredRows() folds
+// into every other chart and the table — click the same slice again to
+// clear it. The active slice is visually "exploded" (offset from center).
 function renderBDGmeetChart(){
   if(!window.Chart) return;
   const canvas = $('#bd-gmeet-chart'); if(!canvas) return;
@@ -382,23 +385,31 @@ function renderBDGmeetChart(){
   const counts = bdGmeetBreakdown();
   const labels = ['Yes','No','Pending'];
   const values = labels.map(l => counts[l]);
-  if(!values.some(v => v>0)) return;
+  const total = values.reduce((a,b)=>a+b,0);
+  const totalEl = $('#bd-gmeet-total');
+  if(totalEl) totalEl.textContent = '(Total: ' + fmtIN(total) + (STATE.bdGmeetFilter!=='All' ? ' · filtered: '+STATE.bdGmeetFilter : '') + ')';
+  if(!total) return;
   const colors = ['#16a34a','#e11d48','#b45309'];
+  const offsets = labels.map(l => l === STATE.bdGmeetFilter ? 18 : 0);
   STATE.bdGmeetChart = new Chart(canvas.getContext('2d'), {
     type:'pie',
     plugins: window.ChartDataLabels ? [window.ChartDataLabels] : [],
-    data:{ labels, datasets:[{ data:values, backgroundColor:colors, borderWidth:1, borderColor:'#fff' }] },
+    data:{ labels, datasets:[{ data:values, backgroundColor:colors, borderWidth:1, borderColor:'#fff', offset:offsets }] },
     options:{
       responsive:true, maintainAspectRatio:false,
+      onClick:(evt, elements) => {
+        if(!elements.length) return;
+        const clicked = labels[elements[0].index];
+        STATE.bdGmeetFilter = STATE.bdGmeetFilter === clicked ? 'All' : clicked;
+        renderBDPerformance();
+      },
+      onHover:(evt, elements) => { evt.native.target.style.cursor = elements.length ? 'pointer' : 'default'; },
       plugins:{
         legend:{position:'bottom', labels:{color:'#475569', font:{size:11}}},
         tooltip:{callbacks:{label:c => `${c.label}: ${fmtIN(c.raw)}`}},
         datalabels:{
           color:'#fff', font:{size:11,weight:'bold'},
-          formatter:(v,ctx) => {
-            const total = ctx.chart.data.datasets[0].data.reduce((a,b)=>a+b,0);
-            return v>0 && total>0 ? fmtIN(v)+' ('+((v/total)*100).toFixed(0)+'%)' : '';
-          },
+          formatter:(v) => v>0 && total>0 ? fmtIN(v)+' ('+((v/total)*100).toFixed(0)+'%)' : '',
         },
       },
     },
@@ -413,23 +424,31 @@ function renderBDFinancialPlanChart(){
   const counts = bdFinancialPlanBreakdown();
   const labels = ['Yes','No','Pending'];
   const values = labels.map(l => counts[l]);
-  if(!values.some(v => v>0)) return;
+  const total = values.reduce((a,b)=>a+b,0);
+  const totalEl = $('#bd-fp-total');
+  if(totalEl) totalEl.textContent = '(Total: ' + fmtIN(total) + (STATE.bdFpFilter!=='All' ? ' · filtered: '+STATE.bdFpFilter : '') + ')';
+  if(!total) return;
   const colors = ['#16a34a','#e11d48','#b45309'];
+  const offsets = labels.map(l => l === STATE.bdFpFilter ? 18 : 0);
   STATE.bdFpChart = new Chart(canvas.getContext('2d'), {
     type:'pie',
     plugins: window.ChartDataLabels ? [window.ChartDataLabels] : [],
-    data:{ labels, datasets:[{ data:values, backgroundColor:colors, borderWidth:1, borderColor:'#fff' }] },
+    data:{ labels, datasets:[{ data:values, backgroundColor:colors, borderWidth:1, borderColor:'#fff', offset:offsets }] },
     options:{
       responsive:true, maintainAspectRatio:false,
+      onClick:(evt, elements) => {
+        if(!elements.length) return;
+        const clicked = labels[elements[0].index];
+        STATE.bdFpFilter = STATE.bdFpFilter === clicked ? 'All' : clicked;
+        renderBDPerformance();
+      },
+      onHover:(evt, elements) => { evt.native.target.style.cursor = elements.length ? 'pointer' : 'default'; },
       plugins:{
         legend:{position:'bottom', labels:{color:'#475569', font:{size:11}}},
         tooltip:{callbacks:{label:c => `${c.label}: ${fmtIN(c.raw)}`}},
         datalabels:{
           color:'#fff', font:{size:11,weight:'bold'},
-          formatter:(v,ctx) => {
-            const total = ctx.chart.data.datasets[0].data.reduce((a,b)=>a+b,0);
-            return v>0 && total>0 ? fmtIN(v)+' ('+((v/total)*100).toFixed(0)+'%)' : '';
-          },
+          formatter:(v) => v>0 && total>0 ? fmtIN(v)+' ('+((v/total)*100).toFixed(0)+'%)' : '',
         },
       },
     },
