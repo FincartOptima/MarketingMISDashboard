@@ -194,7 +194,6 @@ function initPremiumLock(){
         if(err) err.textContent = '';
         renderRMPerformance();
         renderRMRev();
-        renderBDPerformance();
       } else {
         if(err) err.textContent = 'Incorrect password.';
       }

@@ -23,7 +23,7 @@ const CONFIG = {
   // Google Form (Name + Suggestion) linked to a Google Sheet.
   FEEDBACK_FORM_URL: 'https://docs.google.com/forms/d/e/1FAIpQLSeee0xpyNQvoG2ULnAR0xPbG23wwcmhERKCMwKT6dw8dWp4eA/viewform?usp=publish-editor',
   DATA_API_URL: 'https://fincart.pythonanywhere.com/api/data',
-  PREMIUM_TABS: ['rmperf', 'rmrev', 'bdperf'],
+  PREMIUM_TABS: ['rmperf', 'rmrev'],
   PREMIUM_PASSWORD: 'Password',
   FILE_LABELS: {
     fin23: 'FIN23 Lead Management file (B2C.xlsx)',

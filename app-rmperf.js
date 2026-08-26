@@ -488,7 +488,6 @@ function renderBDStageChart(){
 }
 
 function renderBDPerformance(){
-  if(!STATE.premiumUnlocked) return;
   if(!STATE.filesLoaded.bd){
     setNotUploaded('#tbl-bdperf','bd');
     $('#legend-bdperf').innerHTML = '';
