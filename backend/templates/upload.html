@@ -27,14 +27,14 @@
 <body>
 <div class="card">
   <h1>Marketing <span class="accent">MIS</span> — Data Upload</h1>
-  <p class="sub">Upload the source files to refresh the dashboard. Only B2C is required.</p>
+  <p class="sub">Upload any of the source files below to refresh the dashboard — all optional.</p>
 
   {% if error %}<div class="msg error">{{ error }}</div>{% endif %}
   {% if success %}<div class="msg success">{{ success }}</div>{% endif %}
 
   <form method="POST" enctype="multipart/form-data">
-    <label>B2C — FIN23 Lead Management <strong>[REQUIRED]</strong></label>
-    <input type="file" name="fin23" accept=".xlsx" required>
+    <label>B2C — FIN23 Lead Management <span class="opt">(optional)</span></label>
+    <input type="file" name="fin23" accept=".xlsx">
 
     <label>Revenue Input <span class="opt">(optional)</span></label>
     <input type="file" name="rev" accept=".xlsx">

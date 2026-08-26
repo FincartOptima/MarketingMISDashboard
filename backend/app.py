@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
-# Marketing MIS backend: accepts the 5 source xlsx files over a password-protected
-# upload form, parses them with extract_lib (same logic as the local extract.py),
+# Marketing MIS backend: accepts the source xlsx files over a password-protected
+# upload form (every file is optional — submit any subset), parses them with
+# extract_lib (same logic as the local extract.py),
 # and stores the result in SQLite on disk. The dashboard (hosted separately on
 # GitHub Pages) reads GET /api/data instead of a static data.js file — same
 # JSON shape, so app.js's calculation logic is untouched.
@@ -23,15 +24,16 @@ UPLOAD_PASSWORD = os.environ.get('UPLOAD_PASSWORD', '')
 MAX_CONTENT_LENGTH = 200 * 1024 * 1024  # 200MB combined upload cap
 app.config['MAX_CONTENT_LENGTH'] = MAX_CONTENT_LENGTH
 
-# Single source of truth for the 5 uploadable files: which form field carries
-# it, whether it's required, the label used in error messages, and which
-# extract_lib loader (with what extra args) parses it. upload_submit() below
-# loops over this instead of repeating one block per file.
+# Single source of truth for the uploadable files: which form field carries
+# it, whether it's required (all False — every file is optional), the label
+# used in error messages, and which extract_lib loader (with what extra args)
+# parses it. upload_submit() below loops over this instead of repeating one
+# block per file.
 SOURCE_CONFIGS = [
     {
         'key': 'fin23',
         'form_field': 'fin23',
-        'required': True,
+        'required': False,
         'human_label': 'B2C (FIN23)',
         'loader': extract_lib.load_sheet_rows,
         'loader_kwargs': {'sheet_names': ['RAW_DATA', 'RawData'], 'column_allowlist': extract_lib.FIN23_COLUMNS},
