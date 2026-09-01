@@ -582,17 +582,20 @@ function workshopStatusDistribution(){
 // ---- BD Performance (BD Accountability Tracker) ----
 // Team is the primary grouping (mirrors the main dashboard's Team Performance
 // Matrix): default view = one row per team; selecting a team in the Team
-// filter drills down to one row per Assigned RM within it. Person (which BD
-// rep sourced the lead) and Quarter are independent filters layered on top.
+// filter drills down to one row per RM within it. Person (which BD rep
+// sourced the lead) and Month are independent filters layered on top.
 //
-// Each BD lead is matched to B2C by email (BD tracker) <-> userId (B2C) —
+// Only dateAssigned/email/gmeetJoined come from the tracker itself — every
+// other field (Stage, RM, Team, Month) is sourced from the matching B2C
+// record. Each lead is matched by email (BD tracker) <-> userId (B2C) —
 // userId is a misleadingly-named field that is actually the client's email,
-// and is unique across B2C (verified: 0 duplicates in a 12k+ row export).
-// A matched lead's Stage/RM/Team come from the (more authoritative, CRM-
-// maintained) B2C record; an unmatched lead falls back to the BD tracker's
-// own Current Stage/Assigned RM/Team Leader. See annotateBDWithB2CMatch()
-// in app-dataload.js, which sets effectiveStage/effectiveRM/effectiveTeam/
-// crmMatched on every STATE.bd row once at load time.
+// and is unique across B2C (verified: 0 duplicates in a 12k+ row export). A
+// lead with no match (not yet in the CRM, or an email typo) has no B2C data
+// to draw on: it's labeled "(Not in CRM)" under team SV, excluded from the
+// Stage breakdown, and falls back to the tracker's own Date Assigned for
+// Month. See annotateBDWithB2CMatch() in app-state.js, which sets
+// effectiveStage/effectiveRM/effectiveTeam/effectiveMonth/crmMatched on
+// every STATE.bd row once at load time.
 const B2C_STATUS_TO_BD_STAGE = {
   'ASSIGNED': 'LEAD ASSIGNED',
   'RE-ASSIGNED': 'LEAD ASSIGNED',
@@ -603,7 +606,7 @@ const B2C_STATUS_TO_BD_STAGE = {
   'DEAD': 'ON HOLD/DEAD',
 };
 // B2C has no equivalent of the BD-specific DROPPED / TAX FILING DONE stages —
-// those only ever come from the tracker's own fallback path.
+// those can no longer occur now that Stage is B2C-sourced only.
 function bdStageFromB2C(b2cRow){
   // CM-presence rule (isConvertedLead) takes priority over leadStatus, same
   // as everywhere else in this dashboard — a lead with a CM is CONVERTED
@@ -627,17 +630,17 @@ function bdTeamList(){
   const present = new Set(STATE.bd.map(r => r.effectiveTeam));
   return FIXED_TEAMS.filter(t => present.has(t));
 }
-function bdQuarterList(){
-  return [...new Set(STATE.bd.map(r => r.quarter).filter(Boolean))].sort();
+function bdMonthList(){
+  return sortMonths([...new Set(STATE.bd.map(r => r.effectiveMonth).filter(Boolean))]);
 }
-function isAllBdQuarters(){
-  const f = STATE.bdQuarterFilter;
+function isAllBdMonths(){
+  const f = STATE.bdMonthFilter;
   return !f || f === 'All' || (Array.isArray(f) && f.length === 0);
 }
-function bdQuarterMatch(q){
-  if(isAllBdQuarters()) return true;
-  const f = STATE.bdQuarterFilter;
-  return Array.isArray(f) ? f.includes(q) : q === f;
+function bdMonthMatch(m){
+  if(isAllBdMonths()) return true;
+  const f = STATE.bdMonthFilter;
+  return Array.isArray(f) ? f.includes(m) : m === f;
 }
 function isAllBdTeams(){
   const f = STATE.bdTeamFilter;
@@ -657,15 +660,14 @@ function bdPersonMatch(person){
   const f = STATE.bdPersonFilter;
   return Array.isArray(f) ? f.includes(person) : person === f;
 }
-// GMeet/Financial Plan filters are set by clicking a pie slice (see
-// renderBDGmeetChart/renderBDFinancialPlanChart) rather than a dropdown —
-// they fold into the same filtered scope as Quarter/Team/Person, so a click
-// cascades to the other chart, the Current Stage chart, and the table.
+// The GMeet filter is set by clicking a pie slice (see renderBDGmeetChart)
+// rather than a dropdown — it folds into the same filtered scope as
+// Month/Team/Person, so a click cascades to the Current Stage chart and
+// the table too.
 function bdFilteredRows(){
   return STATE.bd.filter(r =>
-    bdQuarterMatch(r.quarter) && bdTeamMatch(r.effectiveTeam) && bdPersonMatch(r.person) &&
-    (STATE.bdGmeetFilter === 'All' || r.gmeetJoined === STATE.bdGmeetFilter) &&
-    (STATE.bdFpFilter === 'All' || r.financialPlanCreated === STATE.bdFpFilter)
+    bdMonthMatch(r.effectiveMonth) && bdTeamMatch(r.effectiveTeam) && bdPersonMatch(r.person) &&
+    (STATE.bdGmeetFilter === 'All' || r.gmeetJoined === STATE.bdGmeetFilter)
   );
 }
 
@@ -674,7 +676,6 @@ function bdSummarize(rows){
   for(const st of BD_STAGES) obj[st] = rows.filter(r => r.effectiveStage === st).length;
   obj.Total = rows.length;
   obj['GMeet Joined'] = rows.filter(r => r.gmeetJoined === 'Yes').length;
-  obj['Financial Plan Created'] = rows.filter(r => r.financialPlanCreated === 'Yes').length;
   obj['Conv. Rate'] = rows.length>0 ? (obj['CONVERTED']||0)/rows.length : 0;
   return obj;
 }
@@ -683,7 +684,7 @@ function bdPerformanceByTeam(){
   const rows = bdFilteredRows();
   const teams = bdTeamList();
   const out = teams.map(team => ({Team: team, ...bdSummarize(rows.filter(r => r.effectiveTeam === team))}));
-  const gt = buildGrandTotalRow('Team', 'Grand Total', [...BD_STAGES,'Total','GMeet Joined','Financial Plan Created'], out);
+  const gt = buildGrandTotalRow('Team', 'Grand Total', [...BD_STAGES,'Total','GMeet Joined'], out);
   gt['Conv. Rate'] = gt.Total>0 ? (gt['CONVERTED']||0)/gt.Total : 0;
   out.push(gt);
   return out;
@@ -694,25 +695,19 @@ function bdPerformanceByRM(team){
   const rms = [...new Set(rows.map(r => (r.effectiveRM||'').trim()).filter(Boolean))];
   const out = rms.map(rm => ({RM: rm, ...bdSummarize(rows.filter(r => (r.effectiveRM||'').trim() === rm))}))
                  .sort((a,b) => b.Total - a.Total);
-  const gt = buildGrandTotalRow('RM', team+' Total', [...BD_STAGES,'Total','GMeet Joined','Financial Plan Created'], out);
+  const gt = buildGrandTotalRow('RM', team+' Total', [...BD_STAGES,'Total','GMeet Joined'], out);
   gt['Conv. Rate'] = gt.Total>0 ? (gt['CONVERTED']||0)/gt.Total : 0;
   out.push(gt);
   return out;
 }
 
-// Chart data — all three reflect the currently active Quarter/Team/Person
-// filters via bdFilteredRows(), regardless of whether the table above is
-// showing team-level or RM-drilldown rows.
+// Chart data — both reflect the currently active Month/Team/Person filters
+// via bdFilteredRows(), regardless of whether the table above is showing
+// team-level or RM-drilldown rows.
 function bdGmeetBreakdown(){
   const rows = bdFilteredRows();
   const counts = {Yes:0, No:0, Pending:0};
   for(const r of rows){ if(Object.prototype.hasOwnProperty.call(counts, r.gmeetJoined)) counts[r.gmeetJoined]++; }
-  return counts;
-}
-function bdFinancialPlanBreakdown(){
-  const rows = bdFilteredRows();
-  const counts = {Yes:0, No:0, Pending:0};
-  for(const r of rows){ if(Object.prototype.hasOwnProperty.call(counts, r.financialPlanCreated)) counts[r.financialPlanCreated]++; }
   return counts;
 }
 function bdStageBreakdown(){

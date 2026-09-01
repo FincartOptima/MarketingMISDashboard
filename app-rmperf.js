@@ -416,45 +416,6 @@ function renderBDGmeetChart(){
   });
 }
 
-// Pie chart: Financial Plan Created? — same Yes/No/Pending split, same rules.
-function renderBDFinancialPlanChart(){
-  if(!window.Chart) return;
-  const canvas = $('#bd-fp-chart'); if(!canvas) return;
-  if(STATE.bdFpChart){ STATE.bdFpChart.destroy(); STATE.bdFpChart = null; }
-  const counts = bdFinancialPlanBreakdown();
-  const labels = ['Yes','No','Pending'];
-  const values = labels.map(l => counts[l]);
-  const total = values.reduce((a,b)=>a+b,0);
-  const totalEl = $('#bd-fp-total');
-  if(totalEl) totalEl.textContent = '(Total: ' + fmtIN(total) + (STATE.bdFpFilter!=='All' ? ' · filtered: '+STATE.bdFpFilter : '') + ')';
-  if(!total) return;
-  const colors = ['#16a34a','#e11d48','#b45309'];
-  const offsets = labels.map(l => l === STATE.bdFpFilter ? 18 : 0);
-  STATE.bdFpChart = new Chart(canvas.getContext('2d'), {
-    type:'pie',
-    plugins: window.ChartDataLabels ? [window.ChartDataLabels] : [],
-    data:{ labels, datasets:[{ data:values, backgroundColor:colors, borderWidth:1, borderColor:'#fff', offset:offsets }] },
-    options:{
-      responsive:true, maintainAspectRatio:false,
-      onClick:(evt, elements) => {
-        if(!elements.length) return;
-        const clicked = labels[elements[0].index];
-        STATE.bdFpFilter = STATE.bdFpFilter === clicked ? 'All' : clicked;
-        renderBDPerformance();
-      },
-      onHover:(evt, elements) => { evt.native.target.style.cursor = elements.length ? 'pointer' : 'default'; },
-      plugins:{
-        legend:{position:'bottom', labels:{color:'#475569', font:{size:11}}},
-        tooltip:{callbacks:{label:c => `${c.label}: ${fmtIN(c.raw)}`}},
-        datalabels:{
-          color:'#fff', font:{size:11,weight:'bold'},
-          formatter:(v) => v>0 && total>0 ? fmtIN(v)+' ('+((v/total)*100).toFixed(0)+'%)' : '',
-        },
-      },
-    },
-  });
-}
-
 // Column chart: Current Stage distribution across the currently filtered rows.
 function renderBDStageChart(){
   if(!window.Chart) return;
@@ -491,24 +452,23 @@ function renderBDPerformance(){
   if(!STATE.filesLoaded.bd){
     setNotUploaded('#tbl-bdperf','bd');
     $('#legend-bdperf').innerHTML = '';
-    ['#bdperf-quarter-filter-wrap','#bdperf-team-filter-wrap','#bdperf-person-filter-wrap'].forEach(sel => {
+    ['#bdperf-month-filter-wrap','#bdperf-team-filter-wrap','#bdperf-person-filter-wrap'].forEach(sel => {
       const w = $(sel); if(w) w.innerHTML = '';
     });
     return;
   }
 
-  buildMultiSelect('#bdperf-quarter-filter-wrap', ['All', ...bdQuarterList()], STATE.bdQuarterFilter,
-    val => { STATE.bdQuarterFilter = val; renderBDPerformance(); }, {multi: true});
+  buildMultiSelect('#bdperf-month-filter-wrap', ['All', ...bdMonthList()], STATE.bdMonthFilter,
+    val => { STATE.bdMonthFilter = val; renderBDPerformance(); }, {multi: true});
   buildMultiSelect('#bdperf-team-filter-wrap', ['All', ...bdTeamList()], STATE.bdTeamFilter,
     val => { STATE.bdTeamFilter = val; renderBDPerformance(); }, {multi: false});
   buildMultiSelect('#bdperf-person-filter-wrap', ['All', ...bdPersonList()], STATE.bdPersonFilter,
     val => { STATE.bdPersonFilter = val; renderBDPerformance(); }, {multi: true});
 
   renderBDGmeetChart();
-  renderBDFinancialPlanChart();
   renderBDStageChart();
 
-  const headers = ['Person', ...BD_STAGES, 'Total', 'GMeet Joined', 'Financial Plan Created', 'Conv. Rate'];
+  const headers = ['Person', ...BD_STAGES, 'Total', 'GMeet Joined', 'Conv. Rate'];
   const selectedTeam = STATE.bdTeamFilter;
   const isSingleTeam = selectedTeam && selectedTeam !== 'All' && !Array.isArray(selectedTeam);
 
@@ -521,7 +481,6 @@ function renderBDPerformance(){
     BD_STAGES.forEach(s => o[s] = fmtIN(r[s]));
     o.Total = fmtIN(r.Total);
     o['GMeet Joined'] = fmtIN(r['GMeet Joined']);
-    o['Financial Plan Created'] = fmtIN(r['Financial Plan Created']);
     o['Conv. Rate'] = fmtPct(r['Conv. Rate']);
     o._tot = !!r._tot; o._heat = r._heat;
     return o;

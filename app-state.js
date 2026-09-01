@@ -26,11 +26,10 @@ const STATE = {
   filterStatus: 'All',
   filterTable: 'All',
   teamPerfTeamFilter: 'All',
-  bdQuarterFilter: 'All',
+  bdMonthFilter: 'All',
   bdTeamFilter: 'All',
   bdPersonFilter: 'All',
   bdGmeetFilter: 'All',
-  bdFpFilter: 'All',
   mtdStart: 1,
   mtdEnd: 11,
   mtdFilterRefCold: 'Include',
@@ -45,7 +44,6 @@ const STATE = {
   revChart: null,
   statusChart: null,
   bdGmeetChart: null,
-  bdFpChart: null,
   bdStageChart: null,
   rawFilters: {},
   premiumUnlocked: false,
@@ -127,36 +125,20 @@ function mapRM(rawName){
   return STATE.rmMasterLookup[k] || (rawName||'').toString().trim();
 }
 
-// Resolves the BD Accountability Tracker's free-text "Team Leader" column to
-// one of FIXED_TEAMS, reusing the same RM Master Mapping / EMPLOYEE_REF data
-// the main dashboard already maintains (so a name added there — including
-// misspelling fixes — automatically improves BD Performance team resolution
-// too). A few source rows already contain the literal team code instead of a
-// leader's name (e.g. "Vivek S") — passed through directly. Blank or
-// unresolved values fall back to SV, same convention as the main dataset.
-function bdResolveTeam(teamLeaderRaw){
-  const raw = (teamLeaderRaw || '').toString().trim();
-  if(!raw) return 'SV';
-  if(FIXED_TEAMS.includes(raw)) return raw;
-  const canonical = mapRM(raw);
-  const key = normalizeNameKey(canonical);
-  return STATE.rmMasterTeam[key] || STATE.teamMap[key] || 'SV';
-}
-
 // Matches every BD tracker row to its B2C record by email (BD tracker) <->
 // userId (B2C, despite the name — verified to be the client's email and
-// unique across the file). A match wins: its Stage/RM/Team come from the
-// CRM-maintained B2C record (bdStageFromB2C/buildB2CEmailIndex, both in
-// app-aggregators.js) rather than the BD rep's self-reported tracker fields.
-// No match found (lead not yet in the CRM, or an email typo) falls back to
-// the tracker's own Current Stage/Assigned RM/Team Leader.
+// unique across the file). The tracker only supplies dateAssigned/email/
+// gmeetJoined now — Stage/RM/Team/Month all come from the matched B2C
+// record (bdStageFromB2C/buildB2CEmailIndex, both in app-aggregators.js).
+// The matched RM name is passed through mapRM() since B2C's own
+// currentRmName isn't reliably canonical on its own (e.g. "Ankit Kumar
+// KaundaL" on one lead vs. the properly-cased form on another) — this keeps
+// the RM breakdown from fragmenting the same person into multiple rows.
 //
-// Both the matched RM name (B2C's own currentRmName) and the fallback RM
-// name (the tracker's Assigned RM) are passed through mapRM() — neither
-// source is reliably canonical on its own (e.g. B2C's currentRmName can be
-// "Ankit Kumar KaundaL" on one lead and the tracker's Assigned RM "durgesh"
-// on another) — so every row lands on the same canonical RM name and the RM
-// breakdown doesn't fragment the same person into multiple rows.
+// No match found (lead not yet in the CRM, or an email typo) means there's
+// no Stage/RM/Team data at all for that lead: it's labeled "(Not in CRM)"
+// under the SV team and excluded from the Stage breakdown (still counted in
+// Total). Month falls back to the tracker's own Date Assigned (Column A).
 function annotateBDWithB2CMatch(){
   const b2cIndex = buildB2CEmailIndex();
   for(const r of STATE.bd){
@@ -165,13 +147,15 @@ function annotateBDWithB2CMatch(){
     if(b2cRow){
       r.crmMatched = true;
       r.effectiveStage = bdStageFromB2C(b2cRow);
-      r.effectiveRM = mapRM(b2cRow.currentRmName) || r.assignedRM;
-      r.effectiveTeam = b2cRow.Team || r.resolvedTeam;
+      r.effectiveRM = mapRM(b2cRow.currentRmName) || b2cRow.currentRmName || '(unassigned)';
+      r.effectiveTeam = b2cRow.Team || 'SV';
+      r.effectiveMonth = b2cRow.CTM;
     } else {
       r.crmMatched = false;
-      r.effectiveStage = r.currentStage;
-      r.effectiveRM = mapRM(r.assignedRM) || r.assignedRM;
-      r.effectiveTeam = r.resolvedTeam;
+      r.effectiveStage = '';
+      r.effectiveRM = '(Not in CRM)';
+      r.effectiveTeam = 'SV';
+      r.effectiveMonth = toMmmYyyy(r.dateAssigned) || 'N/A';
     }
   }
 }

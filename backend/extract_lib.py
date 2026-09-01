@@ -116,44 +116,19 @@ def load_revenue_input_rows(file_like):
 # ignored since it won't match.
 BD_SHEET_PATTERN = re.compile(r'^(.+?)\s+Q(\d+)$', re.IGNORECASE)
 
-# Source headers are inconsistent across sheets (trailing spaces, "Annual
-# Salary" vs "Annual Income", casing) — matched case/space-insensitively and
-# collapsed onto one canonical key per column.
+# Only dateAssigned/email/gmeetJoined are actually used by the dashboard —
+# Stage/RM/Team are sourced from the matching B2C record instead (see
+# annotateBDWithB2CMatch in app-state.js), and Financial Plan Created isn't
+# tracked at all. dateAssigned is kept only as the Month fallback for leads
+# that don't match a B2C record. Source headers are inconsistent across
+# sheets (trailing spaces, casing) — matched case/space-insensitively.
 BD_TRACKER_COLUMNS = {
-    'dateAssigned':         {'date assigned'},
-    'clientName':           {'client name'},
-    'email':                {'email'},
-    'sourceOfLead':         {'source of lead'},
-    'assignedRM':           {'assigned rm'},
-    'teamLeader':           {'team leader'},
-    'appointmentDate':      {'appointment date'},
-    'annualIncome':         {'annual salary', 'annual income'},
-    'gmeetJoined':          {'gmeet joined?'},
-    'financialPlanCreated': {'financial plan created?'},
-    'currentStage':         {'current stage'},
-    'remarks':              {'remarks'},
+    'dateAssigned': {'date assigned'},
+    'email':        {'email'},
+    'gmeetJoined':  {'gmeet joined?'},
 }
 
-# "Current Stage" free-text values seen in the wild, collapsed onto one
-# canonical label per real-world stage. Unrecognized non-blank values pass
-# through upper-cased rather than being silently dropped.
-BD_STAGE_MAP = {
-    'lead assigned': 'LEAD ASSIGNED', 'assign': 'LEAD ASSIGNED',
-    'in follow-up': 'IN FOLLOW-UP', 'follow up': 'IN FOLLOW-UP',
-    'in process': 'IN PROCESS',
-    'dropped': 'DROPPED',
-    'onhold/dead': 'ON HOLD/DEAD',
-    'converted': 'CONVERTED',
-    'tax filling done': 'TAX FILING DONE',
-}
-
-def normalize_bd_stage(v):
-    s = header_text(v).strip().lower()
-    if not s:
-        return ''
-    return BD_STAGE_MAP.get(s, header_text(v).strip().upper())
-
-# GMeet Joined? / Financial Plan Created? collapse onto a 3-state Yes/No/Pending.
+# GMeet Joined? collapses onto a 3-state Yes/No/Pending.
 BD_YNP_MAP = {
     'yes': 'Yes', 'joined': 'Yes',
     'no': 'No', 'not joined': 'No',
@@ -190,12 +165,7 @@ def load_bd_tracker_rows(file_like):
             any_val = False
             for i, canon in col_for_idx.items():
                 v = row[i] if i < len(row) else None
-                if canon == 'currentStage':
-                    v = normalize_bd_stage(v)
-                elif canon in ('gmeetJoined', 'financialPlanCreated'):
-                    v = normalize_bd_ynp(v)
-                else:
-                    v = cell_value(v)
+                v = normalize_bd_ynp(v) if canon == 'gmeetJoined' else cell_value(v)
                 obj[canon] = v
                 if v not in ('', None):
                     any_val = True

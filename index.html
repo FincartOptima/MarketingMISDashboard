@@ -787,27 +787,22 @@ table.data.editable td input:focus{outline:2px solid var(--orange);background:va
       <h2>BD Performance — Accountability Tracker
         <button class="info-btn" data-info="bdperf" title="Table info">i</button>
         <span style="float:right;font-weight:400;text-transform:none;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-          <label style="font-size:11px;color:var(--muted)">Quarter</label>
-          <div id="bdperf-quarter-filter-wrap" style="display:inline-block;vertical-align:middle"></div>
+          <label style="font-size:11px;color:var(--muted)">Month</label>
+          <div id="bdperf-month-filter-wrap" style="display:inline-block;vertical-align:middle"></div>
           <label style="font-size:11px;color:var(--muted);margin-left:6px">Team</label>
           <div id="bdperf-team-filter-wrap" style="display:inline-block;vertical-align:middle"></div>
           <label style="font-size:11px;color:var(--muted);margin-left:6px">Person</label>
           <div id="bdperf-person-filter-wrap" style="display:inline-block;vertical-align:middle"></div>
         </span>
       </h2>
-      <div class="meta">One row per lead in each "&lt;Person&gt; Q&lt;N&gt;" sheet of the BD Accountability Tracker upload — new quarters picked up automatically by that naming pattern. By default the table below shows one row per team; selecting a single Team drills down to the RMs under it.</div>
+      <div class="meta">Only Email/GMeet Joined/Date Assigned come from the BD Accountability Tracker upload (sheets named "&lt;Person&gt; Q&lt;N&gt;"). Stage/RM/Team/Month are looked up from the matching B2C lead by email; unmatched leads fall back to the tracker's own Date Assigned for Month. By default the table below shows one row per team; selecting a single Team drills down to the RMs under it.</div>
     </div>
 
-    <div class="grid cols-3">
+    <div class="grid cols-2">
       <div class="section bar-green">
         <h2>GMeet Joined? <span id="bd-gmeet-total" style="font-weight:400;text-transform:none;font-size:12px;color:var(--muted)"></span></h2>
         <div style="height:260px"><canvas id="bd-gmeet-chart"></canvas></div>
-        <div class="hint">Click a slice to filter the other charts &amp; table — click it again to clear.</div>
-      </div>
-      <div class="section bar-blue">
-        <h2>Financial Plan Created? <span id="bd-fp-total" style="font-weight:400;text-transform:none;font-size:12px;color:var(--muted)"></span></h2>
-        <div style="height:260px"><canvas id="bd-fp-chart"></canvas></div>
-        <div class="hint">Click a slice to filter the other charts &amp; table — click it again to clear.</div>
+        <div class="hint">Click a slice to filter the other chart &amp; table — click it again to clear.</div>
       </div>
       <div class="section bar-violet">
         <h2>Current Stage</h2>
