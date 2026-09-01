@@ -584,11 +584,47 @@ function workshopStatusDistribution(){
 // Matrix): default view = one row per team; selecting a team in the Team
 // filter drills down to one row per Assigned RM within it. Person (which BD
 // rep sourced the lead) and Quarter are independent filters layered on top.
+//
+// Each BD lead is matched to B2C by email (BD tracker) <-> userId (B2C) —
+// userId is a misleadingly-named field that is actually the client's email,
+// and is unique across B2C (verified: 0 duplicates in a 12k+ row export).
+// A matched lead's Stage/RM/Team come from the (more authoritative, CRM-
+// maintained) B2C record; an unmatched lead falls back to the BD tracker's
+// own Current Stage/Assigned RM/Team Leader. See annotateBDWithB2CMatch()
+// in app-dataload.js, which sets effectiveStage/effectiveRM/effectiveTeam/
+// crmMatched on every STATE.bd row once at load time.
+const B2C_STATUS_TO_BD_STAGE = {
+  'ASSIGNED': 'LEAD ASSIGNED',
+  'RE-ASSIGNED': 'LEAD ASSIGNED',
+  'FOLLOW UP': 'IN FOLLOW-UP',
+  'IN PROCESS': 'IN PROCESS',
+  'CONVERTED': 'CONVERTED',
+  'ON HOLD': 'ON HOLD/DEAD',
+  'DEAD': 'ON HOLD/DEAD',
+};
+// B2C has no equivalent of the BD-specific DROPPED / TAX FILING DONE stages —
+// those only ever come from the tracker's own fallback path.
+function bdStageFromB2C(b2cRow){
+  // CM-presence rule (isConvertedLead) takes priority over leadStatus, same
+  // as everywhere else in this dashboard — a lead with a CM is CONVERTED
+  // even if leadStatus says something else.
+  if(isConvertedLead(b2cRow)) return 'CONVERTED';
+  return B2C_STATUS_TO_BD_STAGE[b2cRow.leadStatus] || '';
+}
+function buildB2CEmailIndex(){
+  const idx = {};
+  for(const r of STATE.raw){
+    const email = (r.userId||'').toString().trim().toLowerCase();
+    if(email) idx[email] = r;
+  }
+  return idx;
+}
+
 function bdPersonList(){
   return [...new Set(STATE.bd.map(r => r.person).filter(Boolean))].sort();
 }
 function bdTeamList(){
-  const present = new Set(STATE.bd.map(r => r.resolvedTeam));
+  const present = new Set(STATE.bd.map(r => r.effectiveTeam));
   return FIXED_TEAMS.filter(t => present.has(t));
 }
 function bdQuarterList(){
@@ -627,7 +663,7 @@ function bdPersonMatch(person){
 // cascades to the other chart, the Current Stage chart, and the table.
 function bdFilteredRows(){
   return STATE.bd.filter(r =>
-    bdQuarterMatch(r.quarter) && bdTeamMatch(r.resolvedTeam) && bdPersonMatch(r.person) &&
+    bdQuarterMatch(r.quarter) && bdTeamMatch(r.effectiveTeam) && bdPersonMatch(r.person) &&
     (STATE.bdGmeetFilter === 'All' || r.gmeetJoined === STATE.bdGmeetFilter) &&
     (STATE.bdFpFilter === 'All' || r.financialPlanCreated === STATE.bdFpFilter)
   );
@@ -635,7 +671,7 @@ function bdFilteredRows(){
 
 function bdSummarize(rows){
   const obj = {};
-  for(const st of BD_STAGES) obj[st] = rows.filter(r => r.currentStage === st).length;
+  for(const st of BD_STAGES) obj[st] = rows.filter(r => r.effectiveStage === st).length;
   obj.Total = rows.length;
   obj['GMeet Joined'] = rows.filter(r => r.gmeetJoined === 'Yes').length;
   obj['Financial Plan Created'] = rows.filter(r => r.financialPlanCreated === 'Yes').length;
@@ -646,7 +682,7 @@ function bdSummarize(rows){
 function bdPerformanceByTeam(){
   const rows = bdFilteredRows();
   const teams = bdTeamList();
-  const out = teams.map(team => ({Team: team, ...bdSummarize(rows.filter(r => r.resolvedTeam === team))}));
+  const out = teams.map(team => ({Team: team, ...bdSummarize(rows.filter(r => r.effectiveTeam === team))}));
   const gt = buildGrandTotalRow('Team', 'Grand Total', [...BD_STAGES,'Total','GMeet Joined','Financial Plan Created'], out);
   gt['Conv. Rate'] = gt.Total>0 ? (gt['CONVERTED']||0)/gt.Total : 0;
   out.push(gt);
@@ -654,9 +690,9 @@ function bdPerformanceByTeam(){
 }
 
 function bdPerformanceByRM(team){
-  const rows = bdFilteredRows().filter(r => r.resolvedTeam === team);
-  const rms = [...new Set(rows.map(r => (r.assignedRM||'').trim()).filter(Boolean))];
-  const out = rms.map(rm => ({RM: rm, ...bdSummarize(rows.filter(r => (r.assignedRM||'').trim() === rm))}))
+  const rows = bdFilteredRows().filter(r => r.effectiveTeam === team);
+  const rms = [...new Set(rows.map(r => (r.effectiveRM||'').trim()).filter(Boolean))];
+  const out = rms.map(rm => ({RM: rm, ...bdSummarize(rows.filter(r => (r.effectiveRM||'').trim() === rm))}))
                  .sort((a,b) => b.Total - a.Total);
   const gt = buildGrandTotalRow('RM', team+' Total', [...BD_STAGES,'Total','GMeet Joined','Financial Plan Created'], out);
   gt['Conv. Rate'] = gt.Total>0 ? (gt['CONVERTED']||0)/gt.Total : 0;
@@ -682,7 +718,7 @@ function bdFinancialPlanBreakdown(){
 function bdStageBreakdown(){
   const rows = bdFilteredRows();
   const out = {};
-  for(const st of BD_STAGES) out[st] = rows.filter(r => r.currentStage === st).length;
+  for(const st of BD_STAGES) out[st] = rows.filter(r => r.effectiveStage === st).length;
   return out;
 }
 

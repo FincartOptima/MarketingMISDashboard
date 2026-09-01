@@ -142,6 +142,39 @@ function bdResolveTeam(teamLeaderRaw){
   const key = normalizeNameKey(canonical);
   return STATE.rmMasterTeam[key] || STATE.teamMap[key] || 'SV';
 }
+
+// Matches every BD tracker row to its B2C record by email (BD tracker) <->
+// userId (B2C, despite the name — verified to be the client's email and
+// unique across the file). A match wins: its Stage/RM/Team come from the
+// CRM-maintained B2C record (bdStageFromB2C/buildB2CEmailIndex, both in
+// app-aggregators.js) rather than the BD rep's self-reported tracker fields.
+// No match found (lead not yet in the CRM, or an email typo) falls back to
+// the tracker's own Current Stage/Assigned RM/Team Leader.
+//
+// Both the matched RM name (B2C's own currentRmName) and the fallback RM
+// name (the tracker's Assigned RM) are passed through mapRM() — neither
+// source is reliably canonical on its own (e.g. B2C's currentRmName can be
+// "Ankit Kumar KaundaL" on one lead and the tracker's Assigned RM "durgesh"
+// on another) — so every row lands on the same canonical RM name and the RM
+// breakdown doesn't fragment the same person into multiple rows.
+function annotateBDWithB2CMatch(){
+  const b2cIndex = buildB2CEmailIndex();
+  for(const r of STATE.bd){
+    const email = (r.email||'').toString().trim().toLowerCase();
+    const b2cRow = email ? b2cIndex[email] : null;
+    if(b2cRow){
+      r.crmMatched = true;
+      r.effectiveStage = bdStageFromB2C(b2cRow);
+      r.effectiveRM = mapRM(b2cRow.currentRmName) || r.assignedRM;
+      r.effectiveTeam = b2cRow.Team || r.resolvedTeam;
+    } else {
+      r.crmMatched = false;
+      r.effectiveStage = r.currentStage;
+      r.effectiveRM = mapRM(r.assignedRM) || r.assignedRM;
+      r.effectiveTeam = r.resolvedTeam;
+    }
+  }
+}
 function persistRMMaster(){
   try{ localStorage.setItem(CONFIG.STORAGE_KEYS.RM_MASTER, JSON.stringify(STATE.rmMaster)); }catch(e){}
 }
