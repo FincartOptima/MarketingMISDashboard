@@ -36,7 +36,7 @@ SOURCE_CONFIGS = [
         'required': False,
         'human_label': 'B2C (FIN23)',
         'loader': extract_lib.load_sheet_rows,
-        'loader_kwargs': {'sheet_names': ['RAW_DATA', 'RawData'], 'column_allowlist': extract_lib.FIN23_COLUMNS},
+        'loader_kwargs': {'sheet_names': ['RAW_DATA', 'RawData', 'Data'], 'column_allowlist': extract_lib.FIN23_COLUMNS},
     },
     {
         'key': 'rev',
@@ -191,18 +191,19 @@ def upload_submit():
         file = request.files.get(cfg['form_field'])
         if not file or not file.filename:
             if cfg['required']:
-                return render_template('upload.html', error=f"{cfg['human_label']} file is required.",
-                                        status={}, sources=SOURCES), 400
+                errors.append(f"{cfg['human_label']} file is required.")
             continue
         try:
             results[cfg['key']] = cfg['loader'](_bytes(file), **cfg['loader_kwargs'])
         except Exception as e:
             errors.append(f"{cfg['human_label']}: {e}")
 
-    if errors:
-        return render_template('upload.html', error='; '.join(errors),
-                                status={}, sources=SOURCES), 400
-
+    # Store every source that parsed successfully even if a different source
+    # in the same submission failed or was missing -- one bad/missing file
+    # must never discard data for a file that parsed fine. Each source fully
+    # replaces its own previous row (INSERT ... ON CONFLICT DO UPDATE keyed
+    # on `key`), so re-uploading the same source always overwrites in full,
+    # never appends alongside stale rows.
     now = datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')
     db = get_db()
     for key, rows in results.items():
@@ -215,9 +216,15 @@ def upload_submit():
     db.commit()
 
     elapsed = time.time() - t0
-    summary = ', '.join(f'{k}: {len(v)} rows' for k, v in results.items())
+    summary = ', '.join(f'{k}: {len(v)} rows' for k, v in results.items()) or 'nothing to store'
     rows = db.execute('SELECT key, row_count, updated_at FROM datasets').fetchall()
     status = {r[0]: {'rows': r[1], 'updated_at': r[2]} for r in rows}
+
+    if errors and results:
+        msg = f'Processed in {elapsed:.1f}s — {summary}. Some files failed: ' + '; '.join(errors)
+        return render_template('upload.html', success=msg, status=status, sources=SOURCES)
+    if errors:
+        return render_template('upload.html', error='; '.join(errors), status=status, sources=SOURCES), 400
     return render_template('upload.html', success=f'Processed in {elapsed:.1f}s — {summary}',
                             status=status, sources=SOURCES)
 

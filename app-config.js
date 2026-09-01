@@ -14,7 +14,7 @@
 const CONFIG = {
   MONTHS_3: ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'],
   STATUSES: ['CONVERTED','IN PROCESS','ASSIGNED','RE-ASSIGNED','FOLLOW UP','ON HOLD','DEAD'],
-  FIXED_TEAMS: ['Akanksha','Ankit S','Anmol G','Ratan P','Ravi S','Vidhi','Vivek S','Yash T','BD','SV','Ambika S'],
+  FIXED_TEAMS: ['Akanksha','Ankit S','Anmol G','Ratan P','Ravi S','Vidhi','Vivek S','Yash T','Ambika','DIY Team','SV'],
   RAW_COLUMNS: ['currentRmName','Team','clientName','landingPage','platformName','Campaign Name','userId','createdDate','CTM','lastStatusDate','LSM','leadInProcessDate','LPM','leadHead','leadStatus','convertedDate','CM','firstRmName','Team of FirstRM','convertedByName','annualIncome','clientCategory','FMONTH'],
   B2B_RAW_COLUMNS: ['name','email','phone','companyName','companyEmail','leadHead','currentRmName','firstRmName','createdDate','CreateMonth','brokerName','brokerEmail','leadStatus','platformName','categoryName','landingPage','enquiryType'],
   // Canonical "Current Stage" set the backend's load_bd_tracker_rows() normalizes
