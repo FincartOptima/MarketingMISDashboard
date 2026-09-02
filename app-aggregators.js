@@ -672,6 +672,13 @@ function bdPlatformMatch(platform){
   const f = STATE.bdPlatformFilter;
   return Array.isArray(f) ? f.includes(platform) : platform === f;
 }
+// Which stage classification the Workpoint Status / BD Team Status toggle
+// currently selects — shared by the Team/RM Breakdown table and the Current
+// Stage chart (NOT the GMeet-vs-In Process table, which always reads
+// currentStage regardless of the toggle).
+function bdActiveStageField(){
+  return STATE.bdStatusSource === 'bdteam' ? 'currentStage' : 'effectiveStage';
+}
 // Every filter except GMeet — shared base for the table/Stage chart (which
 // add the GMeet click-filter on top) and the GMeet-vs-Conversion correlation
 // table (which deliberately does NOT apply it, since collapsing to a single
@@ -770,10 +777,11 @@ function bdGmeetBreakdown(){
   for(const r of rows){ if(Object.prototype.hasOwnProperty.call(counts, r.gmeetJoined)) counts[r.gmeetJoined]++; }
   return counts;
 }
-function bdStageBreakdown(){
+function bdStageBreakdown(stageField){
+  stageField = stageField || 'effectiveStage';
   const rows = bdFilteredRows();
   const out = {};
-  for(const st of BD_STAGES) out[st] = rows.filter(r => r.effectiveStage === st).length;
+  for(const st of BD_STAGES) out[st] = rows.filter(r => r[stageField] === st).length;
   return out;
 }
 

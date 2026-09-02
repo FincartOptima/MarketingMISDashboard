@@ -417,11 +417,15 @@ function renderBDGmeetChart(){
 }
 
 // Column chart: Current Stage distribution across the currently filtered rows.
+// Follows the same Workpoint Status / BD Team Status toggle as the Team/RM
+// Breakdown table below (STATE.bdStatusSource) — not a separate control.
 function renderBDStageChart(){
+  const labelEl = $('#bd-stage-source-label');
+  if(labelEl) labelEl.textContent = STATE.bdStatusSource === 'bdteam' ? '(BD Team Status)' : '(Workpoint Status)';
   if(!window.Chart) return;
   const canvas = $('#bd-stage-chart'); if(!canvas) return;
   if(STATE.bdStageChart){ STATE.bdStageChart.destroy(); STATE.bdStageChart = null; }
-  const counts = bdStageBreakdown();
+  const counts = bdStageBreakdown(bdActiveStageField());
   const labels = BD_STAGES;
   const values = labels.map(l => counts[l]);
   const colors = ['#3b82f6','#b45309','#0891b2','#16a34a','#7c3aed','#e11d48','#db2777'];
@@ -488,7 +492,7 @@ function renderBDPerformance(){
       btn.onclick = () => { STATE.bdStatusSource = btn.dataset.mode; renderBDPerformance(); };
     });
   }
-  const stageField = STATE.bdStatusSource === 'bdteam' ? 'currentStage' : 'effectiveStage';
+  const stageField = bdActiveStageField();
 
   const headers = ['Person', ...BD_STAGES, 'Total', 'GMeet Joined', 'Conv. Rate', 'QL Conv. Rate'];
   const selectedTeam = STATE.bdTeamFilter;
