@@ -814,13 +814,15 @@ table.data.editable td input:focus{outline:2px solid var(--orange);background:va
     </div>
 
     <div class="section bar-cyan">
-      <h2>GMeet Joined? vs Conversion</h2>
+      <h2>GMeet Joined? vs In Process</h2>
       <div class="table-wrap" id="tbl-bdperf-gmeet"></div>
-      <div class="hint">Always shows all three GMeet states side by side (ignores the pie chart's click-filter above) — honors Month/Team/Person/Platform.</div>
+      <div class="hint">Data as per the BD Performance Tracker Google Sheet maintained by the BD Team (Current Stage column) — not the B2C-derived status. Always shows all three GMeet states side by side (ignores the pie chart's click-filter above) — honors Month/Team/Person/Platform.</div>
     </div>
 
     <div class="section bar-orange">
-      <h2>Team / RM Breakdown</h2>
+      <h2>Team / RM Breakdown
+        <span id="bdperf-status-source-toggle"></span>
+      </h2>
       <div id="legend-bdperf"></div>
       <div class="table-wrap" id="tbl-bdperf"></div>
       <div class="hint">Add <strong>BD Accountability Tracker.xlsx</strong> to the repo to populate this table.</div>

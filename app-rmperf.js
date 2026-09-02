@@ -478,11 +478,23 @@ function renderBDPerformance(){
   renderBDStageChart();
   renderBDGmeetCorrelation();
 
+  const toggleWrap = $('#bdperf-status-source-toggle');
+  if(toggleWrap){
+    toggleWrap.innerHTML = '<div class="toggle-group">' +
+      '<button class="tg-btn'+(STATE.bdStatusSource==='workpoint'?' active':'')+'" data-mode="workpoint">Workpoint Status</button>' +
+      '<button class="tg-btn'+(STATE.bdStatusSource==='bdteam'?' active':'')+'" data-mode="bdteam">BD Team Status</button>' +
+      '</div>';
+    toggleWrap.querySelectorAll('.tg-btn').forEach(btn => {
+      btn.onclick = () => { STATE.bdStatusSource = btn.dataset.mode; renderBDPerformance(); };
+    });
+  }
+  const stageField = STATE.bdStatusSource === 'bdteam' ? 'currentStage' : 'effectiveStage';
+
   const headers = ['Person', ...BD_STAGES, 'Total', 'GMeet Joined', 'Conv. Rate', 'QL Conv. Rate'];
   const selectedTeam = STATE.bdTeamFilter;
   const isSingleTeam = selectedTeam && selectedTeam !== 'All' && !Array.isArray(selectedTeam);
 
-  const data = isSingleTeam ? bdPerformanceByRM(selectedTeam) : bdPerformanceByTeam();
+  const data = isSingleTeam ? bdPerformanceByRM(selectedTeam, stageField) : bdPerformanceByTeam(stageField);
   const rowLabelField = isSingleTeam ? 'RM' : 'Team';
   headers[0] = rowLabelField;
   applyHeatAndLegend(data, 'Total', '#legend-bdperf', 'Row heat by Total Leads');
@@ -501,16 +513,17 @@ function renderBDPerformance(){
 
 // Separate table (not affected by the GMeet pie's click-filter — see
 // bdGmeetCorrelation) showing whether joining the GMeet actually predicts
-// conversion: one row per GMeet Joined? state.
+// progress: one row per GMeet Joined? state. Always sourced from the BD
+// tracker's own Current Stage column (see bdGmeetCorrelation), regardless of
+// the Workpoint/BD Team Status toggle on the Team/RM Breakdown table below.
 function renderBDGmeetCorrelation(){
   const data = bdGmeetCorrelation();
-  const headers = ['GMeet Joined', 'Total', 'Converted', 'Conv. Rate', 'QL Conv. Rate'];
+  const headers = ['GMeet Joined', 'Total', 'In Process', 'In Process Rate'];
   const rows = data.map(r => ({
     'GMeet Joined': r['GMeet Joined'],
     Total: fmtIN(r.Total),
-    Converted: fmtIN(r.Converted),
-    'Conv. Rate': fmtPct(r['Conv. Rate']),
-    'QL Conv. Rate': fmtPct(r['QL Conv. Rate']),
+    'In Process': fmtIN(r['In Process']),
+    'In Process Rate': fmtPct(r['In Process Rate']),
     _tot: !!r._tot,
   }));
   renderTable('#tbl-bdperf-gmeet', headers, rows);

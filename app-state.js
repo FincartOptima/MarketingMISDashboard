@@ -31,6 +31,7 @@ const STATE = {
   bdPersonFilter: 'All',
   bdGmeetFilter: 'All',
   bdPlatformFilter: 'All',
+  bdStatusSource: 'workpoint',
   mtdStart: 1,
   mtdEnd: 11,
   mtdFilterRefCold: 'Include',

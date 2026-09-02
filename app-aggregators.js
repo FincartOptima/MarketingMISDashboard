@@ -692,9 +692,14 @@ function bdFilteredRows(){
   );
 }
 
-function bdSummarize(rows){
+// stageField picks which stage classification to tally: 'effectiveStage'
+// (Workpoint Status — B2C-derived, current CRM ownership/status) or
+// 'currentStage' (BD Team Status — the tracker's own self-reported stage,
+// as logged by the BD rep). See the toggle in renderBDPerformance().
+function bdSummarize(rows, stageField){
+  stageField = stageField || 'effectiveStage';
   const obj = {};
-  for(const st of BD_STAGES) obj[st] = rows.filter(r => r.effectiveStage === st).length;
+  for(const st of BD_STAGES) obj[st] = rows.filter(r => r[stageField] === st).length;
   obj.Total = rows.length;
   obj['GMeet Joined'] = rows.filter(r => r.gmeetJoined === 'Yes').length;
   obj['Conv. Rate'] = rows.length>0 ? (obj['CONVERTED']||0)/rows.length : 0;
@@ -702,10 +707,10 @@ function bdSummarize(rows){
   return obj;
 }
 
-function bdPerformanceByTeam(){
+function bdPerformanceByTeam(stageField){
   const rows = bdFilteredRows();
   const teams = bdTeamList();
-  const out = teams.map(team => ({Team: team, ...bdSummarize(rows.filter(r => r.effectiveTeam === team))}));
+  const out = teams.map(team => ({Team: team, ...bdSummarize(rows.filter(r => r.effectiveTeam === team), stageField)}));
   const gt = buildGrandTotalRow('Team', 'Grand Total', [...BD_STAGES,'Total','GMeet Joined'], out);
   gt['Conv. Rate'] = gt.Total>0 ? (gt['CONVERTED']||0)/gt.Total : 0;
   gt['QL Conv. Rate'] = gt.Total>0 ? ((gt['CONVERTED']||0)+(gt['IN PROCESS']||0))/gt.Total : 0;
@@ -713,10 +718,10 @@ function bdPerformanceByTeam(){
   return out;
 }
 
-function bdPerformanceByRM(team){
+function bdPerformanceByRM(team, stageField){
   const rows = bdFilteredRows().filter(r => r.effectiveTeam === team);
   const rms = [...new Set(rows.map(r => (r.effectiveRM||'').trim()).filter(Boolean))];
-  const out = rms.map(rm => ({RM: rm, ...bdSummarize(rows.filter(r => (r.effectiveRM||'').trim() === rm))}))
+  const out = rms.map(rm => ({RM: rm, ...bdSummarize(rows.filter(r => (r.effectiveRM||'').trim() === rm), stageField)}))
                  .sort((a,b) => b.Total - a.Total);
   const gt = buildGrandTotalRow('RM', team+' Total', [...BD_STAGES,'Total','GMeet Joined'], out);
   gt['Conv. Rate'] = gt.Total>0 ? (gt['CONVERTED']||0)/gt.Total : 0;
@@ -725,33 +730,32 @@ function bdPerformanceByRM(team){
   return out;
 }
 
-// GMeet Joined? vs Conversion — one row per GMeet state (Yes/No/Pending),
-// so you can see whether actually joining the meeting predicts conversion.
-// Uses bdFilteredRowsBase() (Month/Team/Person/Platform only, no GMeet
-// click-filter) since collapsing to one GMeet state would defeat the
-// comparison this table exists to show.
+// GMeet Joined? vs In Process — one row per GMeet state (Yes/No/Pending), so
+// you can see whether actually joining the meeting predicts progress. Always
+// sourced from the BD tracker's OWN "Current Stage" column (currentStage),
+// per the BD team's self-reported Google Sheet — not the B2C-derived
+// effectiveStage — since this table is meant to reflect what BD ops
+// themselves logged. Uses bdFilteredRowsBase() (Month/Team/Person/Platform
+// only, no GMeet click-filter) since collapsing to one GMeet state would
+// defeat the comparison this table exists to show.
 function bdGmeetCorrelation(){
   const rows = bdFilteredRowsBase();
   const states = ['Yes','No','Pending'];
   const out = states.map(st => {
     const sub = rows.filter(r => r.gmeetJoined === st);
-    const converted = sub.filter(r => r.effectiveStage === 'CONVERTED').length;
-    const inProcess = sub.filter(r => r.effectiveStage === 'IN PROCESS').length;
+    const inProcess = sub.filter(r => r.currentStage === 'IN PROCESS').length;
     return {
       'GMeet Joined': st,
       Total: sub.length,
-      Converted: converted,
-      'Conv. Rate': sub.length>0 ? converted/sub.length : 0,
-      'QL Conv. Rate': sub.length>0 ? (converted+inProcess)/sub.length : 0,
+      'In Process': inProcess,
+      'In Process Rate': sub.length>0 ? inProcess/sub.length : 0,
     };
   });
   const gtTotal = out.reduce((s,r)=>s+r.Total,0);
-  const gtConverted = out.reduce((s,r)=>s+r.Converted,0);
-  const gtInProcess = rows.filter(r => r.effectiveStage === 'IN PROCESS').length;
+  const gtInProcess = out.reduce((s,r)=>s+r['In Process'],0);
   out.push({
-    'GMeet Joined': 'Grand Total', Total: gtTotal, Converted: gtConverted,
-    'Conv. Rate': gtTotal>0 ? gtConverted/gtTotal : 0,
-    'QL Conv. Rate': gtTotal>0 ? (gtConverted+gtInProcess)/gtTotal : 0,
+    'GMeet Joined': 'Grand Total', Total: gtTotal, 'In Process': gtInProcess,
+    'In Process Rate': gtTotal>0 ? gtInProcess/gtTotal : 0,
     _tot: true,
   });
   return out;
