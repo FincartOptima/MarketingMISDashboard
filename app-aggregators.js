@@ -660,14 +660,35 @@ function bdPersonMatch(person){
   const f = STATE.bdPersonFilter;
   return Array.isArray(f) ? f.includes(person) : person === f;
 }
-// The GMeet filter is set by clicking a pie slice (see renderBDGmeetChart)
-// rather than a dropdown — it folds into the same filtered scope as
-// Month/Team/Person, so a click cascades to the Current Stage chart and
-// the table too.
-function bdFilteredRows(){
+function bdPlatformList(){
+  return [...new Set(STATE.bd.map(r => r.effectivePlatform).filter(Boolean))].sort();
+}
+function isAllBdPlatforms(){
+  const f = STATE.bdPlatformFilter;
+  return !f || f === 'All' || (Array.isArray(f) && f.length === 0);
+}
+function bdPlatformMatch(platform){
+  if(isAllBdPlatforms()) return true;
+  const f = STATE.bdPlatformFilter;
+  return Array.isArray(f) ? f.includes(platform) : platform === f;
+}
+// Every filter except GMeet — shared base for the table/Stage chart (which
+// add the GMeet click-filter on top) and the GMeet-vs-Conversion correlation
+// table (which deliberately does NOT apply it, since collapsing to a single
+// GMeet state would defeat a table whose whole point is comparing all three).
+function bdFilteredRowsBase(){
   return STATE.bd.filter(r =>
     bdMonthMatch(r.effectiveMonth) && bdTeamMatch(r.effectiveTeam) && bdPersonMatch(r.person) &&
-    (STATE.bdGmeetFilter === 'All' || r.gmeetJoined === STATE.bdGmeetFilter)
+    bdPlatformMatch(r.effectivePlatform)
+  );
+}
+// The GMeet filter is set by clicking a pie slice (see renderBDGmeetChart)
+// rather than a dropdown — it folds into the same filtered scope as
+// Month/Team/Person/Platform, so a click cascades to the Current Stage
+// chart and the table too.
+function bdFilteredRows(){
+  return bdFilteredRowsBase().filter(r =>
+    STATE.bdGmeetFilter === 'All' || r.gmeetJoined === STATE.bdGmeetFilter
   );
 }
 
@@ -677,6 +698,7 @@ function bdSummarize(rows){
   obj.Total = rows.length;
   obj['GMeet Joined'] = rows.filter(r => r.gmeetJoined === 'Yes').length;
   obj['Conv. Rate'] = rows.length>0 ? (obj['CONVERTED']||0)/rows.length : 0;
+  obj['QL Conv. Rate'] = rows.length>0 ? ((obj['CONVERTED']||0)+(obj['IN PROCESS']||0))/rows.length : 0;
   return obj;
 }
 
@@ -686,6 +708,7 @@ function bdPerformanceByTeam(){
   const out = teams.map(team => ({Team: team, ...bdSummarize(rows.filter(r => r.effectiveTeam === team))}));
   const gt = buildGrandTotalRow('Team', 'Grand Total', [...BD_STAGES,'Total','GMeet Joined'], out);
   gt['Conv. Rate'] = gt.Total>0 ? (gt['CONVERTED']||0)/gt.Total : 0;
+  gt['QL Conv. Rate'] = gt.Total>0 ? ((gt['CONVERTED']||0)+(gt['IN PROCESS']||0))/gt.Total : 0;
   out.push(gt);
   return out;
 }
@@ -697,13 +720,46 @@ function bdPerformanceByRM(team){
                  .sort((a,b) => b.Total - a.Total);
   const gt = buildGrandTotalRow('RM', team+' Total', [...BD_STAGES,'Total','GMeet Joined'], out);
   gt['Conv. Rate'] = gt.Total>0 ? (gt['CONVERTED']||0)/gt.Total : 0;
+  gt['QL Conv. Rate'] = gt.Total>0 ? ((gt['CONVERTED']||0)+(gt['IN PROCESS']||0))/gt.Total : 0;
   out.push(gt);
   return out;
 }
 
-// Chart data — both reflect the currently active Month/Team/Person filters
-// via bdFilteredRows(), regardless of whether the table above is showing
-// team-level or RM-drilldown rows.
+// GMeet Joined? vs Conversion — one row per GMeet state (Yes/No/Pending),
+// so you can see whether actually joining the meeting predicts conversion.
+// Uses bdFilteredRowsBase() (Month/Team/Person/Platform only, no GMeet
+// click-filter) since collapsing to one GMeet state would defeat the
+// comparison this table exists to show.
+function bdGmeetCorrelation(){
+  const rows = bdFilteredRowsBase();
+  const states = ['Yes','No','Pending'];
+  const out = states.map(st => {
+    const sub = rows.filter(r => r.gmeetJoined === st);
+    const converted = sub.filter(r => r.effectiveStage === 'CONVERTED').length;
+    const inProcess = sub.filter(r => r.effectiveStage === 'IN PROCESS').length;
+    return {
+      'GMeet Joined': st,
+      Total: sub.length,
+      Converted: converted,
+      'Conv. Rate': sub.length>0 ? converted/sub.length : 0,
+      'QL Conv. Rate': sub.length>0 ? (converted+inProcess)/sub.length : 0,
+    };
+  });
+  const gtTotal = out.reduce((s,r)=>s+r.Total,0);
+  const gtConverted = out.reduce((s,r)=>s+r.Converted,0);
+  const gtInProcess = rows.filter(r => r.effectiveStage === 'IN PROCESS').length;
+  out.push({
+    'GMeet Joined': 'Grand Total', Total: gtTotal, Converted: gtConverted,
+    'Conv. Rate': gtTotal>0 ? gtConverted/gtTotal : 0,
+    'QL Conv. Rate': gtTotal>0 ? (gtConverted+gtInProcess)/gtTotal : 0,
+    _tot: true,
+  });
+  return out;
+}
+
+// Chart data — both reflect the currently active Month/Team/Person/Platform
+// filters via bdFilteredRows(), regardless of whether the table above is
+// showing team-level or RM-drilldown rows.
 function bdGmeetBreakdown(){
   const rows = bdFilteredRows();
   const counts = {Yes:0, No:0, Pending:0};

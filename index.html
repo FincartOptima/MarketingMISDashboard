@@ -793,9 +793,12 @@ table.data.editable td input:focus{outline:2px solid var(--orange);background:va
           <div id="bdperf-team-filter-wrap" style="display:inline-block;vertical-align:middle"></div>
           <label style="font-size:11px;color:var(--muted);margin-left:6px">Person</label>
           <div id="bdperf-person-filter-wrap" style="display:inline-block;vertical-align:middle"></div>
+          <label style="font-size:11px;color:var(--muted);margin-left:6px">Platform</label>
+          <div id="bdperf-platform-filter-wrap" style="display:inline-block;vertical-align:middle"></div>
+          <button class="secondary" id="bdperf-reset-filters" style="margin-left:6px">Reset filters</button>
         </span>
       </h2>
-      <div class="meta">Only Email/GMeet Joined/Date Assigned come from the BD Accountability Tracker upload (sheets named "&lt;Person&gt; Q&lt;N&gt;"). Stage/RM/Team/Month are looked up from the matching B2C lead by email; unmatched leads fall back to the tracker's own Date Assigned for Month. By default the table below shows one row per team; selecting a single Team drills down to the RMs under it.</div>
+      <div class="meta">Only Email/GMeet Joined/Date Assigned come from the BD Accountability Tracker upload (sheets named "&lt;Person&gt; Q&lt;N&gt;"). Stage/RM/Team/Month/Platform are looked up from the matching B2C lead by email; unmatched leads fall back to the tracker's own Date Assigned for Month. By default the table below shows one row per team; selecting a single Team drills down to the RMs under it. Click any column header to sort.</div>
     </div>
 
     <div class="grid cols-2">
@@ -808,6 +811,12 @@ table.data.editable td input:focus{outline:2px solid var(--orange);background:va
         <h2>Current Stage</h2>
         <div style="height:260px"><canvas id="bd-stage-chart"></canvas></div>
       </div>
+    </div>
+
+    <div class="section bar-cyan">
+      <h2>GMeet Joined? vs Conversion</h2>
+      <div class="table-wrap" id="tbl-bdperf-gmeet"></div>
+      <div class="hint">Always shows all three GMeet states side by side (ignores the pie chart's click-filter above) — honors Month/Team/Person/Platform.</div>
     </div>
 
     <div class="section bar-orange">

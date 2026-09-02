@@ -30,6 +30,7 @@ const STATE = {
   bdTeamFilter: 'All',
   bdPersonFilter: 'All',
   bdGmeetFilter: 'All',
+  bdPlatformFilter: 'All',
   mtdStart: 1,
   mtdEnd: 11,
   mtdFilterRefCold: 'Include',
@@ -150,12 +151,14 @@ function annotateBDWithB2CMatch(){
       r.effectiveRM = mapRM(b2cRow.currentRmName) || b2cRow.currentRmName || '(unassigned)';
       r.effectiveTeam = b2cRow.Team || 'SV';
       r.effectiveMonth = b2cRow.CTM;
+      r.effectivePlatform = b2cRow.platformName || '';
     } else {
       r.crmMatched = false;
       r.effectiveStage = '';
       r.effectiveRM = '(Not in CRM)';
       r.effectiveTeam = 'SV';
       r.effectiveMonth = toMmmYyyy(r.dateAssigned) || 'N/A';
+      r.effectivePlatform = '';
     }
   }
 }

@@ -452,7 +452,8 @@ function renderBDPerformance(){
   if(!STATE.filesLoaded.bd){
     setNotUploaded('#tbl-bdperf','bd');
     $('#legend-bdperf').innerHTML = '';
-    ['#bdperf-month-filter-wrap','#bdperf-team-filter-wrap','#bdperf-person-filter-wrap'].forEach(sel => {
+    $('#tbl-bdperf-gmeet').innerHTML = '';
+    ['#bdperf-month-filter-wrap','#bdperf-team-filter-wrap','#bdperf-person-filter-wrap','#bdperf-platform-filter-wrap'].forEach(sel => {
       const w = $(sel); if(w) w.innerHTML = '';
     });
     return;
@@ -464,11 +465,20 @@ function renderBDPerformance(){
     val => { STATE.bdTeamFilter = val; renderBDPerformance(); }, {multi: false});
   buildMultiSelect('#bdperf-person-filter-wrap', ['All', ...bdPersonList()], STATE.bdPersonFilter,
     val => { STATE.bdPersonFilter = val; renderBDPerformance(); }, {multi: true});
+  buildMultiSelect('#bdperf-platform-filter-wrap', ['All', ...bdPlatformList()], STATE.bdPlatformFilter,
+    val => { STATE.bdPlatformFilter = val; renderBDPerformance(); }, {multi: true});
+  const resetBtn = $('#bdperf-reset-filters');
+  if(resetBtn) resetBtn.onclick = () => {
+    STATE.bdMonthFilter = 'All'; STATE.bdTeamFilter = 'All'; STATE.bdPersonFilter = 'All';
+    STATE.bdPlatformFilter = 'All'; STATE.bdGmeetFilter = 'All';
+    renderBDPerformance();
+  };
 
   renderBDGmeetChart();
   renderBDStageChart();
+  renderBDGmeetCorrelation();
 
-  const headers = ['Person', ...BD_STAGES, 'Total', 'GMeet Joined', 'Conv. Rate'];
+  const headers = ['Person', ...BD_STAGES, 'Total', 'GMeet Joined', 'Conv. Rate', 'QL Conv. Rate'];
   const selectedTeam = STATE.bdTeamFilter;
   const isSingleTeam = selectedTeam && selectedTeam !== 'All' && !Array.isArray(selectedTeam);
 
@@ -482,10 +492,28 @@ function renderBDPerformance(){
     o.Total = fmtIN(r.Total);
     o['GMeet Joined'] = fmtIN(r['GMeet Joined']);
     o['Conv. Rate'] = fmtPct(r['Conv. Rate']);
+    o['QL Conv. Rate'] = fmtPct(r['QL Conv. Rate']);
     o._tot = !!r._tot; o._heat = r._heat;
     return o;
   });
-  renderTable('#tbl-bdperf', headers, rows);
+  makeSortableTable('#tbl-bdperf', headers, rows, renderBDPerformance);
+}
+
+// Separate table (not affected by the GMeet pie's click-filter — see
+// bdGmeetCorrelation) showing whether joining the GMeet actually predicts
+// conversion: one row per GMeet Joined? state.
+function renderBDGmeetCorrelation(){
+  const data = bdGmeetCorrelation();
+  const headers = ['GMeet Joined', 'Total', 'Converted', 'Conv. Rate', 'QL Conv. Rate'];
+  const rows = data.map(r => ({
+    'GMeet Joined': r['GMeet Joined'],
+    Total: fmtIN(r.Total),
+    Converted: fmtIN(r.Converted),
+    'Conv. Rate': fmtPct(r['Conv. Rate']),
+    'QL Conv. Rate': fmtPct(r['QL Conv. Rate']),
+    _tot: !!r._tot,
+  }));
+  renderTable('#tbl-bdperf-gmeet', headers, rows);
 }
 
 function mtdPerformance(){
