@@ -313,7 +313,23 @@ async function loadAllFromRepo(){
 }
 
 function showUpload(){ $('#upload-screen').style.display='flex'; $('#app').style.display='none'; }
-function showApp()   { $('#upload-screen').style.display='none'; $('#app').style.display='block'; updateDataSubtitle(); }
+// Every Chart.js instance is constructed inside renderAll(), which runs while
+// #app is still display:none (see loadAllFromRepo/applyPreloadedState) — so
+// each chart measures a 0x0 container at creation time. Some recover on
+// their own once shown, but not reliably across browsers, leaving charts
+// like the Dashboard tab's Status Distribution bar blank until some later
+// interaction happens to trigger a resize. Forcing a resize on every chart
+// right after #app becomes visible fixes them all in one place. yieldToPaint
+// (not a bare rAF) so this still resolves if the dashboard is opened in a
+// background tab, where requestAnimationFrame alone would never fire.
+function showApp(){
+  $('#upload-screen').style.display='none';
+  $('#app').style.display='block';
+  updateDataSubtitle();
+  yieldToPaint().then(() => {
+    Object.values((window.Chart && Chart.instances) || {}).forEach(c => c.resize());
+  });
+}
 
 function updateDataSubtitle(){
   const el = $('#app-subtitle');
