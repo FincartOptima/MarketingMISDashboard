@@ -4,6 +4,10 @@
 <meta charset="utf-8">
 <title>Marketing MIS Dashboard</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<!-- Dashboard-tab redesign pilot only — see the scoped block in <style> below -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Space+Grotesk:wght@600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
 /* ============================================================
    SOFT SLATE & CORPORATE BLUE — enterprise dashboard theme.
@@ -433,6 +437,130 @@ table.data.editable td input:focus{outline:2px solid var(--orange);background:va
 .lock-box button{width:100%}
 .lock-box .lock-error{color:var(--red);font-size:12px;margin-top:8px;min-height:16px;font-weight:600}
 .lock-box .lock-hint{color:var(--muted);font-size:11px;margin-top:14px;font-style:italic}
+
+/* ============================================================
+   DASHBOARD TAB — EDITORIAL REDESIGN PILOT
+   Everything below is scoped under #tab-dashboard on purpose: this is a
+   trial of a more considered, less generic visual language (real type
+   pairing, tactile offset-shadow hover instead of glow, one asymmetric
+   "headline" KPI instead of a uniform card grid, a side rail instead of
+   another top bar) on the single most-viewed tab before touching the
+   other ~14. Nothing here changes shared classes, so every other tab is
+   untouched. If this direction sticks, fold the parts worth keeping into
+   the shared rules above and drop the #tab-dashboard scoping.
+   ============================================================ */
+#tab-dashboard{
+  --font-display:'Fraunces',Georgia,serif;   /* headlines — expressive, has a personality */
+  --font-stat:'Space Grotesk',system-ui,sans-serif; /* big numbers — confident, geometric */
+  --font-body:'Inter',system-ui,sans-serif;  /* everything else — clean and legible at table density */
+  font-family:var(--font-body);
+  position:relative;
+  background:
+    radial-gradient(rgba(30,41,59,.07) 1px,transparent 1.3px) 0 0/18px 18px,
+    var(--bg);
+}
+/* So a rail-nav jump doesn't tuck the section title under the sticky header */
+#tab-dashboard [id^="sec-"]{scroll-margin-top:76px}
+
+/* Section titles switch typeface entirely rather than just changing size —
+   a real pairing (serif headline / sans everything-else) instead of one
+   family at different weights. Mixed case + tight tracking on purpose,
+   deliberately opposite of the uppercase+loose-tracked hint text beside it. */
+#tab-dashboard .section h2{
+  font:600 21px/1.3 var(--font-display);
+  text-transform:none;letter-spacing:-.3px;
+}
+#tab-dashboard .section .hint,
+#tab-dashboard .kpi-label,
+#tab-dashboard .live-band-header{
+  font-family:var(--font-body);
+}
+#tab-dashboard .section-divider .sd-label{
+  font:600 16px/1 var(--font-display);
+  text-transform:none;letter-spacing:0;
+}
+
+/* Tactile hover: a solid, ink-dark offset shadow that shifts on hover —
+   no blur, no glow, so it reads as something physically lifting rather
+   than emitting light. Applied uniformly across every section/tile. */
+#tab-dashboard .section,
+#tab-dashboard .kpi{
+  transition:transform .12s ease,box-shadow .12s ease;
+}
+#tab-dashboard .section:hover,
+#tab-dashboard .kpi:hover{
+  transform:translate(-3px,-3px);
+  box-shadow:5px 5px 0 var(--text);
+}
+
+/* Stat numbers get the grotesque, not the body face — the one other place
+   (besides headers) allowed to be loud. */
+#tab-dashboard .kpi-value{
+  font-family:var(--font-stat);
+  font-weight:700;
+  font-size:28px;
+}
+
+/* The headline metric (YTD Leads, always first) breaks out of the uniform
+   card grid instead of matching the seven tiles beside it. */
+#tab-dashboard #kpis{position:relative}
+#tab-dashboard #kpis .kpi:first-child{
+  grid-column:span 2;
+  background:var(--text);border-color:var(--text);
+}
+#tab-dashboard #kpis .kpi:first-child .kpi-value{color:#fff;font-size:40px}
+#tab-dashboard #kpis .kpi:first-child .kpi-label{color:#cbd5e1}
+#tab-dashboard #kpis .kpi:first-child:hover{box-shadow:5px 5px 0 var(--orange)}
+@media(max-width:640px){
+  #tab-dashboard #kpis .kpi:first-child{grid-column:span 1}
+}
+
+/* Landing on a section via the rail nav gets a brief acknowledgment
+   instead of just silently jumping. [id^="sec-"] rather than .section
+   since three nav targets are .grid wrappers (two .sections side by
+   side), not .section elements themselves. */
+#tab-dashboard [id^="sec-"]:target{animation:dash-target-flash 1.4s ease-out}
+@keyframes dash-target-flash{
+  0%{box-shadow:0 0 0 3px var(--orange)}
+  100%{box-shadow:none}
+}
+
+/* Sticky side rail — a jump-list for this tab's ~13 sections, grouped to
+   match the page's own B2C / B2B / Workshop dividers. Collapses to dots
+   until hovered so it never competes with the data for attention, and
+   only appears where there's real margin outside the 1600px content
+   column so it can never overlap a table on ordinary screens. */
+@media(min-width:1700px){
+  .dash-railnav{
+    position:fixed;right:18px;top:50%;transform:translateY(-50%);
+    z-index:15;display:flex;flex-direction:column;gap:14px;
+    padding:16px 0 16px 16px;border-left:2px solid var(--line);
+  }
+  .dash-railnav .rn-group+.rn-group{margin-top:4px}
+  .dash-railnav .rn-group-label{
+    font:700 9px/1 var(--font-body);text-transform:uppercase;letter-spacing:.6px;
+    color:var(--muted);margin-bottom:8px;white-space:nowrap;
+  }
+  .dash-railnav a{
+    display:flex;align-items:center;gap:10px;margin-bottom:9px;
+    color:var(--muted);text-decoration:none;
+    font:600 11px/1 var(--font-body);white-space:nowrap;
+    transition:color .12s;
+  }
+  .dash-railnav a:last-child{margin-bottom:0}
+  .dash-railnav .rn-tick{
+    flex:none;width:6px;height:6px;background:var(--border-strong);
+    transition:background .12s,width .12s,height .12s;
+  }
+  .dash-railnav .rn-label{
+    max-width:0;overflow:hidden;opacity:0;
+    transition:max-width .18s ease,opacity .15s;
+  }
+  .dash-railnav a:hover{color:var(--orange)}
+  .dash-railnav a:hover .rn-tick{background:var(--orange);width:8px;height:8px}
+  .dash-railnav:hover .rn-label{max-width:220px;opacity:1}
+}
+@media(max-width:1699px){.dash-railnav{display:none}}
 </style>
 </head>
 <body>
@@ -473,6 +601,30 @@ table.data.editable td input:focus{outline:2px solid var(--orange);background:va
   <!-- ===== DASHBOARD ===== -->
   <div class="tab-panel" id="tab-dashboard">
 
+    <!-- Jump-nav: collapses to dots, only shown where there's margin outside
+         the 1600px content column (see @media(min-width:1700px) in <style>) -->
+    <nav class="dash-railnav" aria-label="Dashboard sections">
+      <div class="rn-group">
+        <a href="#sec-status-dist"><span class="rn-tick"></span><span class="rn-label">Status Distribution</span></a>
+        <a href="#sec-platform-month"><span class="rn-tick"></span><span class="rn-label">Platform × Month</span></a>
+        <a href="#sec-status-teams"><span class="rn-tick"></span><span class="rn-label">Status by Team</span></a>
+        <a href="#sec-platform-status"><span class="rn-tick"></span><span class="rn-label">Platform × Status</span></a>
+        <a href="#sec-lp-status"><span class="rn-tick"></span><span class="rn-label">Landing Page × Status</span></a>
+        <a href="#sec-team-perf"><span class="rn-tick"></span><span class="rn-label">Team Performance</span></a>
+        <a href="#sec-rm-transfer"><span class="rn-tick"></span><span class="rn-label">RM Transfer</span></a>
+        <a href="#sec-campaign-team"><span class="rn-tick"></span><span class="rn-label">Campaign × Team</span></a>
+        <a href="#sec-income-cost"><span class="rn-tick"></span><span class="rn-label">Income &amp; Cost</span></a>
+        <a href="#sec-cpl-rm"><span class="rn-tick"></span><span class="rn-label">Cost Per Lead</span></a>
+        <a href="#sec-inprocess-converted"><span class="rn-tick"></span><span class="rn-label">In-Process / Converted</span></a>
+      </div>
+      <div class="rn-group">
+        <a href="#sec-b2b"><span class="rn-tick"></span><span class="rn-label">B2B Corp Leads</span></a>
+      </div>
+      <div class="rn-group">
+        <a href="#sec-workshop"><span class="rn-tick"></span><span class="rn-label">Workshop Status</span></a>
+      </div>
+    </nav>
+
     <!-- Top KPIs -->
     <div class="kpis" id="kpis"></div>
 
@@ -480,7 +632,7 @@ table.data.editable td input:focus{outline:2px solid var(--orange);background:va
     <div id="live-kpis"></div>
 
     <!-- Status distribution bar chart -->
-    <div class="section bar-blue">
+    <div class="section bar-blue" id="sec-status-dist">
       <h2>Status Distribution <span id="status-chart-filter" style="font-weight:400;text-transform:none;font-size:11px;color:var(--muted)"></span>
         <button class="info-btn" data-info="status-chart" title="Chart info">i</button>
       </h2>
@@ -488,7 +640,7 @@ table.data.editable td input:focus{outline:2px solid var(--orange);background:va
     </div>
 
     <!-- Platform × Month -->
-    <div class="section bar-yellow">
+    <div class="section bar-yellow" id="sec-platform-month">
       <h2>Leads Generated · Platform × Month
         <button class="info-btn" data-info="platform-month" title="Table info">i</button>
       </h2>
@@ -497,7 +649,7 @@ table.data.editable td input:focus{outline:2px solid var(--orange);background:va
     </div>
 
     <!-- Status Distribution — Mapped (non-SV) + SV -->
-    <div class="grid cols-2">
+    <div class="grid cols-2" id="sec-status-teams">
       <div class="section bar-blue">
         <h2>Status Distribution · Mapped Teams
           <button class="info-btn" data-info="status-month-mapped" title="Table info">i</button>
@@ -515,7 +667,7 @@ table.data.editable td input:focus{outline:2px solid var(--orange);background:va
     </div>
 
     <!-- Platform × Status -->
-    <div class="section bar-pink">
+    <div class="section bar-pink" id="sec-platform-status">
       <h2>Platform × Status Breakdown
         <button class="info-btn" data-info="platform-status" title="Table info">i</button>
         <span style="float:right;font-weight:400;text-transform:none">
@@ -533,7 +685,7 @@ table.data.editable td input:focus{outline:2px solid var(--orange);background:va
     </div>
 
     <!-- Landing Page × Status -->
-    <div class="section bar-pink">
+    <div class="section bar-pink" id="sec-lp-status">
       <h2>Landing Page × Status Breakdown
         <button class="info-btn" data-info="lp-status" title="Table info">i</button>
         <span style="float:right;font-weight:400;text-transform:none;display:flex;align-items:center;gap:10px">
@@ -551,7 +703,7 @@ table.data.editable td input:focus{outline:2px solid var(--orange);background:va
     </div>
 
     <!-- Team Performance -->
-    <div class="section bar-green">
+    <div class="section bar-green" id="sec-team-perf">
       <h2>Team Performance Matrix
         <button class="info-btn" data-info="team-perf" title="Table info">i</button>
         <span style="float:right;font-weight:400;text-transform:none;display:flex;align-items:center;gap:10px">
@@ -565,7 +717,7 @@ table.data.editable td input:focus{outline:2px solid var(--orange);background:va
     </div>
 
     <!-- FirstRM to CurrentRM Transfer -->
-    <div class="section bar-red">
+    <div class="section bar-red" id="sec-rm-transfer">
       <h2>FirstRM to CurrentRM Transfer
         <button class="info-btn" data-info="rm-transfer" title="Table info">i</button>
       </h2>
@@ -574,7 +726,7 @@ table.data.editable td input:focus{outline:2px solid var(--orange);background:va
     </div>
 
     <!-- Leads per Campaign × Team -->
-    <div class="section bar-violet">
+    <div class="section bar-violet" id="sec-campaign-team">
       <h2>Leads per Campaign · Team × Campaign
         <button class="info-btn" data-info="campaign-team" title="Table info">i</button>
         <span style="float:right;font-weight:400;text-transform:none;display:flex;align-items:center;gap:10px">
@@ -588,7 +740,7 @@ table.data.editable td input:focus{outline:2px solid var(--orange);background:va
     </div>
 
     <!-- Income + Cost -->
-    <div class="grid cols-2">
+    <div class="grid cols-2" id="sec-income-cost">
       <div class="section bar-cyan">
         <h2>Income Segment Analysis
           <button class="info-btn" data-info="income" title="Table info">i</button>
@@ -607,7 +759,7 @@ table.data.editable td input:focus{outline:2px solid var(--orange);background:va
     </div>
 
     <!-- CPL per RM -->
-    <div class="section bar-red">
+    <div class="section bar-red" id="sec-cpl-rm">
       <h2>Cost Per Lead · per Team / RM
         <button class="info-btn" data-info="cpl-rm" title="Table info">i</button>
       </h2>
@@ -616,7 +768,7 @@ table.data.editable td input:focus{outline:2px solid var(--orange);background:va
     </div>
 
     <!-- InProcess + Converted Datasets -->
-    <div class="grid cols-2">
+    <div class="grid cols-2" id="sec-inprocess-converted">
       <div class="section bar-pink">
         <h2 id="inprocess-ds-title">In-Process Date Set, Status ≠ IN PROCESS
           <button class="info-btn" data-info="inprocess-ds" title="Table info">i</button>
@@ -635,7 +787,7 @@ table.data.editable td input:focus{outline:2px solid var(--orange);background:va
     <div class="section-divider"><span class="sd-label">⬇ B2B Corporate Data Below</span></div>
 
     <!-- B2B Corp Leads -->
-    <div class="section bar-orange" style="border-top-color:var(--orange)">
+    <div class="section bar-orange" id="sec-b2b" style="border-top-color:var(--orange)">
       <h2 id="b2b-table-title">B2B Corp Leads — RM × Status
         <button class="info-btn" data-info="b2b" title="Table info">i</button>
       </h2>
@@ -647,7 +799,7 @@ table.data.editable td input:focus{outline:2px solid var(--orange);background:va
     <div class="section-divider"><span class="sd-label">⬇ Workshop Status Distribution</span></div>
 
     <!-- Workshop Status Distribution (BTL Marketing platform, by landing-page owner) -->
-    <div class="section bar-cyan">
+    <div class="section bar-cyan" id="sec-workshop">
       <h2>Workshop Status Distribution
         <button class="info-btn" data-info="workshop-status" title="Table info">i</button>
       </h2>
