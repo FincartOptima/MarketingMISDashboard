@@ -480,14 +480,12 @@ table.data.editable td input:focus{outline:2px solid var(--orange);background:va
   text-transform:none;letter-spacing:0;
 }
 
-/* Tactile hover: a solid, ink-dark offset shadow that shifts on hover —
-   no blur, no glow, so it reads as something physically lifting rather
-   than emitting light. Applied uniformly across every section/tile. */
-#tab-dashboard .section,
+/* Tactile hover on the KPI tiles only — removed from .section (tables)
+   per user feedback, it made hovering a table to read it feel like the
+   whole panel was popping out at you. */
 #tab-dashboard .kpi{
   transition:transform .12s ease,box-shadow .12s ease;
 }
-#tab-dashboard .section:hover,
 #tab-dashboard .kpi:hover{
   transform:translate(-3px,-3px);
   box-shadow:5px 5px 0 var(--text);
