@@ -449,11 +449,10 @@ function renderBDStageChart(){
   });
 }
 
-// Stacked bar: BD Daily Log call volume by month, split into Connected vs
-// CNP so the connect-rate trend is visible at a glance via segment
-// proportions, alongside raw volume (bar height = Total Calls). Exact
-// counts/percentages live in the table below it rather than crowding the
-// chart with datalabels on what can be fairly thin CNP/Connected segments.
+// Grouped bar: Total Calls Made / Calls Connected / CNP side by side per
+// month, with the count printed above each bar. Grouped rather than stacked
+// so Total reads as its own bar for direct month-to-month comparison instead
+// of having to be inferred from a stack's height.
 function renderBDCallsChart(){
   const wrap = $('#bd-calls-chart-wrap');
   if(!STATE.filesLoaded.bdcalls){ if(wrap) wrap.innerHTML = notUploadedHTML('bdcalls'); return; }
@@ -462,20 +461,20 @@ function renderBDCallsChart(){
   if(STATE.bdCallsChart){ STATE.bdCallsChart.destroy(); STATE.bdCallsChart = null; }
   const data = bdCallsByMonth();
   const labels = data.map(r => r.Month);
-  const connected = data.map(r => r['Calls Connected']);
-  const cnp = data.map(r => r['CNP']);
   STATE.bdCallsChart = new Chart(canvas.getContext('2d'), {
     type:'bar',
+    plugins: window.ChartDataLabels ? [window.ChartDataLabels] : [],
     data:{
       labels,
       datasets:[
-        { label:'Calls Connected', data:connected, backgroundColor:'#16a34a', borderWidth:0, maxBarThickness:58 },
-        { label:'CNP', data:cnp, backgroundColor:'#e11d48', borderWidth:0, maxBarThickness:58 },
+        { label:'Total Calls Made', data:data.map(r => r['Total Calls']),     backgroundColor:'#3b82f6', borderWidth:0, maxBarThickness:44 },
+        { label:'Calls Connected',  data:data.map(r => r['Calls Connected']), backgroundColor:'#16a34a', borderWidth:0, maxBarThickness:44 },
+        { label:'CNP',              data:data.map(r => r['CNP']),             backgroundColor:'#e11d48', borderWidth:0, maxBarThickness:44 },
       ],
     },
     options:{
       responsive:true, maintainAspectRatio:false,
-      layout:{padding:{top:8,right:8,left:4,bottom:0}},
+      layout:{padding:{top:26,right:8,left:4,bottom:0}},
       plugins:{
         legend:{position:'bottom', labels:{color:'#475569', font:{size:11}, usePointStyle:true, boxWidth:8}},
         tooltip:{
@@ -483,37 +482,128 @@ function renderBDCallsChart(){
             label:c => {
               const total = data[c.dataIndex]['Total Calls'];
               const pct = total>0 ? (c.raw/total*100).toFixed(1) : '0.0';
-              return `${c.dataset.label}: ${fmtIN(c.raw)} (${pct}%)`;
+              return c.dataset.label === 'Total Calls Made'
+                ? `${c.dataset.label}: ${fmtIN(c.raw)}`
+                : `${c.dataset.label}: ${fmtIN(c.raw)} (${pct}% of calls made)`;
             },
-            footer:items => 'Total Calls: ' + fmtIN(data[items[0].dataIndex]['Total Calls']),
           },
+        },
+        datalabels:{
+          anchor:'end', align:'top', offset:2,
+          color:'#1f2937', font:{size:10,weight:'bold'},
+          formatter:v => v>0 ? fmtIN(v) : '',
         },
       },
       scales:{
-        x:{ stacked:true, ticks:{color:'#475569',font:{size:11,weight:'600'}}, grid:{display:false}, border:{color:'#cbd5e1'} },
-        y:{ stacked:true, beginAtZero:true, ticks:{color:'#64748b',callback:v=>fmtIN(v)}, grid:{color:'rgba(148,163,184,.25)'}, border:{color:'#cbd5e1'} },
+        x:{ ticks:{color:'#475569',font:{size:11,weight:'600'}}, grid:{display:false}, border:{color:'#cbd5e1'} },
+        y:{ beginAtZero:true, ticks:{color:'#64748b',callback:v=>fmtIN(v)}, grid:{color:'rgba(148,163,184,.25)'}, border:{color:'#cbd5e1'} },
       },
     },
   });
 }
 
-// Table: one row per BD rep — Total Calls Made / Calls Connected / CNP taken
-// as-is from the BD Daily Log sheet (not recomputed from each other — see
-// the info popup for why they don't always add up exactly), plus
-// Connected%/CNP% of Total Calls.
+// Branching flow diagram of the call funnel. Plain DOM (not a chart library)
+// since the shape is a fixed 3-level branch, not a data-driven plot — this
+// keeps the split nodes visually parallel and lets each node carry its own
+// source label. Built as innerHTML in one pass to avoid layout thrash.
+function renderBDCallFlow(){
+  const host = $('#bd-call-flow');
+  if(!host) return;
+  if(!STATE.filesLoaded.bdcalls){ host.innerHTML = notUploadedHTML('bdcalls'); return; }
+  const f = bdCallFlow();
+  const hasAppts = bdHasAppointmentsData();
+  const node = (label, value, sub, tone) =>
+    `<div class="cf-node cf-${tone}">
+       <div class="cf-value">${value === null ? '&mdash;' : fmtIN(value)}</div>
+       <div class="cf-label">${label}</div>
+       ${sub ? `<div class="cf-sub">${sub}</div>` : ''}
+     </div>`;
+
+  host.innerHTML =
+    `<div class="cf-flow">
+      <div class="cf-row">${node('Total Calls Made', f.totalCalls, 'BD Daily Log', 'blue')}</div>
+      <div class="cf-split"></div>
+      <div class="cf-row cf-row-2">
+        ${node('Calls Connected', f.connected, fmtPct(f.connectedPct)+' of calls made', 'green')}
+        ${node('CNP · Not Picked', f.cnp, fmtPct(f.cnpPct)+' of calls made', 'red')}
+      </div>
+      <div class="cf-arrow" title="Calls Connected → Meetings Scheduled">&#8595;</div>
+      <div class="cf-row">${hasAppts
+        ? node('Meetings Scheduled', f.meetings, fmtPct(f.meetingPct)+' of calls connected', 'violet')
+        : node('Meetings Scheduled', null, 'awaiting backend re-upload', 'violet')}</div>
+      <div class="cf-split cf-split-3"></div>
+      <div class="cf-row cf-row-3">
+        ${node('Meeting Joined', f.joined, fmtPct(f.joinedPct)+' of tracked meetings', 'green')}
+        ${node('Not Joined', f.notJoined, fmtPct(f.notJoinedPct)+' of tracked meetings', 'red')}
+        ${node('Pending', f.pending, fmtPct(f.pendingPct)+' of tracked meetings', 'amber')}
+      </div>
+     </div>
+     ${hasAppts ? '' :
+       `<div class="cf-note" style="border-left-color:var(--red)">
+          <strong>Meetings Scheduled is unavailable in the currently loaded data.</strong>
+          The Appointments Booked column is read by a newer version of the extractor than the one that produced this
+          data, so those rows carry no appointments figure at all &mdash; this is <em>not</em> a real zero. Redeploy the
+          backend and re-upload the BD Accountability Tracker file to populate it.
+        </div>`}
+     <div class="cf-note">
+       The bottom row is a <strong>different source</strong> from the three above it: Joined / Not Joined / Pending come from
+       the per-lead <strong>GMeet Joined?</strong> column in the tracker sheets (${fmtIN(f.gmeetTotal)} leads with a status),
+       whereas Meetings Scheduled is the BD reps' own daily tally in the <strong>BD Daily Log</strong> sheet${hasAppts ? ' ('+fmtIN(f.meetings)+')' : ''}.
+       The two are maintained separately and are shown as-is rather than forced to reconcile, so the bottom row will not
+       add up to the box above it.
+     </div>`;
+}
+
+// The same funnel as a table — one row per stage, with each stage's share of
+// the stage it came from and the sheet it was read from.
+function renderBDCallFlowTable(){
+  if(!STATE.filesLoaded.bdcalls){ setNotUploaded('#tbl-bd-call-flow','bdcalls'); return; }
+  const hasAppts = bdHasAppointmentsData();
+  const headers = ['Stage', 'Count', 'Conversion', 'of', 'Source'];
+  const rows = bdCallFlowStages().map(r => {
+    const isMeetings = r.Stage === 'Meetings Scheduled';
+    const blank = isMeetings && !hasAppts;
+    return {
+      Stage: r.Stage,
+      Count: blank ? '—' : fmtIN(r.Count),
+      Conversion: (blank || r.Pct === null) ? '—' : fmtPct(r.Pct),
+      'of': blank ? 'awaiting backend re-upload' : r.Of,
+      Source: r.Source,
+      _tot: r.Stage === 'Total Calls Made',
+    };
+  });
+  renderTable('#tbl-bd-call-flow', headers, rows);
+}
+
+// Table: one row per BD rep — Total Calls Made / Calls Connected / CNP /
+// Meetings taken as-is from the BD Daily Log sheet (not recomputed from each
+// other — see the info popup for why they don't always add up exactly), plus
+// Connected%/CNP% of Total Calls and Meeting% of Calls Connected.
 function renderBDCallsTable(){
   if(!STATE.filesLoaded.bdcalls){ setNotUploaded('#tbl-bdcalls','bdcalls'); return; }
   const data = bdCallsByPerson();
-  const headers = ['BD Rep', 'Total Calls', 'Calls Connected', 'CNP', 'Connected %', 'CNP %'];
-  const rows = data.map(r => ({
-    'BD Rep': r.BDName,
-    'Total Calls': fmtIN(r['Total Calls']),
-    'Calls Connected': fmtIN(r['Calls Connected']),
-    'CNP': fmtIN(r['CNP']),
-    'Connected %': fmtPct(r['Connected %']),
-    'CNP %': fmtPct(r['CNP %']),
-    _tot: !!r._tot,
-  }));
+  const hasAppts = bdHasAppointmentsData();
+  // Drop the Meetings columns entirely rather than showing a column of zeros
+  // when the loaded data predates the Appointments Booked extraction.
+  const headers = hasAppts
+    ? ['BD Rep', 'Total Calls', 'Calls Connected', 'CNP', 'Meetings', 'Connected %', 'CNP %', 'Meeting %']
+    : ['BD Rep', 'Total Calls', 'Calls Connected', 'CNP', 'Connected %', 'CNP %'];
+  const rows = data.map(r => {
+    const o = {
+      'BD Rep': r.BDName,
+      'Total Calls': fmtIN(r['Total Calls']),
+      'Calls Connected': fmtIN(r['Calls Connected']),
+      'CNP': fmtIN(r['CNP']),
+      'Connected %': fmtPct(r['Connected %']),
+      'CNP %': fmtPct(r['CNP %']),
+      _tot: !!r._tot,
+    };
+    if(hasAppts){
+      o['Meetings'] = fmtIN(r['Meetings']);
+      o['Meeting %'] = fmtPct(r['Meeting %']);
+    }
+    return o;
+  });
   makeSortableTable('#tbl-bdcalls', headers, rows, renderBDCallsTable);
 }
 
@@ -521,8 +611,11 @@ function renderBDPerformance(){
   if(!STATE.filesLoaded.bd){
     setNotUploaded('#tbl-bdperf','bd');
     setNotUploaded('#tbl-bdcalls','bdcalls');
+    setNotUploaded('#tbl-bd-call-flow','bdcalls');
     $('#legend-bdperf').innerHTML = '';
     $('#tbl-bdperf-gmeet').innerHTML = '';
+    const flowHost = $('#bd-call-flow');
+    if(flowHost) flowHost.innerHTML = notUploadedHTML('bdcalls');
     const callsChartWrap = $('#bd-calls-chart-wrap');
     if(callsChartWrap) callsChartWrap.innerHTML = notUploadedHTML('bdcalls');
     ['#bdperf-month-filter-wrap','#bdperf-team-filter-wrap','#bdperf-person-filter-wrap','#bdperf-platform-filter-wrap'].forEach(sel => {
@@ -546,11 +639,13 @@ function renderBDPerformance(){
     renderBDPerformance();
   };
 
+  renderBDCallFlow();
+  renderBDCallFlowTable();
+  renderBDCallsChart();
+  renderBDCallsTable();
   renderBDGmeetChart();
   renderBDStageChart();
   renderBDGmeetCorrelation();
-  renderBDCallsChart();
-  renderBDCallsTable();
 
   const toggleWrap = $('#bdperf-status-source-toggle');
   if(toggleWrap){

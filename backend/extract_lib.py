@@ -222,6 +222,13 @@ BD_DAILY_LOG_COLUMNS = {
     'cnp':            {'cnp'},
 }
 
+# "Appointments Booked" is split across one column per quarter (Q1..Q4), but
+# only the column matching that row's own Quarter is ever populated -- verified
+# across the real file: every row has its appointment count in exactly its own
+# quarter's column and zero/blank in the other three. So the row's total
+# appointments booked is simply the sum of all four, no quarter logic needed.
+BD_APPOINTMENT_HEADER = re.compile(r'^appointments?\s+booked', re.IGNORECASE)
+
 def load_bd_daily_log_rows(file_like):
     """The real header isn't reliably row 1 -- the source sheet has a stray
     near-blank row above it -- so it's located by content (must contain both
@@ -242,16 +249,21 @@ def load_bd_daily_log_rows(file_like):
 
     header_idx = None
     col_for_idx = {}
+    appt_idx = []
     for i in range(min(len(all_rows), 5)):
         lowered = [header_text(c).strip().lower() for c in all_rows[i]]
         candidate = {}
+        appts = []
         for j, h in enumerate(lowered):
             for canon, variants in BD_DAILY_LOG_COLUMNS.items():
                 if h in variants:
                     candidate[j] = canon
+            if BD_APPOINTMENT_HEADER.match(h):
+                appts.append(j)
         if 'date' in candidate.values() and 'bdName' in candidate.values():
             header_idx = i
             col_for_idx = candidate
+            appt_idx = appts
             break
     if header_idx is None:
         return []
@@ -264,5 +276,11 @@ def load_bd_daily_log_rows(file_like):
             obj[canon] = cell_value(v)
         if not obj.get('date') or not obj.get('bdName'):
             continue
+        appts = 0
+        for i in appt_idx:
+            v = row[i] if i < len(row) else None
+            if isinstance(v, (int, float)):
+                appts += v
+        obj['appointments'] = appts
         out.append(obj)
     return out
