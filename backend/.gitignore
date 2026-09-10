@@ -1,3 +1,6 @@
 __pycache__/
 *.pyc
 marketing.db
+service-account*.json
+*-key.json
+.venv/

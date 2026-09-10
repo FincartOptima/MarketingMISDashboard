@@ -22,6 +22,13 @@
   .status table{width:100%;border-collapse:collapse;font-size:13px;}
   .status td{padding:4px 0;border-bottom:1px solid #f1f5f9;}
   .status td:last-child{text-align:right;color:#64748b;}
+  .bdsync{margin-top:28px;border-top:2px solid #e2e8f0;padding-top:16px;}
+  .bdsync p{font-size:13px;color:#334155;margin:4px 0;}
+  .bdsync .err{color:#991b1b;}
+  .bdsync .ok{color:#166534;}
+  .bdsync form{display:inline;}
+  .bdsync button{margin-top:10px;padding:8px 16px;font-size:13px;}
+  .bdsync input[type=password]{display:inline-block;width:180px;margin-right:8px;}
 </style>
 </head>
 <body>
@@ -48,7 +55,7 @@
     <label>Plan Approval Sheet <span class="opt">(optional)</span></label>
     <input type="file" name="pa" accept=".xlsx">
 
-    <label>BD Accountability Tracker <span class="opt">(optional — also populates BD Daily Log)</span></label>
+    <label>BD Accountability Tracker <span class="opt">(optional fallback — normally synced live from Google Sheets, see below; also populates BD Daily Log)</span></label>
     <input type="file" name="bd" accept=".xlsx">
 
     <label>Upload Password</label>
@@ -68,6 +75,19 @@
       </tr>
       {% endfor %}
     </table>
+  </div>
+  {% endif %}
+
+  {% if bd_sync %}
+  <div class="bdsync">
+    <strong>BD Accountability Tracker — live Google Sheets sync</strong>
+    <p>Runs automatically (throttled) whenever the dashboard loads data.</p>
+    {% if bd_sync.last_success %}<p class="ok">Last successful sync: {{ bd_sync.last_success }}</p>{% else %}<p>No successful sync yet.</p>{% endif %}
+    {% if bd_sync.last_error %}<p class="err">Last error: {{ bd_sync.last_error }}</p>{% endif %}
+    <form method="POST" action="/sync-bd">
+      <input type="password" name="password" placeholder="Upload password" required>
+      <button type="submit">Sync now</button>
+    </form>
   </div>
   {% endif %}
 </div>
