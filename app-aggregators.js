@@ -806,15 +806,12 @@ function bdCallsSummarize(rows){
   const totalCalls = rows.reduce((s,r) => s + (r.totalCalls||0), 0);
   const connected = rows.reduce((s,r) => s + (r.callsConnected||0), 0);
   const cnp = rows.reduce((s,r) => s + (r.cnp||0), 0);
-  const meetings = rows.reduce((s,r) => s + (r.appointments||0), 0);
   return {
     'Total Calls': totalCalls,
     'Calls Connected': connected,
     'CNP': cnp,
-    'Meetings': meetings,
     'Connected %': totalCalls>0 ? connected/totalCalls : 0,
     'CNP %': totalCalls>0 ? cnp/totalCalls : 0,
-    'Meeting %': connected>0 ? meetings/connected : 0,
   };
 }
 
@@ -823,59 +820,62 @@ function bdCallsByPerson(){
   const rows = bdCallsFilteredRows();
   const people = [...new Set(rows.map(r => r.bdName).filter(Boolean))].sort();
   const out = people.map(person => ({BDName: person, ...bdCallsSummarize(rows.filter(r => r.bdName === person))}));
-  const gt = buildGrandTotalRow('BDName', 'Grand Total', ['Total Calls','Calls Connected','CNP','Meetings'], out);
+  const gt = buildGrandTotalRow('BDName', 'Grand Total', ['Total Calls','Calls Connected','CNP'], out);
   gt['Connected %'] = gt['Total Calls']>0 ? gt['Calls Connected']/gt['Total Calls'] : 0;
   gt['CNP %'] = gt['Total Calls']>0 ? gt['CNP']/gt['Total Calls'] : 0;
-  gt['Meeting %'] = gt['Calls Connected']>0 ? gt['Meetings']/gt['Calls Connected'] : 0;
   out.push(gt);
   return out;
 }
 
 // ---- Call → Meeting funnel ----
 // The whole funnel is scoped to Month + Person only (NOT Team/Platform):
-// its first four stages come from the BD Daily Log, which has no lead-level
-// linkage to derive a Team or Platform from, so applying those filters to
-// only the GMeet stage would silently desync the stages from each other.
+// Total Calls/Connected/CNP come from the BD Daily Log, which has no
+// lead-level linkage to derive a Team or Platform from, so applying those
+// filters to only later stages would silently desync the stages from
+// each other.
 //
-// IMPORTANT -- the last stage is a different source from the ones above it:
-// Calls/Meetings Scheduled are the BD reps' own per-day tallies in the Daily
-// Log sheet, while Joined/Not Joined come from the per-lead "GMeet Joined?"
-// column in the tracker sheets. The two are maintained separately and do NOT
-// reconcile exactly (in the real file, ~1,530 meetings booked per the Daily
-// Log vs ~1,814 leads carrying a GMeet status in the tracker). They are shown
-// as-is with their source labelled, rather than being forced to add up.
+// Meetings Scheduled / Joined / Not Joined / Pending all come from the same
+// row set -- every lead in the "<Person> Q<N>" tracker sheets whose Date
+// Assigned falls in the selected month(s), i.e. every lead handed to that BD
+// rep that period counts as a meeting scheduled with them. Joined/Not
+// Joined/Pending is simply that same set's GMeet Joined? column, so those
+// three always add up exactly to Meetings Scheduled -- verified against the
+// real file (Suhani, Sept 2026: 27 leads assigned = 2 Yes + 0 No + 25
+// Pending, exactly). This replaced an earlier version that summed the BD
+// Daily Log's separate "Appointments Booked" column instead, which turned
+// out not to match what the BD team actually means by "meetings scheduled".
+//
+// Meetings Scheduled vs Calls Connected IS still a cross-source comparison
+// (Daily Log vs tracker) and won't line up as cleanly -- see the % label.
 function bdFlowTrackerRows(){
-  return STATE.bd.filter(r => bdMonthMatch(r.effectiveMonth) && bdPersonMatch(r.person));
-}
-
-// Appointments Booked was added to the extractor after the BD Daily Log
-// itself shipped, so a backend that hasn't been redeployed+re-uploaded yet
-// returns rows with no `appointments` key at all. That is very different from
-// a genuine zero, and rendering it as "0 meetings booked" would be a plain
-// misstatement -- so the UI distinguishes the two and says so.
-function bdHasAppointmentsData(){
-  return STATE.bdCalls.some(r => r.appointments !== undefined && r.appointments !== null);
+  return STATE.bd.filter(r => bdMonthMatch(toMmmYyyy(r.dateAssigned)) && bdPersonMatch(r.person));
 }
 
 function bdCallFlow(){
   const c = bdCallsSummarize(bdCallsFilteredRows());
   const t = bdFlowTrackerRows();
+  const meetings = t.length;
   const joined = t.filter(r => r.gmeetJoined === 'Yes').length;
   const notJoined = t.filter(r => r.gmeetJoined === 'No').length;
   const pending = t.filter(r => r.gmeetJoined === 'Pending').length;
-  const gmeetTotal = joined + notJoined + pending;
+  // A handful of leads have no GMeet Joined? value logged at all (blank, or
+  // something that didn't normalize to Yes/No/Pending) -- counting those
+  // separately, rather than dropping them, is what makes Joined+NotJoined+
+  // Pending+NotLogged equal Meetings Scheduled exactly, always.
+  const notLogged = meetings - joined - notJoined - pending;
   return {
     totalCalls: c['Total Calls'],
     connected: c['Calls Connected'],
     cnp: c['CNP'],
-    meetings: c['Meetings'],
+    meetings,
     connectedPct: c['Connected %'],
     cnpPct: c['CNP %'],
-    meetingPct: c['Meeting %'],
-    joined, notJoined, pending, gmeetTotal,
-    joinedPct: gmeetTotal>0 ? joined/gmeetTotal : 0,
-    notJoinedPct: gmeetTotal>0 ? notJoined/gmeetTotal : 0,
-    pendingPct: gmeetTotal>0 ? pending/gmeetTotal : 0,
+    meetingPct: c['Calls Connected']>0 ? meetings/c['Calls Connected'] : 0,
+    joined, notJoined, pending, notLogged,
+    joinedPct: meetings>0 ? joined/meetings : 0,
+    notJoinedPct: meetings>0 ? notJoined/meetings : 0,
+    pendingPct: meetings>0 ? pending/meetings : 0,
+    notLoggedPct: meetings>0 ? notLogged/meetings : 0,
   };
 }
 
@@ -884,13 +884,14 @@ function bdCallFlow(){
 function bdCallFlowStages(){
   const f = bdCallFlow();
   return [
-    {Stage:'Total Calls Made',   Count:f.totalCalls, Of:'—',                        Pct:null,             Source:'BD Daily Log'},
-    {Stage:'↳ Calls Connected',  Count:f.connected,  Of:'of calls made',            Pct:f.connectedPct,   Source:'BD Daily Log'},
-    {Stage:'↳ CNP (not picked)', Count:f.cnp,        Of:'of calls made',            Pct:f.cnpPct,         Source:'BD Daily Log'},
-    {Stage:'Meetings Scheduled', Count:f.meetings,   Of:'of calls connected',       Pct:f.meetingPct,     Source:'BD Daily Log'},
-    {Stage:'↳ Meeting Joined',   Count:f.joined,     Of:'of tracked meetings',      Pct:f.joinedPct,      Source:'Tracker · GMeet Joined?'},
-    {Stage:'↳ Not Joined',       Count:f.notJoined,  Of:'of tracked meetings',      Pct:f.notJoinedPct,   Source:'Tracker · GMeet Joined?'},
-    {Stage:'↳ Pending',          Count:f.pending,    Of:'of tracked meetings',      Pct:f.pendingPct,     Source:'Tracker · GMeet Joined?'},
+    {Stage:'Total Calls Made',    Count:f.totalCalls, Of:'—',                     Pct:null,             Source:'BD Daily Log'},
+    {Stage:'↳ Calls Connected',   Count:f.connected,  Of:'of calls made',         Pct:f.connectedPct,   Source:'BD Daily Log'},
+    {Stage:'↳ CNP (not picked)',  Count:f.cnp,        Of:'of calls made',         Pct:f.cnpPct,         Source:'BD Daily Log'},
+    {Stage:'Meetings Scheduled',  Count:f.meetings,   Of:'of calls connected',    Pct:f.meetingPct,     Source:'Tracker · Date Assigned'},
+    {Stage:'↳ Meeting Joined',    Count:f.joined,     Of:'of meetings scheduled', Pct:f.joinedPct,      Source:'Tracker · GMeet Joined?'},
+    {Stage:'↳ Not Joined',        Count:f.notJoined,  Of:'of meetings scheduled', Pct:f.notJoinedPct,   Source:'Tracker · GMeet Joined?'},
+    {Stage:'↳ Pending',           Count:f.pending,    Of:'of meetings scheduled', Pct:f.pendingPct,     Source:'Tracker · GMeet Joined?'},
+    {Stage:'↳ Not Logged',        Count:f.notLogged,  Of:'of meetings scheduled', Pct:f.notLoggedPct,   Source:'Tracker · GMeet Joined?'},
   ];
 }
 

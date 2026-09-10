@@ -452,6 +452,7 @@ table.data.editable td input:focus{outline:2px solid var(--orange);background:va
 .cf-red   {border-top-color:var(--red)}    .cf-red    .cf-value{color:var(--red)}
 .cf-violet{border-top-color:var(--violet)} .cf-violet .cf-value{color:var(--violet)}
 .cf-amber {border-top-color:var(--amber)}  .cf-amber  .cf-value{color:var(--amber)}
+.cf-muted {border-top-color:var(--border-strong)} .cf-muted .cf-value{color:var(--muted)}
 /* Single vertical connector between two stacked stages. */
 .cf-arrow{
   color:var(--border-strong);font-size:20px;line-height:1;
@@ -471,10 +472,11 @@ table.data.editable td input:focus{outline:2px solid var(--orange);background:va
   background:var(--border-strong);
 }
 .cf-split-3::after{left:16.6%;right:16.6%}
+.cf-split-4::after{left:12.5%;right:12.5%}
 /* The horizontal bar only reaches the centre of the outermost children, so
    each child needs its own short stem rising to meet it. */
-.cf-row-2 .cf-node,.cf-row-3 .cf-node{position:relative}
-.cf-row-2 .cf-node::before,.cf-row-3 .cf-node::before{
+.cf-row-2 .cf-node,.cf-row-3 .cf-node,.cf-row-4 .cf-node{position:relative}
+.cf-row-2 .cf-node::before,.cf-row-3 .cf-node::before,.cf-row-4 .cf-node::before{
   content:'';position:absolute;top:-14px;left:50%;width:2px;height:14px;
   background:var(--border-strong);transform:translateX(-50%);
 }
@@ -489,7 +491,7 @@ table.data.editable td input:focus{outline:2px solid var(--orange);background:va
      order carry the flow instead. */
   .cf-split{height:10px}
   .cf-split::before,.cf-split::after,
-  .cf-row-2 .cf-node::before,.cf-row-3 .cf-node::before{display:none}
+  .cf-row-2 .cf-node::before,.cf-row-3 .cf-node::before,.cf-row-4 .cf-node::before{display:none}
   .cf-row{gap:10px}
 }
 
@@ -1283,7 +1285,7 @@ table.data.editable td input:focus{outline:2px solid var(--orange);background:va
     <div class="section bar-blue">
       <h2>Call Flow — Stage by Stage</h2>
       <div class="table-wrap" id="tbl-bd-call-flow"></div>
-      <div class="hint">Each stage as a share of the stage it came from — e.g. Meetings Scheduled ÷ Calls Connected. The <strong>Source</strong> column matters: the last three rows are per-lead GMeet statuses from the tracker sheets, while everything above them is the reps' own daily tallies, so the two groups won't reconcile exactly.</div>
+      <div class="hint">Each stage as a share of the stage it came from — e.g. Meeting Joined ÷ Meetings Scheduled. Meetings Scheduled and everything below it come from the tracker sheets (Date Assigned / GMeet Joined?): Joined + Not Joined + Pending + Not Logged always add up to Meetings Scheduled exactly ("Not Logged" = no GMeet Joined? value entered yet). Only Calls Connected → Meetings Scheduled crosses from the Daily Log into the tracker, so treat that one percentage as directional. See the <strong>Source</strong> column for exactly where each row comes from.</div>
     </div>
 
     <div class="section bar-green">
@@ -1297,7 +1299,7 @@ table.data.editable td input:focus{outline:2px solid var(--orange);background:va
     <div class="section bar-green">
       <h2>Call Activity by BD Rep</h2>
       <div class="table-wrap" id="tbl-bdcalls"></div>
-      <div class="hint">Total Calls Made / Calls Connected / CNP / Meetings as entered in the BD Daily Log sheet (not recomputed from each other) — a handful of rows in the source don't add up exactly; see the chart's info button for details. Connected % and CNP % are ÷ Total Calls Made; Meeting % is ÷ Calls Connected. Click any column header to sort.</div>
+      <div class="hint">Total Calls Made / Calls Connected / CNP as entered in the BD Daily Log sheet (not recomputed from each other) — a handful of rows in the source don't add up exactly; see the chart's info button for details. Connected % and CNP % are ÷ Total Calls Made. Meetings Scheduled is tracker-sourced, not from this sheet — see the Call Flow section above. Click any column header to sort.</div>
     </div>
 
     <!-- ===== 2. LEAD-LEVEL: what happened to the leads behind those meetings ===== -->

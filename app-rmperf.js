@@ -509,12 +509,11 @@ function renderBDCallsChart(){
 function renderBDCallFlow(){
   const host = $('#bd-call-flow');
   if(!host) return;
-  if(!STATE.filesLoaded.bdcalls){ host.innerHTML = notUploadedHTML('bdcalls'); return; }
+  if(!STATE.filesLoaded.bd){ host.innerHTML = notUploadedHTML('bd'); return; }
   const f = bdCallFlow();
-  const hasAppts = bdHasAppointmentsData();
   const node = (label, value, sub, tone) =>
     `<div class="cf-node cf-${tone}">
-       <div class="cf-value">${value === null ? '&mdash;' : fmtIN(value)}</div>
+       <div class="cf-value">${fmtIN(value)}</div>
        <div class="cf-label">${label}</div>
        ${sub ? `<div class="cf-sub">${sub}</div>` : ''}
      </div>`;
@@ -528,82 +527,58 @@ function renderBDCallFlow(){
         ${node('CNP · Not Picked', f.cnp, fmtPct(f.cnpPct)+' of calls made', 'red')}
       </div>
       <div class="cf-arrow" title="Calls Connected → Meetings Scheduled">&#8595;</div>
-      <div class="cf-row">${hasAppts
-        ? node('Meetings Scheduled', f.meetings, fmtPct(f.meetingPct)+' of calls connected', 'violet')
-        : node('Meetings Scheduled', null, 'awaiting backend re-upload', 'violet')}</div>
-      <div class="cf-split cf-split-3"></div>
-      <div class="cf-row cf-row-3">
-        ${node('Meeting Joined', f.joined, fmtPct(f.joinedPct)+' of tracked meetings', 'green')}
-        ${node('Not Joined', f.notJoined, fmtPct(f.notJoinedPct)+' of tracked meetings', 'red')}
-        ${node('Pending', f.pending, fmtPct(f.pendingPct)+' of tracked meetings', 'amber')}
+      <div class="cf-row">${node('Meetings Scheduled', f.meetings, fmtPct(f.meetingPct)+' of calls connected', 'violet')}</div>
+      <div class="cf-split cf-split-4"></div>
+      <div class="cf-row cf-row-4">
+        ${node('Meeting Joined', f.joined, fmtPct(f.joinedPct)+' of meetings scheduled', 'green')}
+        ${node('Not Joined', f.notJoined, fmtPct(f.notJoinedPct)+' of meetings scheduled', 'red')}
+        ${node('Pending', f.pending, fmtPct(f.pendingPct)+' of meetings scheduled', 'amber')}
+        ${node('Not Logged', f.notLogged, fmtPct(f.notLoggedPct)+' of meetings scheduled', 'muted')}
       </div>
      </div>
-     ${hasAppts ? '' :
-       `<div class="cf-note" style="border-left-color:var(--red)">
-          <strong>Meetings Scheduled is unavailable in the currently loaded data.</strong>
-          The Appointments Booked column is read by a newer version of the extractor than the one that produced this
-          data, so those rows carry no appointments figure at all &mdash; this is <em>not</em> a real zero. Redeploy the
-          backend and re-upload the BD Accountability Tracker file to populate it.
-        </div>`}
      <div class="cf-note">
-       The bottom row is a <strong>different source</strong> from the three above it: Joined / Not Joined / Pending come from
-       the per-lead <strong>GMeet Joined?</strong> column in the tracker sheets (${fmtIN(f.gmeetTotal)} leads with a status),
-       whereas Meetings Scheduled is the BD reps' own daily tally in the <strong>BD Daily Log</strong> sheet${hasAppts ? ' ('+fmtIN(f.meetings)+')' : ''}.
-       The two are maintained separately and are shown as-is rather than forced to reconcile, so the bottom row will not
-       add up to the box above it.
+       <strong>Meetings Scheduled</strong> is every lead in the tracker sheets whose <strong>Date Assigned</strong> falls in the
+       selected month(s) — each lead handed to a BD rep counts as a meeting scheduled with them. <strong>Joined / Not Joined /
+       Pending / Not Logged</strong> is that exact same set of leads broken down by their <strong>GMeet Joined?</strong> column
+       (Not Logged = no value entered yet), so those four always add up to Meetings Scheduled exactly. The one join that
+       <em>is</em> across two different sheets is Connected → Meetings Scheduled (Daily Log calls vs. tracker leads), so
+       treat that percentage as directional rather than a strict conversion.
      </div>`;
 }
 
 // The same funnel as a table — one row per stage, with each stage's share of
 // the stage it came from and the sheet it was read from.
 function renderBDCallFlowTable(){
-  if(!STATE.filesLoaded.bdcalls){ setNotUploaded('#tbl-bd-call-flow','bdcalls'); return; }
-  const hasAppts = bdHasAppointmentsData();
+  if(!STATE.filesLoaded.bd){ setNotUploaded('#tbl-bd-call-flow','bd'); return; }
   const headers = ['Stage', 'Count', 'Conversion', 'of', 'Source'];
-  const rows = bdCallFlowStages().map(r => {
-    const isMeetings = r.Stage === 'Meetings Scheduled';
-    const blank = isMeetings && !hasAppts;
-    return {
-      Stage: r.Stage,
-      Count: blank ? '—' : fmtIN(r.Count),
-      Conversion: (blank || r.Pct === null) ? '—' : fmtPct(r.Pct),
-      'of': blank ? 'awaiting backend re-upload' : r.Of,
-      Source: r.Source,
-      _tot: r.Stage === 'Total Calls Made',
-    };
-  });
+  const rows = bdCallFlowStages().map(r => ({
+    Stage: r.Stage,
+    Count: fmtIN(r.Count),
+    Conversion: r.Pct === null ? '—' : fmtPct(r.Pct),
+    'of': r.Of,
+    Source: r.Source,
+    _tot: r.Stage === 'Total Calls Made',
+  }));
   renderTable('#tbl-bd-call-flow', headers, rows);
 }
 
-// Table: one row per BD rep — Total Calls Made / Calls Connected / CNP /
-// Meetings taken as-is from the BD Daily Log sheet (not recomputed from each
-// other — see the info popup for why they don't always add up exactly), plus
-// Connected%/CNP% of Total Calls and Meeting% of Calls Connected.
+// Table: one row per BD rep — Total Calls Made / Calls Connected / CNP taken
+// as-is from the BD Daily Log sheet (not recomputed from each other — see
+// the info popup for why they don't always add up exactly), plus
+// Connected%/CNP% of Total Calls.
 function renderBDCallsTable(){
   if(!STATE.filesLoaded.bdcalls){ setNotUploaded('#tbl-bdcalls','bdcalls'); return; }
   const data = bdCallsByPerson();
-  const hasAppts = bdHasAppointmentsData();
-  // Drop the Meetings columns entirely rather than showing a column of zeros
-  // when the loaded data predates the Appointments Booked extraction.
-  const headers = hasAppts
-    ? ['BD Rep', 'Total Calls', 'Calls Connected', 'CNP', 'Meetings', 'Connected %', 'CNP %', 'Meeting %']
-    : ['BD Rep', 'Total Calls', 'Calls Connected', 'CNP', 'Connected %', 'CNP %'];
-  const rows = data.map(r => {
-    const o = {
-      'BD Rep': r.BDName,
-      'Total Calls': fmtIN(r['Total Calls']),
-      'Calls Connected': fmtIN(r['Calls Connected']),
-      'CNP': fmtIN(r['CNP']),
-      'Connected %': fmtPct(r['Connected %']),
-      'CNP %': fmtPct(r['CNP %']),
-      _tot: !!r._tot,
-    };
-    if(hasAppts){
-      o['Meetings'] = fmtIN(r['Meetings']);
-      o['Meeting %'] = fmtPct(r['Meeting %']);
-    }
-    return o;
-  });
+  const headers = ['BD Rep', 'Total Calls', 'Calls Connected', 'CNP', 'Connected %', 'CNP %'];
+  const rows = data.map(r => ({
+    'BD Rep': r.BDName,
+    'Total Calls': fmtIN(r['Total Calls']),
+    'Calls Connected': fmtIN(r['Calls Connected']),
+    'CNP': fmtIN(r['CNP']),
+    'Connected %': fmtPct(r['Connected %']),
+    'CNP %': fmtPct(r['CNP %']),
+    _tot: !!r._tot,
+  }));
   makeSortableTable('#tbl-bdcalls', headers, rows, renderBDCallsTable);
 }
 
@@ -611,11 +586,11 @@ function renderBDPerformance(){
   if(!STATE.filesLoaded.bd){
     setNotUploaded('#tbl-bdperf','bd');
     setNotUploaded('#tbl-bdcalls','bdcalls');
-    setNotUploaded('#tbl-bd-call-flow','bdcalls');
+    setNotUploaded('#tbl-bd-call-flow','bd');
     $('#legend-bdperf').innerHTML = '';
     $('#tbl-bdperf-gmeet').innerHTML = '';
     const flowHost = $('#bd-call-flow');
-    if(flowHost) flowHost.innerHTML = notUploadedHTML('bdcalls');
+    if(flowHost) flowHost.innerHTML = notUploadedHTML('bd');
     const callsChartWrap = $('#bd-calls-chart-wrap');
     if(callsChartWrap) callsChartWrap.innerHTML = notUploadedHTML('bdcalls');
     ['#bdperf-month-filter-wrap','#bdperf-team-filter-wrap','#bdperf-person-filter-wrap','#bdperf-platform-filter-wrap'].forEach(sel => {
