@@ -207,3 +207,62 @@ def load_bd_tracker_rows(file_like):
             out.append(obj)
     wb.close()
     return out
+
+
+# ---------- BD Daily Log ----------
+# A single sheet (literally named "BD Daily Log") in the same workbook as the
+# per-person-per-quarter tabs above: one row per BD rep per day of call
+# activity. Shares the same uploaded file as the 'bd' source (see SOURCE_CONFIGS
+# in app.py) rather than needing its own upload field.
+BD_DAILY_LOG_COLUMNS = {
+    'date':           {'date'},
+    'bdName':         {'bd name'},
+    'totalCalls':     {'total calls made'},
+    'callsConnected': {'calls connected'},
+    'cnp':            {'cnp'},
+}
+
+def load_bd_daily_log_rows(file_like):
+    """The real header isn't reliably row 1 -- the source sheet has a stray
+    near-blank row above it -- so it's located by content (must contain both
+    'date' and 'bd name'), same approach as load_revenue_input_rows. Rows
+    missing Date or BD Name are skipped: the sheet also has scratch rows
+    further down (an unlabelled future-quarter placeholder, a hidden
+    grand-total row) that carry numbers but no date/name, which would
+    otherwise be mistaken for real daily entries."""
+    wb = openpyxl.load_workbook(file_like, read_only=True, data_only=True)
+    if 'BD Daily Log' not in wb.sheetnames:
+        wb.close()
+        return []
+    ws = wb['BD Daily Log']
+    all_rows = list(ws.iter_rows(values_only=True))
+    wb.close()
+    if not all_rows:
+        return []
+
+    header_idx = None
+    col_for_idx = {}
+    for i in range(min(len(all_rows), 5)):
+        lowered = [header_text(c).strip().lower() for c in all_rows[i]]
+        candidate = {}
+        for j, h in enumerate(lowered):
+            for canon, variants in BD_DAILY_LOG_COLUMNS.items():
+                if h in variants:
+                    candidate[j] = canon
+        if 'date' in candidate.values() and 'bdName' in candidate.values():
+            header_idx = i
+            col_for_idx = candidate
+            break
+    if header_idx is None:
+        return []
+
+    out = []
+    for row in all_rows[header_idx + 1:]:
+        obj = {}
+        for i, canon in col_for_idx.items():
+            v = row[i] if i < len(row) else None
+            obj[canon] = cell_value(v)
+        if not obj.get('date') or not obj.get('bdName'):
+            continue
+        out.append(obj)
+    return out

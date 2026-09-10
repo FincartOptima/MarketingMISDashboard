@@ -78,6 +78,16 @@ SOURCE_CONFIGS = [
         'loader': extract_lib.load_bd_tracker_rows,
         'loader_kwargs': {},
     },
+    {
+        # Same uploaded file as 'bd' above (form_field: 'bd'), different sheet
+        # within it ("BD Daily Log") -- no separate upload field needed.
+        'key': 'bdcalls',
+        'form_field': 'bd',
+        'required': False,
+        'human_label': 'BD Daily Log',
+        'loader': extract_lib.load_bd_daily_log_rows,
+        'loader_kwargs': {},
+    },
 ]
 SOURCES = [cfg['key'] for cfg in SOURCE_CONFIGS]
 
@@ -173,6 +183,11 @@ def upload_form():
 def _bytes(file_storage):
     # werkzeug wraps uploads in a SpooledTemporaryFile, which on Python < 3.11
     # lacks .seekable() that openpyxl/zipfile requires. Read into BytesIO instead.
+    # seek(0) first since 'bdcalls' shares its form field with 'bd' (both read
+    # the same uploaded BD Accountability Tracker file) -- without it, the
+    # second SOURCE_CONFIGS entry to read this field would get an
+    # already-exhausted stream and silently extract nothing.
+    file_storage.stream.seek(0)
     return io.BytesIO(file_storage.read())
 
 

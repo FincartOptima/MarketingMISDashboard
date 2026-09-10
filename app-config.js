@@ -32,6 +32,7 @@ const CONFIG = {
     fy:    'FY2026 file (FY2026.xlsx)',
     pa:    'Plan Approval file (Plan Approval.xlsx)',
     bd:    'BD Accountability Tracker file (BD Accountability Tracker.xlsx)',
+    bdcalls: 'BD Daily Log sheet (in the same BD Accountability Tracker.xlsx upload)',
   },
   // The FY start month business rule — the one genuinely "hardcoded" value
   // in this block, kept most discoverable since it changes once a year.

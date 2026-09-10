@@ -449,11 +449,82 @@ function renderBDStageChart(){
   });
 }
 
+// Stacked bar: BD Daily Log call volume by month, split into Connected vs
+// CNP so the connect-rate trend is visible at a glance via segment
+// proportions, alongside raw volume (bar height = Total Calls). Exact
+// counts/percentages live in the table below it rather than crowding the
+// chart with datalabels on what can be fairly thin CNP/Connected segments.
+function renderBDCallsChart(){
+  const wrap = $('#bd-calls-chart-wrap');
+  if(!STATE.filesLoaded.bdcalls){ if(wrap) wrap.innerHTML = notUploadedHTML('bdcalls'); return; }
+  if(!window.Chart) return;
+  const canvas = $('#bd-calls-chart'); if(!canvas) return;
+  if(STATE.bdCallsChart){ STATE.bdCallsChart.destroy(); STATE.bdCallsChart = null; }
+  const data = bdCallsByMonth();
+  const labels = data.map(r => r.Month);
+  const connected = data.map(r => r['Calls Connected']);
+  const cnp = data.map(r => r['CNP']);
+  STATE.bdCallsChart = new Chart(canvas.getContext('2d'), {
+    type:'bar',
+    data:{
+      labels,
+      datasets:[
+        { label:'Calls Connected', data:connected, backgroundColor:'#16a34a', borderWidth:0, maxBarThickness:58 },
+        { label:'CNP', data:cnp, backgroundColor:'#e11d48', borderWidth:0, maxBarThickness:58 },
+      ],
+    },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      layout:{padding:{top:8,right:8,left:4,bottom:0}},
+      plugins:{
+        legend:{position:'bottom', labels:{color:'#475569', font:{size:11}, usePointStyle:true, boxWidth:8}},
+        tooltip:{
+          callbacks:{
+            label:c => {
+              const total = data[c.dataIndex]['Total Calls'];
+              const pct = total>0 ? (c.raw/total*100).toFixed(1) : '0.0';
+              return `${c.dataset.label}: ${fmtIN(c.raw)} (${pct}%)`;
+            },
+            footer:items => 'Total Calls: ' + fmtIN(data[items[0].dataIndex]['Total Calls']),
+          },
+        },
+      },
+      scales:{
+        x:{ stacked:true, ticks:{color:'#475569',font:{size:11,weight:'600'}}, grid:{display:false}, border:{color:'#cbd5e1'} },
+        y:{ stacked:true, beginAtZero:true, ticks:{color:'#64748b',callback:v=>fmtIN(v)}, grid:{color:'rgba(148,163,184,.25)'}, border:{color:'#cbd5e1'} },
+      },
+    },
+  });
+}
+
+// Table: one row per BD rep — Total Calls Made / Calls Connected / CNP taken
+// as-is from the BD Daily Log sheet (not recomputed from each other — see
+// the info popup for why they don't always add up exactly), plus
+// Connected%/CNP% of Total Calls.
+function renderBDCallsTable(){
+  if(!STATE.filesLoaded.bdcalls){ setNotUploaded('#tbl-bdcalls','bdcalls'); return; }
+  const data = bdCallsByPerson();
+  const headers = ['BD Rep', 'Total Calls', 'Calls Connected', 'CNP', 'Connected %', 'CNP %'];
+  const rows = data.map(r => ({
+    'BD Rep': r.BDName,
+    'Total Calls': fmtIN(r['Total Calls']),
+    'Calls Connected': fmtIN(r['Calls Connected']),
+    'CNP': fmtIN(r['CNP']),
+    'Connected %': fmtPct(r['Connected %']),
+    'CNP %': fmtPct(r['CNP %']),
+    _tot: !!r._tot,
+  }));
+  makeSortableTable('#tbl-bdcalls', headers, rows, renderBDCallsTable);
+}
+
 function renderBDPerformance(){
   if(!STATE.filesLoaded.bd){
     setNotUploaded('#tbl-bdperf','bd');
+    setNotUploaded('#tbl-bdcalls','bdcalls');
     $('#legend-bdperf').innerHTML = '';
     $('#tbl-bdperf-gmeet').innerHTML = '';
+    const callsChartWrap = $('#bd-calls-chart-wrap');
+    if(callsChartWrap) callsChartWrap.innerHTML = notUploadedHTML('bdcalls');
     ['#bdperf-month-filter-wrap','#bdperf-team-filter-wrap','#bdperf-person-filter-wrap','#bdperf-platform-filter-wrap'].forEach(sel => {
       const w = $(sel); if(w) w.innerHTML = '';
     });
@@ -478,6 +549,8 @@ function renderBDPerformance(){
   renderBDGmeetChart();
   renderBDStageChart();
   renderBDGmeetCorrelation();
+  renderBDCallsChart();
+  renderBDCallsTable();
 
   const toggleWrap = $('#bdperf-status-source-toggle');
   if(toggleWrap){

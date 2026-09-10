@@ -623,15 +623,23 @@ function buildB2CEmailIndex(){
   return idx;
 }
 
+// Union with bdCalls (BD Daily Log) so the shared Month/Person dropdowns at
+// the top of the tab cover every BD rep/month either data source has, even
+// on a date the tracker itself has no leads for yet (the daily log tends to
+// run a few days ahead of the tracker/B2C data for "today").
 function bdPersonList(){
-  return [...new Set(STATE.bd.map(r => r.person).filter(Boolean))].sort();
+  const fromTracker = STATE.bd.map(r => r.person);
+  const fromCalls = STATE.bdCalls.map(r => r.bdName);
+  return [...new Set([...fromTracker, ...fromCalls].filter(Boolean))].sort();
 }
 function bdTeamList(){
   const present = new Set(STATE.bd.map(r => r.effectiveTeam));
   return FIXED_TEAMS.filter(t => present.has(t));
 }
 function bdMonthList(){
-  return sortMonths([...new Set(STATE.bd.map(r => r.effectiveMonth).filter(Boolean))]);
+  const fromTracker = STATE.bd.map(r => r.effectiveMonth);
+  const fromCalls = STATE.bdCalls.map(r => toMmmYyyy(r.date));
+  return sortMonths([...new Set([...fromTracker, ...fromCalls].filter(Boolean))]);
 }
 function isAllBdMonths(){
   const f = STATE.bdMonthFilter;
@@ -783,6 +791,47 @@ function bdStageBreakdown(stageField){
   const out = {};
   for(const st of BD_STAGES) out[st] = rows.filter(r => r[stageField] === st).length;
   return out;
+}
+
+// ---- BD Daily Log (Total Calls Made / Calls Connected / CNP) ----
+// Independent of the tracker/B2C-matched STATE.bd rows above -- this is raw
+// per-rep-per-day call activity from its own sheet, with no lead-level (and
+// therefore no Team/Platform) linkage, so it only honors the Month/Person
+// filters shared with the rest of the tab.
+function bdCallsFilteredRows(){
+  return STATE.bdCalls.filter(r => bdMonthMatch(toMmmYyyy(r.date)) && bdPersonMatch(r.bdName));
+}
+
+function bdCallsSummarize(rows){
+  const totalCalls = rows.reduce((s,r) => s + (r.totalCalls||0), 0);
+  const connected = rows.reduce((s,r) => s + (r.callsConnected||0), 0);
+  const cnp = rows.reduce((s,r) => s + (r.cnp||0), 0);
+  return {
+    'Total Calls': totalCalls,
+    'Calls Connected': connected,
+    'CNP': cnp,
+    'Connected %': totalCalls>0 ? connected/totalCalls : 0,
+    'CNP %': totalCalls>0 ? cnp/totalCalls : 0,
+  };
+}
+
+// One row per BD rep, for the table.
+function bdCallsByPerson(){
+  const rows = bdCallsFilteredRows();
+  const people = [...new Set(rows.map(r => r.bdName).filter(Boolean))].sort();
+  const out = people.map(person => ({BDName: person, ...bdCallsSummarize(rows.filter(r => r.bdName === person))}));
+  const gt = buildGrandTotalRow('BDName', 'Grand Total', ['Total Calls','Calls Connected','CNP'], out);
+  gt['Connected %'] = gt['Total Calls']>0 ? gt['Calls Connected']/gt['Total Calls'] : 0;
+  gt['CNP %'] = gt['Total Calls']>0 ? gt['CNP']/gt['Total Calls'] : 0;
+  out.push(gt);
+  return out;
+}
+
+// One row per month (chronological), for the stacked chart.
+function bdCallsByMonth(){
+  const rows = bdCallsFilteredRows();
+  const months = sortMonths([...new Set(rows.map(r => toMmmYyyy(r.date)).filter(Boolean))]);
+  return months.map(m => ({Month: m, ...bdCallsSummarize(rows.filter(r => toMmmYyyy(r.date) === m))}));
 }
 
 function convertedDataset(){

@@ -1234,6 +1234,25 @@ table.data.editable td input:focus{outline:2px solid var(--orange);background:va
       <div class="table-wrap" id="tbl-bdperf"></div>
       <div class="hint">Add <strong>BD Accountability Tracker.xlsx</strong> to the repo to populate this table.</div>
     </div>
+
+    <!-- Page break: everything below is the BD Daily Log sheet — raw call
+         activity, not matched to individual B2C leads, so only Month/Person
+         (not Team/Platform) apply. -->
+    <div class="section-divider"><span class="sd-label">⬇ BD Daily Log — Call Activity</span></div>
+
+    <div class="section bar-green">
+      <h2>Total Calls Made — Connected vs CNP, by Month
+        <button class="info-btn" data-info="bdcalls" title="Chart info">i</button>
+      </h2>
+      <div id="bd-calls-chart-wrap" style="height:280px"><canvas id="bd-calls-chart"></canvas></div>
+      <div class="hint">Bar height = Total Calls Made that month; stacked into Calls Connected (green) and CNP (red). Honors the Month/Person filters above — Team/Platform don't apply since this sheet isn't matched to individual leads.</div>
+    </div>
+
+    <div class="section bar-green">
+      <h2>BD Daily Log — Calls by Rep</h2>
+      <div class="table-wrap" id="tbl-bdcalls"></div>
+      <div class="hint">Total Calls Made / Calls Connected / CNP as entered in the BD Daily Log sheet (not recomputed from each other) — a handful of rows in the source don't add up exactly; see the chart's info button for details. Connected % and CNP % are each ÷ Total Calls Made.</div>
+    </div>
   </div>
 
   <!-- ===== COST PER CAMPAIGN ===== -->

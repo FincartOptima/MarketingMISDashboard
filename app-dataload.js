@@ -219,7 +219,7 @@ async function loadAllFromRepo(){
   // the page stays completely blank (no spinner, no error) for the entire loading
   // and render pass, which can take well over a minute on a large dataset.
   showUpload();
-  STATE.filesLoaded = { fin23: false, rev: false, b2b: false, fy: false, pa: false };
+  STATE.filesLoaded = { fin23: false, rev: false, b2b: false, fy: false, pa: false, bd: false, bdcalls: false };
 
   loadEmployeeFromStorage();
   loadCostFromStorage();
@@ -290,6 +290,14 @@ async function loadAllFromRepo(){
   } else {
     console.warn('[MIS] bd data missing from data.js');
     STATE.bd = [];
+  }
+
+  if(d.bdcalls && d.bdcalls.length){
+    STATE.bdCalls = d.bdcalls;
+    STATE.filesLoaded.bdcalls = true;
+  } else {
+    console.warn('[MIS] bdcalls data missing from data.js');
+    STATE.bdCalls = [];
   }
 
   if(STATE.fy && STATE.fy.length) STATE.fy.forEach(r => { r.mappedRM = mapRM(r.rmName); });
