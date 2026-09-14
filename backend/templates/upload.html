@@ -18,6 +18,7 @@
   .msg{padding:12px 14px;margin-bottom:16px;font-size:13px;}
   .msg.error{background:#fee2e2;border:1px solid #ef4444;color:#991b1b;}
   .msg.success{background:#dcfce7;border:1px solid #22c55e;color:#166534;}
+  .msg.warning{background:#fef3c7;border:1px solid #f59e0b;color:#92400e;}
   .status{margin-top:28px;border-top:2px solid #e2e8f0;padding-top:16px;}
   .status table{width:100%;border-collapse:collapse;font-size:13px;}
   .status td{padding:4px 0;border-bottom:1px solid #f1f5f9;}
@@ -38,6 +39,7 @@
 
   {% if error %}<div class="msg error">{{ error }}</div>{% endif %}
   {% if success %}<div class="msg success">{{ success }}</div>{% endif %}
+  {% if warning %}<div class="msg warning">⚠️ {{ warning }}</div>{% endif %}
 
   <form method="POST" enctype="multipart/form-data">
     <label>B2C — FIN23 Lead Management <span class="opt">(optional)</span></label>

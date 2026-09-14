@@ -92,6 +92,16 @@ SOURCE_CONFIGS = [
 ]
 SOURCES = [cfg['key'] for cfg in SOURCE_CONFIGS]
 
+# Sanity-check thresholds on raw upload size (MB), surfaced as a non-blocking
+# warning in the /upload response -- catches an incomplete export or a
+# wrong-file mix-up without stopping the file from being processed normally.
+# B2C exports run well over 2MB; B2B exports run well under it, so a file on
+# the wrong side of that line for either source is worth a human glancing at.
+FILE_SIZE_CHECKS = {
+    'fin23': {'min_mb': 2, 'max_mb': None},
+    'b2b':   {'min_mb': None, 'max_mb': 2},
+}
+
 
 def get_db():
     if 'db' not in g:
@@ -290,6 +300,7 @@ def upload_submit():
     t0 = time.time()
     results = {}
     errors = []
+    warnings = []
 
     for cfg in SOURCE_CONFIGS:
         file = request.files.get(cfg['form_field'])
@@ -298,7 +309,21 @@ def upload_submit():
                 errors.append(f"{cfg['human_label']} file is required.")
             continue
         try:
-            results[cfg['key']] = cfg['loader'](_bytes(file), **cfg['loader_kwargs'])
+            buf = _bytes(file)
+            check = FILE_SIZE_CHECKS.get(cfg['key'])
+            if check:
+                size_mb = buf.getbuffer().nbytes / (1024 * 1024)
+                if check['min_mb'] is not None and size_mb < check['min_mb']:
+                    warnings.append(
+                        f"{cfg['human_label']} file is {size_mb:.1f}MB — smaller than the usual "
+                        f"{check['min_mb']}MB+, please double-check it's the complete export."
+                    )
+                if check['max_mb'] is not None and size_mb > check['max_mb']:
+                    warnings.append(
+                        f"{cfg['human_label']} file is {size_mb:.1f}MB — larger than the usual "
+                        f"{check['max_mb']}MB, please double-check it's the right file."
+                    )
+            results[cfg['key']] = cfg['loader'](buf, **cfg['loader_kwargs'])
         except Exception as e:
             errors.append(f"{cfg['human_label']}: {e}")
 
@@ -322,13 +347,14 @@ def upload_submit():
     elapsed = time.time() - t0
     summary = ', '.join(f'{k}: {len(v)} rows' for k, v in results.items()) or 'nothing to store'
     status = _status()
+    warning = ' '.join(warnings) or None
 
     if errors and results:
         msg = f'Processed in {elapsed:.1f}s — {summary}. Some files failed: ' + '; '.join(errors)
-        return render_template('upload.html', success=msg, status=status, sources=SOURCES, bd_sync=_bd_sync_state)
+        return render_template('upload.html', success=msg, warning=warning, status=status, sources=SOURCES, bd_sync=_bd_sync_state)
     if errors:
-        return render_template('upload.html', error='; '.join(errors), status=status, sources=SOURCES, bd_sync=_bd_sync_state), 400
-    return render_template('upload.html', success=f'Processed in {elapsed:.1f}s — {summary}',
+        return render_template('upload.html', error='; '.join(errors), warning=warning, status=status, sources=SOURCES, bd_sync=_bd_sync_state), 400
+    return render_template('upload.html', success=f'Processed in {elapsed:.1f}s — {summary}', warning=warning,
                             status=status, sources=SOURCES, bd_sync=_bd_sync_state)
 
 
