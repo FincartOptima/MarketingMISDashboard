@@ -131,12 +131,15 @@ function platformStatusBreakdown(){
   const mode = STATE.filterTable;
   let rows = applyRefColdFilter(STATE.raw);
   if(STATE.psTeamFilter !== 'All') rows = rows.filter(r => r.Team === STATE.psTeamFilter);
-  const platformNames = [...new Set(rows.map(r => r.platformName).filter(Boolean))].sort();
-  const groups = platformNames.map(p => ({label: p, match: r => r.platformName === p}));
+  // Grouped by Category Name (r['Campaign Name'] — buildRawData() maps the
+  // source's own "Category Name"/"Campaign Name" columns onto this one field
+  // interchangeably) rather than platformName.
+  const categoryNames = [...new Set(rows.map(r => r['Campaign Name']).filter(Boolean))].sort();
+  const groups = categoryNames.map(c => ({label: c, match: r => r['Campaign Name'] === c}));
   const out = [];
   for(const g of groups){
     const sub = rows.filter(g.match);
-    const obj = {Platform: g.label}; let total = 0;
+    const obj = {'Category Name': g.label}; let total = 0;
     for(const st of STATUSES){
       // CONVERTED gate: CM-presence, not leadStatus (per 2026-07-29 rule).
       // Non-converted rows carry CM='N/A' — exclude those. And any lead with a
@@ -151,7 +154,7 @@ function platformStatusBreakdown(){
     obj.LCR = total>0 ? obj.CONVERTED/total : 0;
     out.push(obj);
   }
-  const gt = buildGrandTotalRow('Platform', 'Grand Total', STATUSES, out, 'Total');
+  const gt = buildGrandTotalRow('Category Name', 'Grand Total', STATUSES, out, 'Total');
   gt.LCR = null;
   out.push(gt);
   return out;

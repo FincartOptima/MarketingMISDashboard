@@ -172,9 +172,9 @@ function renderPlatformStatus(){
 
   const data = platformStatusBreakdown();
   applyHeatAndLegend(data, 'Total', '#legend-platform-status', 'Row heat by Total');
-  const headers = ['Platform', ...STATUSES, 'Total', 'LCR', 'QLCR'];
+  const headers = ['Category Name', ...STATUSES, 'Total', 'LCR', 'QLCR'];
   const rows = data.map(r => {
-    const o = {Platform:r.Platform};
+    const o = {'Category Name':r['Category Name']};
     STATUSES.forEach(s => o[s] = fmtIN(r[s]));
     o.Total = fmtIN(r.Total);
     o.LCR = r.LCR == null ? '' : fmtPct(r.LCR);

@@ -63,9 +63,9 @@ const TABLE_INFO = {
     note: 'IN PROCESS count uses LPM (Lead In-Process Month). RAW_DATA FMONTH for non-converted leads = CTM (Created Month). Leads created before the selected month that moved to IN PROCESS within it are counted here but will not appear in a RAW_DATA filter on FMONTH.'
   },
   'platform-status': {
-    title: 'Platform × Status Breakdown',
-    desc: 'Lead counts by platform and status. <strong>Platforms are dynamically read from uploaded data</strong> — new platforms are automatically included. CONVERTED uses CM, IN PROCESS uses LPM, all other statuses (ASSIGNED, RE-ASSIGNED, FOLLOW UP, ON HOLD, DEAD) use CTM.<br><strong>Same Month:</strong> status column matches selected month(s) AND CTM matches.<br><strong>Any Month:</strong> status column matches selected month(s) but CTM outside (only applies to CONVERTED/IN PROCESS; other statuses will be 0 since their column IS CTM).<br><strong>Default:</strong> status column matches selected month(s).',
-    cols: 'platformName (dynamic, all unique values) · leadStatus · CTM (Created Month, used for ASSIGNED / RE-ASSIGNED / FOLLOW UP / ON HOLD / DEAD) · CM (Converted Month, for CONVERTED) · LPM (Lead In-Process Month, for IN PROCESS)',
+    title: 'Category × Status Breakdown',
+    desc: 'Lead counts by category and status. <strong>Category Names are dynamically read from uploaded data</strong> — new categories are automatically included. CONVERTED uses CM, IN PROCESS uses LPM, all other statuses (ASSIGNED, RE-ASSIGNED, FOLLOW UP, ON HOLD, DEAD) use CTM.<br><strong>Same Month:</strong> status column matches selected month(s) AND CTM matches.<br><strong>Any Month:</strong> status column matches selected month(s) but CTM outside (only applies to CONVERTED/IN PROCESS; other statuses will be 0 since their column IS CTM).<br><strong>Default:</strong> status column matches selected month(s).',
+    cols: 'Campaign Name / Category Name (dynamic, all unique values — the source\'s "Category Name" and "Campaign Name" columns map onto the same field) · leadStatus · CTM (Created Month, used for ASSIGNED / RE-ASSIGNED / FOLLOW UP / ON HOLD / DEAD) · CM (Converted Month, for CONVERTED) · LPM (Lead In-Process Month, for IN PROCESS)',
     source: 'RAW_DATA sheet',
     note: 'FMONTH and LSM are not used in this table. For ASSIGNED, RE-ASSIGNED, FOLLOW UP, ON HOLD, DEAD — only CTM and leadStatus are used. AnyMonth mode only affects CONVERTED (CM) and IN PROCESS (LPM) since for other statuses the filter column is CTM itself.'
   },
