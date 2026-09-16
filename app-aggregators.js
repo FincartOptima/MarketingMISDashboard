@@ -131,6 +131,7 @@ function platformStatusBreakdown(){
   const mode = STATE.filterTable;
   let rows = applyRefColdFilter(STATE.raw);
   if(STATE.psTeamFilter !== 'All') rows = rows.filter(r => r.Team === STATE.psTeamFilter);
+  if(STATE.psLeadHeadFilter !== 'All') rows = rows.filter(r => r.leadHead === STATE.psLeadHeadFilter);
   // Grouped by Category Name (r['Campaign Name'] — buildRawData() maps the
   // source's own "Category Name"/"Campaign Name" columns onto this one field
   // interchangeably) rather than platformName.

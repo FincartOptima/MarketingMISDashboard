@@ -40,6 +40,7 @@ const STATE = {
   revMonth: 'All',
   revLPFilter: 'Include',
   psTeamFilter: 'All',
+  psLeadHeadFilter: 'All',
   lpTableMode: 'All',
   lpTeamFilter: 'All',
   lpCampaignFilter: null,
