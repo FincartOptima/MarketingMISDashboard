@@ -42,19 +42,41 @@ Google Cloud Console and the PythonAnywhere Web tab.
 
 ## 3. Configure the PythonAnywhere backend
 
-1. On the PythonAnywhere **Web** tab, scroll to **Environment variables**
-   and add:
-   - `GOOGLE_SERVICE_ACCOUNT_JSON` — paste the *entire contents* of the
-     downloaded JSON key file as one value (it's fine that it contains
-     newlines inside the private key field; paste it as-is).
+**Recommended: upload the key file itself, don't paste its contents.**
+Pasting JSON into an environment variable (or into the WSGI file as a string)
+is fragile — editors and copy-paste routinely turn the `private_key` field's
+escaped `\n` sequences into real line breaks, which breaks JSON parsing
+(`Invalid control character` errors). Uploading the raw file avoids that
+class of bug entirely.
+
+1. On PythonAnywhere, go to the **Files** tab and upload the downloaded
+   `.json` key file into `/home/Fincart/marketing-mis/backend/` (e.g. as
+   `service-account.json` — this filename pattern is already covered by
+   `.gitignore`, so it can never accidentally get committed).
+2. On the **Web** tab, scroll to **Environment variables** (or, if that
+   section isn't available on your plan, add these as
+   `os.environ.setdefault('NAME', 'value')` lines directly in the WSGI
+   configuration file instead) and set:
+   - `GOOGLE_SERVICE_ACCOUNT_FILE` = `/home/Fincart/marketing-mis/backend/service-account.json`
    - (optional) `BD_SHEET_ID` — only if the sheet ID isn't the current
      default.
    - (optional) `BD_SYNC_MIN_INTERVAL` — seconds between auto-syncs,
      default `300`.
-2. In a PythonAnywhere **Bash console**, install the two new dependencies
+3. In a PythonAnywhere **Bash console**, install the two new dependencies
    into your virtualenv: `pip install -r requirements.txt` (adds
    `google-auth` and `requests`).
-3. Reload the web app (Web tab → Reload button).
+4. Reload the web app (Web tab → Reload button).
+
+<details>
+<summary>Alternative: paste the JSON contents into GOOGLE_SERVICE_ACCOUNT_JSON instead</summary>
+
+Only do this if uploading a file isn't an option. Set `GOOGLE_SERVICE_ACCOUNT_JSON`
+to the entire contents of the key file as one value. Paste it from the raw
+file itself (e.g. `cat service-account.json` in a terminal, then copy that
+output) — never from a "pretty" or reformatted view, and never through an
+editor that might auto-format JSON, since either can silently convert the
+`private_key` field's `\n` escapes into real line breaks.
+</details>
 
 ## 4. Verify
 

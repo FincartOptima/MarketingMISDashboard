@@ -166,11 +166,32 @@ _bd_sync_state = {'last_attempt': 0.0, 'last_success': None, 'last_error': None}
 
 
 def _google_credentials():
+    from google.oauth2 import service_account
+    # Prefer a file path when available -- pasting the key's JSON into an env
+    # var (or into the WSGI file as a string literal) is fragile: editors and
+    # copy-paste commonly turn the private_key field's escaped \n sequences
+    # into real line breaks, which breaks JSON parsing. Reading the raw file
+    # never has that problem.
+    path = os.environ.get('GOOGLE_SERVICE_ACCOUNT_FILE')
+    if path:
+        return service_account.Credentials.from_service_account_file(
+            path, scopes=['https://www.googleapis.com/auth/drive.readonly'])
     raw = os.environ.get('GOOGLE_SERVICE_ACCOUNT_JSON')
     if not raw:
-        raise RuntimeError('GOOGLE_SERVICE_ACCOUNT_JSON is not set')
-    from google.oauth2 import service_account
-    info = json.loads(raw)
+        raise RuntimeError(
+            'Set GOOGLE_SERVICE_ACCOUNT_FILE (path to the downloaded .json key file, '
+            'recommended) or GOOGLE_SERVICE_ACCOUNT_JSON (the key contents as a string) '
+            'as an environment variable'
+        )
+    try:
+        info = json.loads(raw)
+    except json.JSONDecodeError as e:
+        raise RuntimeError(
+            f'GOOGLE_SERVICE_ACCOUNT_JSON is not valid JSON ({e}). This almost always means the '
+            "private_key field's escaped \\n sequences got converted into real line breaks during "
+            'copy-paste -- switch to GOOGLE_SERVICE_ACCOUNT_FILE pointing at the raw .json key file '
+            'instead, which avoids this entirely.'
+        ) from e
     return service_account.Credentials.from_service_account_info(
         info, scopes=['https://www.googleapis.com/auth/drive.readonly'])
 

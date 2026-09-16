@@ -7,11 +7,15 @@
 #      PythonAnywhere gives you (Web tab -> WSGI configuration file link).
 #   4. Set UPLOAD_PASSWORD as an environment variable in the Web tab
 #      ("Environment variables" section), or hardcode it below.
-#   5. For the live BD Accountability Tracker sync (see README_BD_SYNC.md),
-#      set GOOGLE_SERVICE_ACCOUNT_JSON in the Web tab's "Environment
-#      variables" section to the full contents of the service account's
-#      JSON key file (one line). BD_SHEET_ID only needs setting if the
-#      tracker ever moves to a different spreadsheet.
+#   5. For the live BD Accountability Tracker sync (see README_BD_SYNC.md):
+#      upload the service account's .json key file to this backend folder,
+#      then set GOOGLE_SERVICE_ACCOUNT_FILE to its path (e.g.
+#      /home/Fincart/marketing-mis/backend/service-account.json) in the Web
+#      tab's "Environment variables" section. Don't paste the key's JSON
+#      contents directly as a string (here or in an env var) -- copy-paste
+#      commonly mangles the private_key field's escaped \n sequences into
+#      real line breaks, which breaks JSON parsing. BD_SHEET_ID only needs
+#      setting if the tracker ever moves to a different spreadsheet.
 import sys
 import os
 
