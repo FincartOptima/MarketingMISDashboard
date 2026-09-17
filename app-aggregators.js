@@ -323,6 +323,37 @@ function rmTransferData(){
   return {teams: result, totalTransfers: transfers.length};
 }
 
+// Same base population as rmTransferData() (Ref+Cold/Status/Lead Head/Month
+// filters all apply), partitioned into three mutually exclusive, exhaustive
+// buckets instead of only looking at the "transferred" subset:
+//   - Same RM: firstRmName === currentRmName (never reassigned).
+//   - Transferred to SV: reassigned, and the CURRENT team is SV — this
+//     covers every generic placeholder currentRmName under that team (e.g.
+//     "Support Wealth Manager"), not just a literal currentRmName of "SV".
+//   - Transferred to another RM: reassigned, current team is anything else.
+function rmTransferSummary(){
+  let base = applyRefColdFilter(STATE.raw);
+  base = base.filter(r => monthFilter(r.CTM));
+
+  let same = 0, toSV = 0, toOtherRM = 0;
+  for(const r of base){
+    const firstRm = (r.firstRmName || '').trim();
+    const currentRm = (r.currentRmName || '').trim();
+    const currentTeam = r.Team || 'SV';
+    if(firstRm.toLowerCase() === currentRm.toLowerCase()) same++;
+    else if(currentTeam === 'SV') toSV++;
+    else toOtherRM++;
+  }
+  const total = base.length;
+  const pct = n => total>0 ? n/total : 0;
+  return [
+    {label: 'Same RM (not transferred)', count: same, pct: pct(same)},
+    {label: 'Transferred to SV / Support Wealth Manager', count: toSV, pct: pct(toSV)},
+    {label: 'Transferred to another RM (excl. SV)', count: toOtherRM, pct: pct(toOtherRM)},
+    {label: 'Total', count: total, pct: total>0 ? 1 : 0, _tot: true},
+  ];
+}
+
 function campaignByTeam(){
   const refMode = rcFilter(STATE.filterRefCold);
   let base = applyRefColdFilter(STATE.raw);

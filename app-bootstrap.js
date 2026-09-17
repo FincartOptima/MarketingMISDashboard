@@ -84,10 +84,10 @@ const TABLE_INFO = {
   },
   'rm-transfer': {
     title: 'FirstRM to CurrentRM Transfer',
-    desc: 'Shows leads that were transferred from one RM to another (where firstRmName ≠ currentRmName). The summary row shows how many leads moved <strong>out</strong> of each team (based on firstRmName\'s team) and lists the top destination teams.<br><br>Click a team row to expand RM-level details: the original RM (FirstRM), campaign, transfer count, destination RM (CurrentRM), destination team, and lead status.',
+    desc: 'Shows leads that were transferred from one RM to another (where firstRmName ≠ currentRmName). The summary row shows how many leads moved <strong>out</strong> of each team (based on firstRmName\'s team) and lists the top destination teams.<br><br>Click a team row to expand RM-level details: the original RM (FirstRM), campaign, transfer count, destination RM (CurrentRM), destination team, and lead status.<br><br>The <strong>Retention vs Transfer Summary</strong> below it covers the same filtered population but counts every lead, not just the transferred ones — split into <strong>Same RM</strong> (firstRmName === currentRmName), <strong>Transferred to SV</strong> (reassigned, and the current <em>Team</em> is SV — this covers every generic placeholder currentRmName under that team, e.g. "Support Wealth Manager", not just a literal currentRmName of "SV"), and <strong>Transferred to another RM</strong> (reassigned, current team is anything else).',
     cols: 'firstRmName (→ source team via EMPLOYEE_REF) · currentRmName (→ destination team via EMPLOYEE_REF / Team column) · Campaign Name · leadStatus · CTM (selected months)',
     source: 'RAW_DATA sheet, EMPLOYEE_REF sheet',
-    note: 'Only leads where firstRmName ≠ currentRmName (case-insensitive) are counted. If both are blank, the lead is excluded. Honors global Month and Ref/Cold filters.'
+    note: 'Only leads where firstRmName ≠ currentRmName (case-insensitive) are counted in the main table. If both are blank, the lead is excluded there but counted as "Same RM" in the summary below (blank equals blank). Honors global Month, Ref+Cold, Status, and Lead Head filters.'
   },
   'campaign-team': {
     title: 'Leads per Campaign · Team × Campaign',

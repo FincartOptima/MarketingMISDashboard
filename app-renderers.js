@@ -463,6 +463,19 @@ function renderRmTransfer(){
   });
 }
 
+function renderRmTransferSummary(){
+  if(!STATE.filesLoaded.fin23){ setNotUploaded('#tbl-rm-transfer-summary','fin23'); return; }
+  const data = rmTransferSummary();
+  const headers = ['Category', 'Leads', '% of Total'];
+  const rows = data.map(r => ({
+    Category: r.label,
+    Leads: fmtIN(r.count),
+    '% of Total': fmtPct(r.pct),
+    _tot: !!r._tot,
+  }));
+  renderTable('#tbl-rm-transfer-summary', headers, rows);
+}
+
 function renderIncome(){
   if(!STATE.filesLoaded.fin23){ setNotUploaded('#tbl-income','fin23'); $('#legend-income').innerHTML=''; return; }
   const data = incomeSegment();
@@ -1041,6 +1054,7 @@ function renderDashboard(){
   renderLandingPageStatus();
   renderTeam();
   renderRmTransfer();
+  renderRmTransferSummary();
   renderCampaignByTeam();
   renderIncome();
   renderCostSummary();
