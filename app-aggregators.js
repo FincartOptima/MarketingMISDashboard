@@ -84,54 +84,6 @@ function liveDataKPIs(){
   return { assigned, anyConv, anyIP, sameConv, sameIP };
 }
 
-// ---- Fixed (unfiltered) analysis tables ----
-// Both tables below deliberately ignore every Dashboard-tab filter (Month,
-// Ref+Cold, Status, Lead Head) — same "Fixed" treatment as the YTD Leads KPI
-// — since their whole point is a stable, always-complete reference view.
-
-// Leads generated (by CTM, i.e. Created Month — same definition as
-// "Generated Leads" elsewhere on this dashboard) each month, split Primary
-// vs Secondary. Month columns use filteredMonths() (Apr-2026 onward), the
-// same fixed month range YTD Leads uses.
-function primarySecondaryByMonth(){
-  const months = filteredMonths();
-  const rowDefs = [
-    {label: 'Primary',   match: r => r.leadHead === 'Primary'},
-    {label: 'Secondary', match: r => r.leadHead === 'Secondary'},
-  ];
-  const out = rowDefs.map(rd => {
-    const obj = {'Lead Head': rd.label}; let total = 0;
-    months.forEach(m => {
-      const c = STATE.raw.filter(r => rd.match(r) && r.CTM === m).length;
-      obj[m] = c; total += c;
-    });
-    obj.Total = total;
-    return obj;
-  });
-  out.push(buildGrandTotalRow('Lead Head', 'Total', months, out, 'Total'));
-  return {months, data: out};
-}
-
-// Every lead currently sitting in a given status (same CM-presence rule as
-// everywhere else: CONVERTED = has a CM regardless of leadStatus, every other
-// status also excludes CM-having leads), split by whether it was GENERATED
-// (CTM) in the current financial year or an earlier one — e.g. a lead that
-// converted this year can easily have been generated last year, and this is
-// the one table meant to surface that split on its own, independent of
-// whichever month(s) happen to be selected in the header filter.
-function statusByGenerationFY(){
-  const out = STATUSES.map(st => {
-    const pool = st === 'CONVERTED'
-      ? STATE.raw.filter(r => isConvertedLead(r))
-      : STATE.raw.filter(r => r.leadStatus === st && !isConvertedLead(r));
-    const thisFY = pool.filter(r => monthKey(r.CTM) >= FY_CUTOFF).length;
-    const prevFY = pool.length - thisFY;
-    return {Status: st, 'This FY': thisFY, 'Previous FY(s)': prevFY, Total: thisFY + prevFY};
-  });
-  out.push(buildGrandTotalRow('Status', 'Grand Total', ['This FY','Previous FY(s)','Total'], out));
-  return out;
-}
-
 function platformsForLeadsTable(){
   const names = [...new Set(STATE.raw.map(r => r.platformName).filter(Boolean))].sort();
   return names.map(p => ({label: p, match: r => r.platformName === p}));
