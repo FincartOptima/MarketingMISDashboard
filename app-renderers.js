@@ -466,14 +466,44 @@ function renderRmTransfer(){
 function renderRmTransferSummary(){
   if(!STATE.filesLoaded.fin23){ setNotUploaded('#tbl-rm-transfer-summary','fin23'); return; }
   const data = rmTransferSummary();
-  const headers = ['Category', 'Leads', '% of Total'];
+  const headers = ['Bucket', 'Leads', '% of Total'];
   const rows = data.map(r => ({
-    Category: r.label,
+    Bucket: r.label,
     Leads: fmtIN(r.count),
     '% of Total': fmtPct(r.pct),
     _tot: !!r._tot,
   }));
   renderTable('#tbl-rm-transfer-summary', headers, rows);
+}
+
+function renderRmTransferByCategory(){
+  if(!STATE.filesLoaded.fin23){ setNotUploaded('#tbl-rm-transfer-category','fin23'); return; }
+  const data = rmTransferByCategory();
+  const headers = ['Category', ...RM_TRANSFER_BUCKETS, 'Total', 'Retained %'];
+  const rows = data.map(r => {
+    const o = {Category: r.Category};
+    RM_TRANSFER_BUCKETS.forEach(b => o[b] = fmtIN(r[b]));
+    o.Total = fmtIN(r.Total);
+    o['Retained %'] = fmtPct(r['Retained %']);
+    o._tot = !!r._tot;
+    return o;
+  });
+  renderTable('#tbl-rm-transfer-category', headers, rows);
+}
+
+function renderRmTransferByTeam(){
+  if(!STATE.filesLoaded.fin23){ setNotUploaded('#tbl-rm-transfer-team','fin23'); return; }
+  const data = rmTransferByTeam();
+  const headers = ['Team (originating)', ...RM_TRANSFER_BUCKETS, 'Total', 'Retained %'];
+  const rows = data.map(r => {
+    const o = {'Team (originating)': r.Team};
+    RM_TRANSFER_BUCKETS.forEach(b => o[b] = fmtIN(r[b]));
+    o.Total = fmtIN(r.Total);
+    o['Retained %'] = fmtPct(r['Retained %']);
+    o._tot = !!r._tot;
+    return o;
+  });
+  renderTable('#tbl-rm-transfer-team', headers, rows);
 }
 
 function renderIncome(){
@@ -1055,6 +1085,8 @@ function renderDashboard(){
   renderTeam();
   renderRmTransfer();
   renderRmTransferSummary();
+  renderRmTransferByCategory();
+  renderRmTransferByTeam();
   renderCampaignByTeam();
   renderIncome();
   renderCostSummary();

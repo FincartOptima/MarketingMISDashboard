@@ -324,34 +324,68 @@ function rmTransferData(){
 }
 
 // Same base population as rmTransferData() (Ref+Cold/Status/Lead Head/Month
-// filters all apply), partitioned into three mutually exclusive, exhaustive
-// buckets instead of only looking at the "transferred" subset:
+// filters all apply). Every row falls into exactly one of three buckets:
 //   - Same RM: firstRmName === currentRmName (never reassigned).
 //   - Transferred to SV: reassigned, and the CURRENT team is SV — this
 //     covers every generic placeholder currentRmName under that team (e.g.
 //     "Support Wealth Manager"), not just a literal currentRmName of "SV".
 //   - Transferred to another RM: reassigned, current team is anything else.
-function rmTransferSummary(){
+const RM_TRANSFER_BUCKETS = ['Same RM', 'Transferred to SV', 'Transferred to Other RM'];
+function rmTransferBucket(r){
+  const firstRm = (r.firstRmName || '').trim();
+  const currentRm = (r.currentRmName || '').trim();
+  if(firstRm.toLowerCase() === currentRm.toLowerCase()) return 'Same RM';
+  return (r.Team || 'SV') === 'SV' ? 'Transferred to SV' : 'Transferred to Other RM';
+}
+function rmTransferFilteredBase(){
   let base = applyRefColdFilter(STATE.raw);
-  base = base.filter(r => monthFilter(r.CTM));
+  return base.filter(r => monthFilter(r.CTM));
+}
+// Tallies the three buckets across `rows`, plus a Total and a Retained %
+// (Same RM ÷ Total) — the one shared shape used by the overall summary and
+// both breakdowns below.
+function rmTransferGroupCounts(rows){
+  const counts = {}; RM_TRANSFER_BUCKETS.forEach(b => counts[b] = 0);
+  for(const r of rows) counts[rmTransferBucket(r)]++;
+  const total = rows.length;
+  return {...counts, Total: total, 'Retained %': total>0 ? counts['Same RM']/total : 0};
+}
 
-  let same = 0, toSV = 0, toOtherRM = 0;
-  for(const r of base){
-    const firstRm = (r.firstRmName || '').trim();
-    const currentRm = (r.currentRmName || '').trim();
-    const currentTeam = r.Team || 'SV';
-    if(firstRm.toLowerCase() === currentRm.toLowerCase()) same++;
-    else if(currentTeam === 'SV') toSV++;
-    else toOtherRM++;
-  }
-  const total = base.length;
-  const pct = n => total>0 ? n/total : 0;
-  return [
-    {label: 'Same RM (not transferred)', count: same, pct: pct(same)},
-    {label: 'Transferred to SV / Support Wealth Manager', count: toSV, pct: pct(toSV)},
-    {label: 'Transferred to another RM (excl. SV)', count: toOtherRM, pct: pct(toOtherRM)},
-    {label: 'Total', count: total, pct: total>0 ? 1 : 0, _tot: true},
-  ];
+function rmTransferSummary(){
+  const base = rmTransferFilteredBase();
+  const g = rmTransferGroupCounts(base);
+  const out = RM_TRANSFER_BUCKETS.map(b => ({label: b, count: g[b], pct: g.Total>0 ? g[b]/g.Total : 0}));
+  out.push({label: 'Total', count: g.Total, pct: g.Total>0 ? 1 : 0, _tot: true});
+  return out;
+}
+
+// Category-wise (Category Name / Campaign Name — e.g. Branding, Corporate,
+// Google, Social Media — dynamically read from uploaded data) breakdown of
+// the same three buckets.
+function rmTransferByCategory(){
+  const base = rmTransferFilteredBase();
+  const categories = [...new Set(base.map(r => r['Campaign Name']).filter(Boolean))].sort();
+  const out = categories.map(cat => ({Category: cat, ...rmTransferGroupCounts(base.filter(r => r['Campaign Name'] === cat))}));
+  const gt = buildGrandTotalRow('Category', 'Grand Total', [...RM_TRANSFER_BUCKETS, 'Total'], out);
+  gt['Retained %'] = gt.Total>0 ? gt['Same RM']/gt.Total : 0;
+  out.push(gt);
+  return out;
+}
+
+// Team-wise breakdown, grouped by the ORIGINATING team (firstRmName's team
+// via EMPLOYEE_REF) — same "From Team" framing as the FirstRM to CurrentRM
+// Transfer table above it, and the same FIXED_TEAMS-first ordering.
+function rmTransferByTeam(){
+  const base = rmTransferFilteredBase();
+  const teamOf = r => STATE.teamMap[(r.firstRmName||'').toLowerCase()] || 'SV';
+  const present = new Set(base.map(teamOf));
+  const teams = FIXED_TEAMS.filter(t => present.has(t));
+  for(const t of present){ if(!teams.includes(t)) teams.push(t); }
+  const out = teams.map(team => ({Team: team, ...rmTransferGroupCounts(base.filter(r => teamOf(r) === team))}));
+  const gt = buildGrandTotalRow('Team', 'Grand Total', [...RM_TRANSFER_BUCKETS, 'Total'], out);
+  gt['Retained %'] = gt.Total>0 ? gt['Same RM']/gt.Total : 0;
+  out.push(gt);
+  return out;
 }
 
 function campaignByTeam(){
