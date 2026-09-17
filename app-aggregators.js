@@ -32,7 +32,8 @@ function applyMonthMode(pool, anyMonthColName, mode){
 }
 
 // The base row filter every Dashboard-tab aggregator starts from: Ref+Cold
-// mode, then the universal Status filter (see statusRowMatch in app-filters.js).
+// mode, then the universal Status + Lead Head filter (see dashboardRowMatch
+// in app-filters.js).
 function applyRefColdFilter(rows){
   const mode = rcFilter(STATE.filterRefCold);
   let out = rows;
@@ -40,7 +41,7 @@ function applyRefColdFilter(rows){
     out = out.filter(r => r['Campaign Name']!=='Referral' && r['Campaign Name']!=='Cold Data');
   else if(mode === 'Only Referral')
     out = out.filter(r => r['Campaign Name']==='Referral');
-  return out.filter(statusRowMatch);
+  return out.filter(dashboardRowMatch);
 }
 
 function topKPIs(){
@@ -96,7 +97,7 @@ function leadsByPlatformMonth(){
   const out = buckets.map(b => {
     const o = {Platform: b.label, total:0};
     months.forEach(m => {
-      let c = rows.filter(x => b.match(x) && x.CTM===m && statusRowMatch(x)).length;
+      let c = rows.filter(x => b.match(x) && x.CTM===m && dashboardRowMatch(x)).length;
       if(refMode==='Exclude' && (b.label==='Referral' || b.label==='Cold Leads')) c = 0;
       o[m] = c; o.total += c;
     });
@@ -108,7 +109,7 @@ function leadsByPlatformMonth(){
 
 function statusByMonth(teamFilter){
   const months = filteredMonths();
-  let base = STATE.raw.filter(statusRowMatch);
+  let base = STATE.raw.filter(dashboardRowMatch);
   if(teamFilter === 'SV') base = base.filter(r => (r.Team || 'SV') === 'SV');
   else if(teamFilter === 'non-SV') base = base.filter(r => (r.Team || 'SV') !== 'SV');
   return STATUSES.map(st => {
@@ -131,7 +132,6 @@ function platformStatusBreakdown(){
   const mode = STATE.filterTable;
   let rows = applyRefColdFilter(STATE.raw);
   if(STATE.psTeamFilter !== 'All') rows = rows.filter(r => r.Team === STATE.psTeamFilter);
-  if(STATE.psLeadHeadFilter !== 'All') rows = rows.filter(r => r.leadHead === STATE.psLeadHeadFilter);
   // Grouped by Category Name (r['Campaign Name'] — buildRawData() maps the
   // source's own "Category Name"/"Campaign Name" columns onto this one field
   // interchangeably) rather than platformName.
@@ -413,9 +413,9 @@ function costSummaryByCampaign(){
   for(let i=1;i<cpc.length;i++){
     const row = cpc[i]; const name = row[0];
     if(!name || !String(name).trim()) continue;
-    let leads = STATE.raw.filter(r => r['Campaign Name']===name && statusRowMatch(r) && monthFilter(r.CTM)).length;
-    let qual  = STATE.raw.filter(r => r['Campaign Name']===name && statusRowMatch(r) && (isConvertedLead(r, monthFilter) || (r.leadStatus==='IN PROCESS' && !isConvertedLead(r) && monthFilter(r.LPM)))).length;
-    let conv  = STATE.raw.filter(r => r['Campaign Name']===name && statusRowMatch(r) && isConvertedLead(r, monthFilter)).length;
+    let leads = STATE.raw.filter(r => r['Campaign Name']===name && dashboardRowMatch(r) && monthFilter(r.CTM)).length;
+    let qual  = STATE.raw.filter(r => r['Campaign Name']===name && dashboardRowMatch(r) && (isConvertedLead(r, monthFilter) || (r.leadStatus==='IN PROCESS' && !isConvertedLead(r) && monthFilter(r.LPM)))).length;
+    let conv  = STATE.raw.filter(r => r['Campaign Name']===name && dashboardRowMatch(r) && isConvertedLead(r, monthFilter)).length;
     const cost = effectiveMonths().reduce((s,m) => { const idx=monthCols.indexOf(m); return s + (idx>=0?(Number(row[idx+1])||0):0); }, 0);
     if(refMode==='Exclude' && (name==='Referral' || name==='Cold Data')){ leads = 0; qual = 0; conv = 0; }
     const cpl  = leads>0 ? cost/leads : 0;
@@ -481,7 +481,7 @@ function costPerLeadPerRMWithTotals(){
 
   let scope = STATE.raw;
   if(refMode==='Exclude') scope = scope.filter(r => r['Campaign Name']!=='Referral' && r['Campaign Name']!=='Cold Data');
-  scope = scope.filter(r => campaignSet.has(r['Campaign Name']) && statusRowMatch(r));
+  scope = scope.filter(r => campaignSet.has(r['Campaign Name']) && dashboardRowMatch(r));
 
   // Total Leads and Total Cost counted by CTM (Created Month); Quality Leads uses the
   // same event-month logic as the Cost Summary table: CONVERTED by CM, IN PROCESS by LPM.

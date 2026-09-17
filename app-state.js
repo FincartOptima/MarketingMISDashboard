@@ -25,6 +25,10 @@ const STATE = {
   filterMonth: 'All',
   filterRefCold: 'Include',
   filterStatus: 'All',
+  // Dashboard-tab-wide, alongside Month/Ref+Cold/Status — defaults to
+  // "Primary" (not "All") since counting every Additional/secondary-applicant
+  // row alongside the Primary one would double-count leads dashboard-wide.
+  filterLeadHead: 'Primary',
   filterTable: 'All',
   teamPerfTeamFilter: 'All',
   bdMonthFilter: 'All',
@@ -40,7 +44,6 @@ const STATE = {
   revMonth: 'All',
   revLPFilter: 'Include',
   psTeamFilter: 'All',
-  psLeadHeadFilter: 'All',
   lpTableMode: 'All',
   lpTeamFilter: 'All',
   lpCampaignFilter: null,

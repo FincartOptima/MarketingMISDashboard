@@ -170,25 +170,6 @@ function renderPlatformStatus(){
     if(sel) sel.value = STATE.psTeamFilter;
   }
 
-  // Lead Head filter for this table only — options read dynamically from
-  // uploaded data (leadHead), same as Category Name itself.
-  const lhWrap = $('#ps-leadhead-filter-wrap');
-  if(lhWrap && !lhWrap.querySelector('select')){
-    const leadHeads = [...new Set(applyRefColdFilter(STATE.raw).map(r => r.leadHead).filter(Boolean))].sort();
-    const sel = document.createElement('select');
-    sel.id = 'ps-leadhead-filter';
-    sel.style.cssText = 'margin-bottom:8px;font-size:12px';
-    const allOpt = document.createElement('option'); allOpt.value = 'All'; allOpt.textContent = 'All Status'; sel.appendChild(allOpt);
-    leadHeads.forEach(lh => { const o=document.createElement('option'); o.value=lh; o.textContent=lh; sel.appendChild(o); });
-    sel.value = STATE.psLeadHeadFilter;
-    sel.onchange = e => { STATE.psLeadHeadFilter = e.target.value; renderPlatformStatus(); };
-    lhWrap.innerHTML = '<label style="font-size:12px;color:var(--muted);margin-right:6px">Lead Head:</label>';
-    lhWrap.appendChild(sel);
-  } else if(lhWrap){
-    const sel = lhWrap.querySelector('select');
-    if(sel) sel.value = STATE.psLeadHeadFilter;
-  }
-
   const data = platformStatusBreakdown();
   applyHeatAndLegend(data, 'Total', '#legend-platform-status', 'Row heat by Total');
   const headers = ['Category Name', ...STATUSES, 'Total', 'LCR', 'QLCR'];
@@ -1050,6 +1031,7 @@ function renderRMRev(){
 
 function renderDashboard(){
   updateDashboardHeaderFilters();
+  renderLeadHeadBanner();
   renderKPIs();
   renderLiveKPIs();
   renderStatusDistributionChart();

@@ -66,7 +66,7 @@ function renderHeatLegend(host, metricLabel, invert){
     + '</div>';
 }
 function filterSummary(extra=''){
-  const parts = ['Month: '+STATE.filterMonth, 'Ref+Cold: '+STATE.filterRefCold];
+  const parts = ['Month: '+STATE.filterMonth, 'Ref+Cold: '+STATE.filterRefCold, 'Lead Head: '+STATE.filterLeadHead];
   const st = STATE.filterStatus;
   if(st && st !== 'All' && !(Array.isArray(st) && st.length === 0)){
     parts.push('Status: '+(Array.isArray(st) ? st.join(', ') : st));

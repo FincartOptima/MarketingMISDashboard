@@ -180,6 +180,11 @@ header.app .spacer{flex:1}
 @media print{
   .section-divider{break-before:page}
 }
+.leadhead-banner{
+  background:var(--orange-tint);border:2px solid var(--orange);
+  color:var(--orange-hover);font-weight:700;font-size:13px;
+  padding:10px 16px;margin-bottom:16px;
+}
 .info-btn{
   display:inline-flex;align-items:center;justify-content:center;
   width:20px;height:20px;border-radius:0;border:1.5px solid var(--muted);
@@ -910,6 +915,8 @@ table.data.editable td input:focus{outline:2px solid var(--orange);background:va
         <div id="filter-refcold-wrap"></div>
         <label>Status</label>
         <div id="filter-status-wrap"></div>
+        <label>Lead Head</label>
+        <div id="filter-leadhead-wrap"></div>
       </span>
       <a class="secondary" id="feedback-link" href="#" target="_blank" rel="noopener" title="Suggest an improvement" style="text-decoration:none;display:inline-flex;align-items:center;padding:6px 12px;font-size:13px">💡 Suggest an Improvement</a>
       <button class="secondary" id="settings-btn" title="Settings">⚙️</button>
@@ -921,6 +928,10 @@ table.data.editable td input:focus{outline:2px solid var(--orange);background:va
 
   <!-- ===== DASHBOARD ===== -->
   <div class="tab-panel" id="tab-dashboard">
+
+    <!-- Filled in by renderLeadHeadBanner() (app-filters.js) — reflects the
+         Lead Head filter in the header above, defaults to "Primary". -->
+    <div id="leadhead-banner" class="leadhead-banner"></div>
 
     <!-- Jump-nav: collapses to dots, only shown where there's margin outside
          the 1600px content column (see @media(min-width:1700px) in <style>) -->
@@ -1002,7 +1013,6 @@ table.data.editable td input:focus{outline:2px solid var(--orange);background:va
       </h2>
       <div style="display:flex;gap:16px;flex-wrap:wrap">
         <div id="ps-team-filter-wrap" style="margin-bottom:6px"></div>
-        <div id="ps-leadhead-filter-wrap" style="margin-bottom:6px"></div>
       </div>
       <div id="legend-platform-status"></div>
       <div class="table-wrap" id="tbl-platform-status"></div>

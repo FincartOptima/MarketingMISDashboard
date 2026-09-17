@@ -23,14 +23,35 @@ function effectiveMonths(){
 }
 function rcFilter(mode){ const f = STATE.filterRefCold; return Array.isArray(f) ? (f[0] || 'Include') : (f || 'Include'); }
 
-// Universal Status filter (header, alongside Month). CONVERTED uses the same
-// CM-presence rule as isConvertedLead(); every other status also requires
-// !isConvertedLead() so a lead never matches two status buckets at once.
-function statusRowMatch(row){
+// Lead Head options are read from the data itself (like months), so a new
+// value uploaded tomorrow shows up with no code change. Sourced from the
+// FULL unfiltered STATE.raw — not a Lead-Head-filtered subset — since this
+// list feeds the Lead Head dropdown itself: filtering it by the current Lead
+// Head selection would mean the dropdown could only ever show one option.
+function leadHeadOptions(){
+  return [...new Set(STATE.raw.map(r => r.leadHead).filter(Boolean))].sort();
+}
+
+// The universal per-row filter for the whole Dashboard tab (header, alongside
+// Month): Status, then Lead Head. Every Dashboard-tab aggregator that isn't
+// explicitly exempt (e.g. the "Fixed" YTD figure) runs its rows through this,
+// either directly or via applyRefColdFilter.
+// - Status: CONVERTED uses the same CM-presence rule as isConvertedLead();
+//   every other status also requires !isConvertedLead() so a lead never
+//   matches two status buckets at once.
+// - Lead Head: defaults to "Primary" (STATE.filterLeadHead) so an
+//   Additional/secondary-applicant row on the same lead doesn't double-count
+//   everywhere; "All" removes the restriction entirely.
+function dashboardRowMatch(row){
   const f = STATE.filterStatus;
-  if(!f || f === 'All' || (Array.isArray(f) && f.length === 0)) return true;
-  const wanted = Array.isArray(f) ? f : [f];
-  return wanted.some(st => st === 'CONVERTED' ? isConvertedLead(row) : (row.leadStatus === st && !isConvertedLead(row)));
+  if(f && f !== 'All' && !(Array.isArray(f) && f.length === 0)){
+    const wanted = Array.isArray(f) ? f : [f];
+    const statusOk = wanted.some(st => st === 'CONVERTED' ? isConvertedLead(row) : (row.leadStatus === st && !isConvertedLead(row)));
+    if(!statusOk) return false;
+  }
+  const lh = STATE.filterLeadHead;
+  if(lh && lh !== 'All' && row.leadHead !== lh) return false;
+  return true;
 }
 
 // Build a custom multi-select (or single-select) dropdown widget
@@ -143,6 +164,20 @@ function initFilters(){
     val => { STATE.filterRefCold = val; renderDashboard(); }, {multi: false});
   buildMultiSelect('#filter-status-wrap', ['All', ...STATUSES], STATE.filterStatus,
     val => { STATE.filterStatus = val; renderDashboard(); }, {multi: true});
+
+  const leadHeads = leadHeadOptions();
+  if(STATE.filterLeadHead !== 'All' && !leadHeads.includes(STATE.filterLeadHead)) STATE.filterLeadHead = 'All';
+  buildMultiSelect('#filter-leadhead-wrap', ['All', ...leadHeads], STATE.filterLeadHead,
+    val => { STATE.filterLeadHead = val; renderDashboard(); }, {multi: false});
+  renderLeadHeadBanner();
+}
+function renderLeadHeadBanner(){
+  const el = $('#leadhead-banner');
+  if(!el) return;
+  const lh = STATE.filterLeadHead;
+  el.textContent = lh === 'All'
+    ? 'This dashboard displays all data regardless of Lead Head.'
+    : `This dashboard displays all data where Lead Head is "${lh}".`;
 }
 function isPeriodNewOrModern(period){
   const s = String(period||'').trim();
