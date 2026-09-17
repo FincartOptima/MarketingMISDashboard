@@ -323,32 +323,45 @@ function rmTransferData(){
   return {teams: result, totalTransfers: transfers.length};
 }
 
-// Same base population as rmTransferData() (Ref+Cold/Status/Lead Head/Month
-// filters all apply). Every row falls into exactly one of three buckets:
-//   - Same RM: firstRmName === currentRmName (never reassigned).
-//   - Transferred to SV: reassigned, and the CURRENT team is SV — this
+// Same base population as rmTransferData() (Ref+Cold/Status/Lead Head all
+// apply — Month is deliberately handled differently, see
+// rmTransferMonthMatch below). Every row falls into exactly one of three
+// buckets, compared at TEAM level rather than exact-RM level: a lead handed
+// from one RM to a teammate still counts as "Same", matching how this is
+// tracked outside the app (confirmed 2026-09 against a manual pivot) rather
+// than the stricter firstRmName===currentRmName reading.
+//   - Same Team: the lead's current Team equals its firstRmName's team
+//     (STATE.teamMap) — includes intra-team handoffs between two RMs.
+//   - Transferred to SV: current Team is SV and it isn't "Same Team" —
 //     covers every generic placeholder currentRmName under that team (e.g.
 //     "Support Wealth Manager"), not just a literal currentRmName of "SV".
-//   - Transferred to another RM: reassigned, current team is anything else.
-const RM_TRANSFER_BUCKETS = ['Same RM', 'Transferred to SV', 'Transferred to Other RM'];
+//   - Transferred to another team: anything else.
+const RM_TRANSFER_BUCKETS = ['Same Team', 'Transferred to SV', 'Transferred to another team'];
 function rmTransferBucket(r){
-  const firstRm = (r.firstRmName || '').trim();
-  const currentRm = (r.currentRmName || '').trim();
-  if(firstRm.toLowerCase() === currentRm.toLowerCase()) return 'Same RM';
-  return (r.Team || 'SV') === 'SV' ? 'Transferred to SV' : 'Transferred to Other RM';
+  const firstTeam = STATE.teamMap[(r.firstRmName||'').toLowerCase()] || 'SV';
+  const currentTeam = r.Team || 'SV';
+  if(firstTeam === currentTeam) return 'Same Team';
+  return currentTeam === 'SV' ? 'Transferred to SV' : 'Transferred to another team';
+}
+// "All" months means literally every lead ever (matching how the reference
+// pivot this was validated against was built) rather than the FY-scoped
+// convention (filteredMonths()) every other month-wise table on this
+// dashboard uses — an explicit month selection still filters normally.
+function rmTransferMonthMatch(ctm){
+  return isAllMonths() ? true : monthFilter(ctm);
 }
 function rmTransferFilteredBase(){
   let base = applyRefColdFilter(STATE.raw);
-  return base.filter(r => monthFilter(r.CTM));
+  return base.filter(r => rmTransferMonthMatch(r.CTM));
 }
 // Tallies the three buckets across `rows`, plus a Total and a Retained %
-// (Same RM ÷ Total) — the one shared shape used by the overall summary and
+// (Same Team ÷ Total) — the one shared shape used by the overall summary and
 // both breakdowns below.
 function rmTransferGroupCounts(rows){
   const counts = {}; RM_TRANSFER_BUCKETS.forEach(b => counts[b] = 0);
   for(const r of rows) counts[rmTransferBucket(r)]++;
   const total = rows.length;
-  return {...counts, Total: total, 'Retained %': total>0 ? counts['Same RM']/total : 0};
+  return {...counts, Total: total, 'Retained %': total>0 ? counts['Same Team']/total : 0};
 }
 
 function rmTransferSummary(){
@@ -367,7 +380,7 @@ function rmTransferByCategory(){
   const categories = [...new Set(base.map(r => r['Campaign Name']).filter(Boolean))].sort();
   const out = categories.map(cat => ({Category: cat, ...rmTransferGroupCounts(base.filter(r => r['Campaign Name'] === cat))}));
   const gt = buildGrandTotalRow('Category', 'Grand Total', [...RM_TRANSFER_BUCKETS, 'Total'], out);
-  gt['Retained %'] = gt.Total>0 ? gt['Same RM']/gt.Total : 0;
+  gt['Retained %'] = gt.Total>0 ? gt['Same Team']/gt.Total : 0;
   out.push(gt);
   return out;
 }
@@ -383,7 +396,7 @@ function rmTransferByTeam(){
   for(const t of present){ if(!teams.includes(t)) teams.push(t); }
   const out = teams.map(team => ({Team: team, ...rmTransferGroupCounts(base.filter(r => teamOf(r) === team))}));
   const gt = buildGrandTotalRow('Team', 'Grand Total', [...RM_TRANSFER_BUCKETS, 'Total'], out);
-  gt['Retained %'] = gt.Total>0 ? gt['Same RM']/gt.Total : 0;
+  gt['Retained %'] = gt.Total>0 ? gt['Same Team']/gt.Total : 0;
   out.push(gt);
   return out;
 }
