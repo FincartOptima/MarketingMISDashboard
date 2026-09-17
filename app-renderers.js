@@ -45,6 +45,34 @@ function renderLiveKPIs(){
     </div>`).join('') + '</div>';
 }
 
+function renderPrimarySecondaryByMonth(){
+  if(!STATE.filesLoaded.fin23){ setNotUploaded('#tbl-leadhead-month','fin23'); return; }
+  const {months, data} = primarySecondaryByMonth();
+  const headers = ['Lead Head', ...months, 'Total'];
+  const rows = data.map(r => {
+    const o = {'Lead Head': r['Lead Head']};
+    months.forEach(m => o[m] = fmtIN(r[m]));
+    o.Total = fmtIN(r.Total);
+    o._tot = !!r._tot;
+    return o;
+  });
+  renderTable('#tbl-leadhead-month', headers, rows);
+}
+
+function renderStatusByGenerationFY(){
+  if(!STATE.filesLoaded.fin23){ setNotUploaded('#tbl-status-fy','fin23'); return; }
+  const data = statusByGenerationFY();
+  const headers = ['Status', 'This FY', 'Previous FY(s)', 'Total'];
+  const rows = data.map(r => ({
+    Status: r.Status,
+    'This FY': fmtIN(r['This FY']),
+    'Previous FY(s)': fmtIN(r['Previous FY(s)']),
+    Total: fmtIN(r.Total),
+    _tot: !!r._tot,
+  }));
+  renderTable('#tbl-status-fy', headers, rows);
+}
+
 function renderStatusDistributionChart(){
   if(!STATE.filesLoaded.fin23){ const w=$('#status-dist-chart-wrap'); if(w) w.innerHTML=notUploadedHTML('fin23'); return; }
   if(!window.Chart) return;
@@ -1034,6 +1062,8 @@ function renderDashboard(){
   renderLeadHeadBanner();
   renderKPIs();
   renderLiveKPIs();
+  renderPrimarySecondaryByMonth();
+  renderStatusByGenerationFY();
   renderStatusDistributionChart();
   renderPlatformMonth();
   renderStatusMonth();

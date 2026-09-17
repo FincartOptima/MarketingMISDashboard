@@ -937,6 +937,8 @@ table.data.editable td input:focus{outline:2px solid var(--orange);background:va
          the 1600px content column (see @media(min-width:1700px) in <style>) -->
     <nav class="dash-railnav" aria-label="Dashboard sections">
       <div class="rn-group">
+        <a href="#sec-leadhead-month"><span class="rn-tick"></span><span class="rn-label">Primary vs Secondary</span></a>
+        <a href="#sec-status-fy"><span class="rn-tick"></span><span class="rn-label">Status vs Generation FY</span></a>
         <a href="#sec-status-dist"><span class="rn-tick"></span><span class="rn-label">Status Distribution</span></a>
         <a href="#sec-platform-month"><span class="rn-tick"></span><span class="rn-label">Platform × Month</span></a>
         <a href="#sec-status-teams"><span class="rn-tick"></span><span class="rn-label">Status by Team</span></a>
@@ -962,6 +964,24 @@ table.data.editable td input:focus{outline:2px solid var(--orange);background:va
 
     <!-- Live Data KPIs -->
     <div id="live-kpis"></div>
+
+    <!-- Primary vs Secondary — Month wise (fixed, ignores every filter) -->
+    <div class="section bar-blue" id="sec-leadhead-month">
+      <h2>Leads Generated · Primary vs Secondary (Month wise)
+        <button class="info-btn" data-info="leadhead-month" title="Table info">i</button>
+      </h2>
+      <div class="hint">This data is not filtered as per the filter(s) selected above — it always reflects every lead ever generated, by Created Month.</div>
+      <div class="table-wrap" id="tbl-leadhead-month"></div>
+    </div>
+
+    <!-- Lead Status vs Generation FY (fixed, ignores every filter) -->
+    <div class="section bar-violet" id="sec-status-fy">
+      <h2>Lead Status · This FY vs Previous FY(s)
+        <button class="info-btn" data-info="status-fy" title="Table info">i</button>
+      </h2>
+      <div class="hint">This data is not filtered as per the filter(s) selected above — every lead's <strong>current</strong> status, split by whether it was <strong>generated</strong> (Created Month) this financial year or an earlier one. A lead can convert this year after being generated last year.</div>
+      <div class="table-wrap" id="tbl-status-fy"></div>
+    </div>
 
     <!-- Status distribution bar chart -->
     <div class="section bar-blue" id="sec-status-dist">

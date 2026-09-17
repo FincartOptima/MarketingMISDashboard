@@ -35,6 +35,20 @@ function attachAllMirrors(){
 }
 
 const TABLE_INFO = {
+  'leadhead-month': {
+    title: 'Leads Generated · Primary vs Secondary (Month wise)',
+    desc: 'Fixed reference table: every lead ever uploaded, by Created Month (CTM), split by the B2C file\'s leadHead column (Primary/Secondary). <strong>Ignores every Dashboard-tab filter</strong> — Month, Ref+Cold, Status, and Lead Head all included — so it always shows the complete picture, the same way the "YTD Leads (Fixed)" KPI does.',
+    cols: 'leadHead (Primary / Secondary) · CTM (Created Month, all months from Apr-2026 onward)',
+    source: 'RAW_DATA sheet',
+    note: 'Month columns use the same fixed Apr-2026-onward range as every other month-wise table and the YTD Leads KPI.'
+  },
+  'status-fy': {
+    title: 'Lead Status · This FY vs Previous FY(s)',
+    desc: 'Fixed reference table: every lead\'s <strong>current</strong> status (CONVERTED uses the same CM-presence rule as everywhere else — leadStatus is not required), split by whether it was <strong>generated</strong> (CTM, Created Month) this financial year or an earlier one. A lead can convert this year after being generated last year — this table is built specifically to surface that split. <strong>Ignores every Dashboard-tab filter.</strong>',
+    cols: 'leadStatus / CM (→ current status) · CTM (Created Month, compared against the FY cutoff)',
+    source: 'RAW_DATA sheet',
+    note: 'This FY = Apr-2026 onward (CONFIG.FY_CUTOFF_MONTH); Previous FY(s) = everything generated before that, grouped together rather than split year by year.'
+  },
   'status-chart': {
     title: 'Status Distribution Chart',
     desc: 'Bar chart showing count of leads per status for selected month(s). Each status is counted using its own event-date column.',
