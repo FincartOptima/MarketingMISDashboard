@@ -76,12 +76,49 @@ function normalizeNameKey(name){
   return (name || '').toString().trim().toLowerCase();
 }
 
-function loadEmployeeFromStorage(){
+// ---- local-edit overrides (EMPLOYEE_REF / RM Master Mapping / Cost Per
+// Campaign) — saved to localStorage so an in-tab edit survives a refresh,
+// but auto-expired the moment the shipped snapshot.js changes underneath it.
+//
+// Without this, a saved override wins over snapshot.js FOREVER: on
+// 2026-09-17 one laptop's EMPLOYEE_REF override — saved before the "Ambika"/
+// "DIY Team" teams existed — silently kept overriding every snapshot.js
+// update since, so that laptop's Team Performance Matrix diverged from a
+// colleague's (who had no override) with no visible sign anything was
+// wrong. Fingerprinting the shipped snapshot at save time and comparing it
+// again at load time means any future snapshot.js update is detected
+// automatically and the stale override is dropped — no manual Reset click,
+// no version number for anyone to remember to bump.
+function snapshotFingerprint(str){
+  let h = 0;
+  for(let i=0;i<str.length;i++) h = (Math.imul(31,h) + str.charCodeAt(i)) | 0;
+  return h.toString(36);
+}
+function currentSnapshotBase(snapshotKey){
+  return snapshotFingerprint(JSON.stringify((window.SNAPSHOT && window.SNAPSHOT[snapshotKey]) || ''));
+}
+function loadOverrideOrSnapshot(storageKey, snapshotKey, fallback){
+  const currentBase = currentSnapshotBase(snapshotKey);
   try{
-    const saved = localStorage.getItem(CONFIG.STORAGE_KEYS.EMPREF);
-    if(saved){ STATE.empref = JSON.parse(saved); return; }
+    const saved = localStorage.getItem(storageKey);
+    if(saved){
+      if(localStorage.getItem(storageKey + '_base') === currentBase) return JSON.parse(saved);
+      localStorage.removeItem(storageKey);
+      localStorage.removeItem(storageKey + '_base');
+    }
   }catch(e){}
-  STATE.empref = (window.SNAPSHOT && window.SNAPSHOT.EMPLOYEE_REF) ? JSON.parse(JSON.stringify(window.SNAPSHOT.EMPLOYEE_REF)) : [['Emp Code','Team','Name']];
+  const snap = window.SNAPSHOT && window.SNAPSHOT[snapshotKey];
+  return snap ? JSON.parse(JSON.stringify(snap)) : fallback;
+}
+function persistOverride(storageKey, snapshotKey, data){
+  try{
+    localStorage.setItem(storageKey, JSON.stringify(data));
+    localStorage.setItem(storageKey + '_base', currentSnapshotBase(snapshotKey));
+  }catch(e){}
+}
+
+function loadEmployeeFromStorage(){
+  STATE.empref = loadOverrideOrSnapshot(CONFIG.STORAGE_KEYS.EMPREF, 'EMPLOYEE_REF', [['Emp Code','Team','Name']]);
 }
 function rebuildTeamMap(){
   STATE.teamMap = {};
@@ -103,13 +140,7 @@ function rebuildTeamMap(){
 }
 
 function loadRMMasterFromStorage(){
-  try{
-    const saved = localStorage.getItem(CONFIG.STORAGE_KEYS.RM_MASTER);
-    if(saved){ STATE.rmMaster = JSON.parse(saved); buildRMMasterLookup(); return; }
-  }catch(e){}
-  STATE.rmMaster = (window.SNAPSHOT && window.SNAPSHOT['RM Master Mapping'])
-    ? JSON.parse(JSON.stringify(window.SNAPSHOT['RM Master Mapping']))
-    : [['Source Name','Correct RM Name','Team']];
+  STATE.rmMaster = loadOverrideOrSnapshot(CONFIG.STORAGE_KEYS.RM_MASTER, 'RM Master Mapping', [['Source Name','Correct RM Name','Team']]);
   buildRMMasterLookup();
 }
 function buildRMMasterLookup(){
@@ -167,16 +198,11 @@ function annotateBDWithB2CMatch(){
   }
 }
 function persistRMMaster(){
-  try{ localStorage.setItem(CONFIG.STORAGE_KEYS.RM_MASTER, JSON.stringify(STATE.rmMaster)); }catch(e){}
+  persistOverride(CONFIG.STORAGE_KEYS.RM_MASTER, 'RM Master Mapping', STATE.rmMaster);
 }
 
 function loadCostFromStorage(){
-  try{
-    const saved = localStorage.getItem(CONFIG.STORAGE_KEYS.COST);
-    if(saved){ STATE.cost = JSON.parse(saved); return; }
-  }catch(e){}
-  const c = window.SNAPSHOT && window.SNAPSHOT['Cost Per Campaign'];
-  STATE.cost = c ? JSON.parse(JSON.stringify(c)) : [['Campaign Name']];
+  STATE.cost = loadOverrideOrSnapshot(CONFIG.STORAGE_KEYS.COST, 'Cost Per Campaign', [['Campaign Name']]);
 }
 
 function reconcileCostMonths(){

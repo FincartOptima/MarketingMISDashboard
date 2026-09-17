@@ -245,7 +245,7 @@ async function syncCostFromSheets(silent){
     const rows = parseCsv(txt);
     if(!rows.length || !rows[0].length) throw new Error('Sheet is empty');
     STATE.cost = rows;
-    try{ localStorage.setItem(CONFIG.STORAGE_KEYS.COST, JSON.stringify(STATE.cost)); }catch(e){}
+    persistOverride(CONFIG.STORAGE_KEYS.COST, 'Cost Per Campaign', STATE.cost);
     if(!silent) setSettingsStatus(`✓ Loaded ${rows.length-1} campaign rows from Google Sheets`, 'ok');
     return true;
   }catch(e){
@@ -482,7 +482,7 @@ function bindUI(){
   $('#b2b-clear-filters').onclick = () => { STATE.b2bFilters = {}; renderB2BRawData(); };
 
   $('#reset-cpc').onclick = () => {
-    try{ localStorage.removeItem(CONFIG.STORAGE_KEYS.COST); }catch(e){}
+    try{ localStorage.removeItem(CONFIG.STORAGE_KEYS.COST); localStorage.removeItem(CONFIG.STORAGE_KEYS.COST+'_base'); }catch(e){}
     loadCostFromStorage(); reconcileCostMonths();
     renderCPC(); renderCostSummary(); renderCplRm(); renderMTD();
   };
@@ -492,7 +492,7 @@ function bindUI(){
     persistEmployee(); rebuildTeamMap(); renderEmployee();
   };
   $('#emp-reset').onclick = () => {
-    try{ localStorage.removeItem(CONFIG.STORAGE_KEYS.EMPREF); }catch(e){}
+    try{ localStorage.removeItem(CONFIG.STORAGE_KEYS.EMPREF); localStorage.removeItem(CONFIG.STORAGE_KEYS.EMPREF+'_base'); }catch(e){}
     loadEmployeeFromStorage(); rebuildTeamMap();
     renderEmployee(); renderAffectedByTeamChange();
   };
@@ -617,7 +617,7 @@ function bindUI(){
     persistRMMaster(); buildRMMasterLookup(); renderRMMaster();
   };
   $('#rmm-reset').onclick = () => {
-    try{ localStorage.removeItem(CONFIG.STORAGE_KEYS.RM_MASTER); }catch(e){}
+    try{ localStorage.removeItem(CONFIG.STORAGE_KEYS.RM_MASTER); localStorage.removeItem(CONFIG.STORAGE_KEYS.RM_MASTER+'_base'); }catch(e){}
     loadRMMasterFromStorage(); buildRMMasterLookup();
     if(STATE.fy && STATE.fy.length) STATE.fy.forEach(r => { r.mappedRM = mapRM(r.rmName); });
     if(STATE.pa && STATE.pa.length) STATE.pa.forEach(r => { r.mappedRM = mapRM(r.advisor); });

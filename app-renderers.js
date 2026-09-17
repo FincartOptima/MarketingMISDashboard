@@ -611,7 +611,7 @@ function renderCPC(){
   $$('.cpc-input').forEach(inp => {
     inp.oninput = () => {
       STATE.cost[+inp.dataset.r][+inp.dataset.c] = +inp.value || 0;
-      try{ localStorage.setItem(CONFIG.STORAGE_KEYS.COST, JSON.stringify(STATE.cost)); }catch(e){}
+      persistOverride(CONFIG.STORAGE_KEYS.COST, 'Cost Per Campaign', STATE.cost);
       renderCostSummary(); renderCplRm(); renderMTD();
     };
   });
@@ -965,7 +965,7 @@ function renderEmployee(){
   });
 }
 function persistEmployee(){
-  try{ localStorage.setItem(CONFIG.STORAGE_KEYS.EMPREF, JSON.stringify(STATE.empref)); }catch(e){}
+  persistOverride(CONFIG.STORAGE_KEYS.EMPREF, 'EMPLOYEE_REF', STATE.empref);
 }
 
 function renderRMMaster(){
