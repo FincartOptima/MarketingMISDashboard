@@ -25,9 +25,16 @@ function buildGrandTotalRow(labelField, labelValue, dynamicKeys, rows, totalFiel
 // in the selected month(s) AND the lead was created then; default (neither) =
 // the event column just needs to match the selected month(s).
 function applyMonthMode(pool, anyMonthColName, mode){
-  if(isAllMonths()) return pool;
-  if(mode === 'AnyMonth')  return pool.filter(r => monthFilter(r[anyMonthColName]) && !monthFilter(r.CTM));
-  if(mode === 'SameMonth') return pool.filter(r => monthFilter(r[anyMonthColName]) && monthFilter(r.CTM));
+  // AnyMonth/SameMonth compare against a specific selected month, so they
+  // only apply once one is actually picked — with "All Months" selected,
+  // fall through to the plain monthFilter() check below (which itself
+  // restricts to the fixed FY range), same as every other month-wise table.
+  // Previously this returned `pool` unfiltered in that case, silently
+  // including pre-FY-cutoff leads that Generated Leads and friends exclude.
+  if(!isAllMonths()){
+    if(mode === 'AnyMonth')  return pool.filter(r => monthFilter(r[anyMonthColName]) && !monthFilter(r.CTM));
+    if(mode === 'SameMonth') return pool.filter(r => monthFilter(r[anyMonthColName]) && monthFilter(r.CTM));
+  }
   return pool.filter(r => monthFilter(r[anyMonthColName]));
 }
 
@@ -91,14 +98,17 @@ function platformsForLeadsTable(){
 
 function leadsByPlatformMonth(){
   const buckets = platformsForLeadsTable();
-  const rows = STATE.raw;
+  // Previously filtered by platformName === 'Referral'/'Cold Leads' as a
+  // stand-in for Ref+Cold, and only under "Exclude" mode — "Only Referral"
+  // was never handled at all (every platform kept its full count). Using
+  // applyRefColdFilter() directly makes this table respect Ref+Cold via the
+  // same Campaign Name check (and modes) as everywhere else on the dashboard.
+  const rows = applyRefColdFilter(STATE.raw);
   const months = filteredMonths();
-  const refMode = STATE.filterRefCold;
   const out = buckets.map(b => {
     const o = {Platform: b.label, total:0};
     months.forEach(m => {
-      let c = rows.filter(x => b.match(x) && x.CTM===m && dashboardRowMatch(x)).length;
-      if(refMode==='Exclude' && (b.label==='Referral' || b.label==='Cold Leads')) c = 0;
+      const c = rows.filter(x => b.match(x) && x.CTM===m).length;
       o[m] = c; o.total += c;
     });
     return o;
@@ -109,7 +119,10 @@ function leadsByPlatformMonth(){
 
 function statusByMonth(teamFilter){
   const months = filteredMonths();
-  let base = STATE.raw.filter(dashboardRowMatch);
+  // Was STATE.raw.filter(dashboardRowMatch) — Status/Lead Head applied but
+  // Ref+Cold silently ignored (Exclude/Only Referral had no effect on this
+  // table). applyRefColdFilter() already calls dashboardRowMatch internally.
+  let base = applyRefColdFilter(STATE.raw);
   if(teamFilter === 'SV') base = base.filter(r => (r.Team || 'SV') === 'SV');
   else if(teamFilter === 'non-SV') base = base.filter(r => (r.Team || 'SV') !== 'SV');
   return STATUSES.map(st => {
