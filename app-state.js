@@ -55,7 +55,7 @@ const STATE = {
   bdCallsChart: null,
   rawFilters: {},
   premiumUnlocked: false,
-  teamPerfMode: 'current',
+  teamPerfMode: 'first',
   campaignTeamMode: 'current',
 };
 
