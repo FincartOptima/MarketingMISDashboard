@@ -554,6 +554,15 @@ function renderBDCallFlowTable(){
   renderTable('#tbl-bd-call-flow', headers, rows);
 }
 
+function renderBDMonthMismatch(){
+  if(!STATE.filesLoaded.bd){ setNotUploaded('#tbl-bd-month-mismatch','bd'); return; }
+  const data = bdMonthMismatchList();
+  const countEl = $('#bd-month-mismatch-count');
+  if(countEl) countEl.textContent = data.length ? `(${fmtIN(data.length)} lead${data.length===1?'':'s'} for this selection)` : '(none for this selection — the two totals agree exactly)';
+  const headers = ['Client Name', 'Email', 'BD Rep', 'Date Assigned (Tracker)', 'Created Month (B2C)', 'Counted In'];
+  renderTable('#tbl-bd-month-mismatch', headers, data);
+}
+
 // Table: one row per BD rep — Total Calls Made / Calls Connected / CNP taken
 // as-is from the BD Daily Log sheet (not recomputed from each other — see
 // the info popup for why they don't always add up exactly), plus
@@ -608,6 +617,7 @@ function renderBDPerformance(){
 
   renderBDCallFlow();
   renderBDCallFlowTable();
+  renderBDMonthMismatch();
   renderBDCallsChart();
   renderBDCallsTable();
   renderBDGmeetChart();

@@ -1298,6 +1298,14 @@ table.data.editable td input:focus{outline:2px solid var(--orange);background:va
             <div class="table-wrap" id="tbl-bd-call-flow"></div>
           </div>
 
+          <div class="section bar-red">
+            <h2>Why "Meetings Scheduled" Doesn't Always Match the Lead-Level Detail Total <span id="bd-month-mismatch-count" style="font-weight:400;text-transform:none;font-size:12px;color:var(--muted)"></span>
+              <button class="info-btn" data-info="bd-month-mismatch" title="Table info">i</button>
+            </h2>
+            <div class="hint">"Meetings Scheduled" above counts a lead by the tracker's own <strong>Date Assigned</strong>. The Lead-Level Detail sub-tab counts the same lead by its <strong>B2C Created Month</strong> instead — usually the same month, but not always. Every client below is a named, exact case where the two disagree for whichever month(s) are currently selected: this is the complete list behind the gap, not an estimate.</div>
+            <div class="table-wrap" id="tbl-bd-month-mismatch"></div>
+          </div>
+
           <div class="section bar-green">
             <h2>Calls by Month — Made vs Connected vs CNP
               <button class="info-btn" data-info="bdcalls" title="Chart info">i</button>

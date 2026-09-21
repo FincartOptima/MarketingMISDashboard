@@ -990,6 +990,40 @@ function bdCallFlowStages(){
   ];
 }
 
+// Named reconciliation list for why Meetings Scheduled (Call Flow, dated by
+// the tracker's own Date Assigned) doesn't always match the Lead-Level
+// Detail tables' total (dated by the matched B2C lead's Created Month) for
+// the same month selection -- every lead below is one where those two
+// month-anchors disagree, so it's counted on one side but not the other.
+// Same Month + Person scoping as Call Flow itself (see bdFlowTrackerRows),
+// so this fully accounts for the gap between the two totals, not just part
+// of it. Only CRM-matched leads can ever appear here: an unmatched lead's
+// effectiveMonth is defined as toMmmYyyy(dateAssigned) (see
+// annotateBDWithB2CMatch in app-state.js), so the two checks are identical
+// by construction for it and it can never be part of the gap.
+function bdMonthMismatchList(){
+  const b2cIndex = buildB2CEmailIndex();
+  const rows = STATE.bd.filter(r => bdPersonMatch(r.person));
+  const out = [];
+  for(const r of rows){
+    const inByAssigned = bdMonthMatch(toMmmYyyy(r.dateAssigned));
+    const inByCreated  = bdMonthMatch(r.effectiveMonth);
+    if(inByAssigned === inByCreated) continue;
+    const email = (r.email || '').toString().trim().toLowerCase();
+    const b2cRow = email ? b2cIndex[email] : null;
+    out.push({
+      'Client Name': (b2cRow && b2cRow.clientName) || '(unknown)',
+      Email: r.email || '',
+      'BD Rep': r.person || '',
+      'Date Assigned (Tracker)': toMmmYyyy(r.dateAssigned) || 'N/A',
+      'Created Month (B2C)': r.effectiveMonth || 'N/A',
+      'Counted In': inByAssigned ? 'Call Flow only' : 'Lead-Level Detail only',
+    });
+  }
+  out.sort((a,b) => a['Counted In'].localeCompare(b['Counted In']) || a['Client Name'].localeCompare(b['Client Name']));
+  return out;
+}
+
 // One row per month (chronological), for the stacked chart.
 function bdCallsByMonth(){
   const rows = bdCallsFilteredRows();

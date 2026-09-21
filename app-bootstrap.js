@@ -171,6 +171,13 @@ const TABLE_INFO = {
     source: 'BD Accountability Tracker file: "BD Daily Log" sheet (calls) + the "<Person> Q<N>" lead sheets (meetings scheduled, GMeet outcomes)',
     note: 'The stage-by-stage table below the diagram carries the same numbers with an explicit Source column per row, if you need to cite where a specific figure came from.'
   },
+  'bd-month-mismatch': {
+    title: 'Why "Meetings Scheduled" Doesn\'t Always Match the Lead-Level Detail Total',
+    desc: '"Meetings Scheduled" (Call Flow, above) dates a lead by the tracker\'s own <strong>Date Assigned</strong>. Every table in the <strong>Lead-Level Detail</strong> sub-tab (GMeet Joined?, Current Stage, Team/RM Breakdown) instead dates the same lead by its matched B2C record\'s <strong>Created Month</strong> — the same convention Month filtering uses everywhere else on this dashboard. The two usually agree, but a lead can be handed to a BD rep in a different month than it was created in B2C, so the two totals can legitimately differ for the same month selection.<br><br>This table is the complete, named reconciliation: every lead where the two month-anchors disagree for the currently selected month(s), so nothing is left unaccounted for. <strong>Counted In</strong> shows which of the two totals includes that lead — "Call Flow only" means its Date Assigned falls in the selection but its B2C Created Month doesn\'t (counted in Meetings Scheduled, not in the Lead-Level Detail total); "Lead-Level Detail only" is the reverse. Only CRM-matched leads can ever appear here, since an unmatched lead\'s "B2C Created Month" is defined as its own Date Assigned and can never disagree with itself.',
+    cols: 'email (→ matched to the B2C RAW_DATA sheet\'s userId) · clientName (from that matched B2C row) · person (BD rep) · dateAssigned (tracker) · effectiveMonth (B2C CTM for matched leads)',
+    source: 'BD Accountability Tracker file (the "<Person> Q<N>" sheets), RAW_DATA (B2C) sheet',
+    note: 'Scoped to Month + Person only, matching Call Flow itself exactly — Team/Platform are ignored here for the same reason they\'re ignored there.'
+  },
   'lp-status': {
     title: 'Landing Page × Status Breakdown',
     desc: 'Lead counts by landing page and status, filtered by campaign. <strong>Landing pages are dynamically read from uploaded data and mapped to their Campaign Name.</strong> CONVERTED uses CM, IN PROCESS uses LPM, all other statuses use CTM.<br><strong>Same Month:</strong> status column matches selected month(s) AND CTM matches.<br><strong>Any Month:</strong> status column matches selected month(s) but CTM outside (only applies to CONVERTED/IN PROCESS).<br><strong>Default:</strong> status column matches selected month(s).',
