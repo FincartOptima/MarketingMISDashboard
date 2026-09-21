@@ -278,3 +278,26 @@ function activateTab(id){
   });
 }
 
+// Dashboard-tab subsections (Overview / Category Distribution / Team
+// Performance / ...) — a second-level tab bar so the whole tab isn't one
+// long scroll. Every subpanel's tables still render on every filter change
+// exactly as before (see renderDashboard); this only changes what's shown.
+function initDashSubtabs(){
+  $$('.dash-subtab').forEach(btn => {
+    btn.onclick = () => activateDashSubtab(btn.dataset.subtab);
+  });
+}
+function activateDashSubtab(id){
+  STATE.dashSubtab = id;
+  $$('.dash-subtab').forEach(b => b.classList.toggle('active', b.dataset.subtab===id));
+  $$('.dash-subpanel').forEach(p => p.classList.toggle('active', p.id==='dashsub-'+id));
+  requestAnimationFrame(() => {
+    const panel = $('#dashsub-'+id);
+    if(panel) panel.querySelectorAll('.table-wrap').forEach(attachMirrorScroll);
+    // Charts built while their subpanel was display:none can end up stuck at
+    // 0x0 (same class of issue showApp() works around) — force a resize now
+    // that this subpanel is actually visible.
+    if(window.Chart) Object.values(Chart.instances||{}).forEach(c => c.resize());
+  });
+}
+

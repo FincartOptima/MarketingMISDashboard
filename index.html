@@ -521,9 +521,6 @@ table.data.editable td input:focus{outline:2px solid var(--orange);background:va
     radial-gradient(rgba(30,41,59,.07) 1px,transparent 1.3px) 0 0/18px 18px,
     var(--bg);
 }
-/* So a rail-nav jump doesn't tuck the section title under the sticky header */
-#tab-dashboard [id^="sec-"]{scroll-margin-top:76px}
-
 /* Section titles switch typeface entirely rather than just changing size —
    a real pairing (serif headline / sans everything-else) instead of one
    family at different weights. Mixed case + tight tracking on purpose,
@@ -575,52 +572,33 @@ table.data.editable td input:focus{outline:2px solid var(--orange);background:va
   #tab-dashboard #kpis .kpi:first-child{grid-column:span 1}
 }
 
-/* Landing on a section via the rail nav gets a brief acknowledgment
-   instead of just silently jumping. [id^="sec-"] rather than .section
-   since three nav targets are .grid wrappers (two .sections side by
-   side), not .section elements themselves. */
-#tab-dashboard [id^="sec-"]:target{animation:dash-target-flash 1.4s ease-out}
-@keyframes dash-target-flash{
-  0%{box-shadow:0 0 0 3px var(--orange)}
-  100%{box-shadow:none}
+/* Subsections — a vertical sub-tab rail on the left (own nav, separate from
+   the top-level Dashboard/RM Performance/... tabs) plus a content column on
+   the right, replacing the old single long scroll. Only the active
+   sub-panel's tables/charts are visible at a time; everything still renders
+   on every filter change exactly as before, this just changes what's shown. */
+.dash-layout{display:flex;align-items:flex-start;gap:20px}
+.dash-subnav{
+  flex:none;width:220px;display:flex;flex-direction:column;gap:2px;
+  position:sticky;top:76px;
 }
-
-/* Sticky side rail — a jump-list for this tab's ~13 sections, grouped to
-   match the page's own B2C / B2B / Workshop dividers. Collapses to dots
-   until hovered so it never competes with the data for attention, and
-   only appears where there's real margin outside the 1600px content
-   column so it can never overlap a table on ordinary screens. */
-@media(min-width:1700px){
-  .dash-railnav{
-    position:fixed;right:18px;top:50%;transform:translateY(-50%);
-    z-index:15;display:flex;flex-direction:column;gap:14px;
-    padding:16px 0 16px 16px;border-left:2px solid var(--line);
-  }
-  .dash-railnav .rn-group+.rn-group{margin-top:4px}
-  .dash-railnav .rn-group-label{
-    font:700 9px/1 var(--font-body);text-transform:uppercase;letter-spacing:.6px;
-    color:var(--muted);margin-bottom:8px;white-space:nowrap;
-  }
-  .dash-railnav a{
-    display:flex;align-items:center;gap:10px;margin-bottom:9px;
-    color:var(--muted);text-decoration:none;
-    font:600 11px/1 var(--font-body);white-space:nowrap;
-    transition:color .12s;
-  }
-  .dash-railnav a:last-child{margin-bottom:0}
-  .dash-railnav .rn-tick{
-    flex:none;width:6px;height:6px;background:var(--border-strong);
-    transition:background .12s,width .12s,height .12s;
-  }
-  .dash-railnav .rn-label{
-    max-width:0;overflow:hidden;opacity:0;
-    transition:max-width .18s ease,opacity .15s;
-  }
-  .dash-railnav a:hover{color:var(--orange)}
-  .dash-railnav a:hover .rn-tick{background:var(--orange);width:8px;height:8px}
-  .dash-railnav:hover .rn-label{max-width:220px;opacity:1}
+.dash-subnav .dash-subtab{
+  display:block;width:100%;text-align:left;background:#fff;color:var(--muted);
+  border:2px solid var(--line);border-left-width:4px;
+  padding:10px 14px;font:600 12px/1.3 var(--font-body,inherit);cursor:pointer;
+  transition:background .1s,color .1s,border-color .1s;
 }
-@media(max-width:1699px){.dash-railnav{display:none}}
+.dash-subnav .dash-subtab + .dash-subtab{border-top:0}
+.dash-subnav .dash-subtab:hover{background:var(--orange-tint);color:var(--orange)}
+.dash-subnav .dash-subtab.active{background:var(--orange-tint);color:var(--orange);border-left-color:var(--orange)}
+.dash-content{flex:1;min-width:0}
+.dash-subpanel{display:none}
+.dash-subpanel.active{display:block}
+@media(max-width:860px){
+  .dash-layout{flex-direction:column}
+  .dash-subnav{position:static;width:100%;flex-direction:row;flex-wrap:wrap}
+  .dash-subnav .dash-subtab{width:auto;flex:1 1 auto;border-left-width:2px;border-top-width:4px}
+}
 </style>
 </head>
 <body>
@@ -933,233 +911,225 @@ table.data.editable td input:focus{outline:2px solid var(--orange);background:va
          Lead Head filter in the header above, defaults to "Primary". -->
     <div id="leadhead-banner" class="leadhead-banner"></div>
 
-    <!-- Jump-nav: collapses to dots, only shown where there's margin outside
-         the 1600px content column (see @media(min-width:1700px) in <style>) -->
-    <nav class="dash-railnav" aria-label="Dashboard sections">
-      <div class="rn-group">
-        <a href="#sec-status-dist"><span class="rn-tick"></span><span class="rn-label">Status Distribution</span></a>
-        <a href="#sec-platform-month"><span class="rn-tick"></span><span class="rn-label">Platform × Month</span></a>
-        <a href="#sec-status-teams"><span class="rn-tick"></span><span class="rn-label">Status by Team</span></a>
-        <a href="#sec-platform-status"><span class="rn-tick"></span><span class="rn-label">Category × Status</span></a>
-        <a href="#sec-lp-status"><span class="rn-tick"></span><span class="rn-label">Landing Page × Status</span></a>
-        <a href="#sec-team-perf"><span class="rn-tick"></span><span class="rn-label">Team Performance</span></a>
-        <a href="#sec-rm-transfer"><span class="rn-tick"></span><span class="rn-label">RM Transfer</span></a>
-        <a href="#sec-campaign-team"><span class="rn-tick"></span><span class="rn-label">Campaign × Team</span></a>
-        <a href="#sec-income-cost"><span class="rn-tick"></span><span class="rn-label">Income &amp; Cost</span></a>
-        <a href="#sec-cpl-rm"><span class="rn-tick"></span><span class="rn-label">Cost Per Lead</span></a>
-        <a href="#sec-inprocess-converted"><span class="rn-tick"></span><span class="rn-label">In-Process / Converted</span></a>
-      </div>
-      <div class="rn-group">
-        <a href="#sec-b2b"><span class="rn-tick"></span><span class="rn-label">B2B Corp Leads</span></a>
-      </div>
-      <div class="rn-group">
-        <a href="#sec-workshop"><span class="rn-tick"></span><span class="rn-label">Workshop Status</span></a>
-      </div>
-    </nav>
+    <div class="dash-layout">
+      <nav class="dash-subnav" aria-label="Dashboard subsections">
+        <button class="dash-subtab active" data-subtab="overview">Overview</button>
+        <button class="dash-subtab" data-subtab="category">Category Distribution</button>
+        <button class="dash-subtab" data-subtab="team">Team Performance</button>
+        <button class="dash-subtab" data-subtab="transfers">Team Transfers / Retention</button>
+        <button class="dash-subtab" data-subtab="cost">Cost</button>
+        <button class="dash-subtab" data-subtab="income">Income Segment Analysis</button>
+        <button class="dash-subtab" data-subtab="b2b">B2B Corporate Leads</button>
+        <button class="dash-subtab" data-subtab="other">Other Reports</button>
+      </nav>
 
-    <!-- Top KPIs -->
-    <div class="kpis" id="kpis"></div>
+      <div class="dash-content">
 
-    <!-- Live Data KPIs -->
-    <div id="live-kpis"></div>
+        <!-- ===== Overview ===== -->
+        <div class="dash-subpanel active" id="dashsub-overview">
+          <div class="kpis" id="kpis"></div>
+          <div id="live-kpis"></div>
+          <div class="section bar-blue" id="sec-status-dist">
+            <h2>Status Distribution <span id="status-chart-filter" style="font-weight:400;text-transform:none;font-size:11px;color:var(--muted)"></span>
+              <button class="info-btn" data-info="status-chart" title="Chart info">i</button>
+            </h2>
+            <div id="status-dist-chart-wrap"><canvas id="status-dist-chart"></canvas></div>
+          </div>
+        </div>
 
-    <!-- Status distribution bar chart -->
-    <div class="section bar-blue" id="sec-status-dist">
-      <h2>Status Distribution <span id="status-chart-filter" style="font-weight:400;text-transform:none;font-size:11px;color:var(--muted)"></span>
-        <button class="info-btn" data-info="status-chart" title="Chart info">i</button>
-      </h2>
-      <div id="status-dist-chart-wrap"><canvas id="status-dist-chart"></canvas></div>
+        <!-- ===== Category Distribution ===== -->
+        <div class="dash-subpanel" id="dashsub-category">
+          <div class="section bar-yellow" id="sec-platform-month">
+            <h2>Leads Generated · Platform × Month
+              <button class="info-btn" data-info="platform-month" title="Table info">i</button>
+            </h2>
+            <div id="legend-platform-month"></div>
+            <div class="table-wrap" id="tbl-platform-month"></div>
+          </div>
+
+          <div class="section bar-pink" id="sec-platform-status">
+            <h2>Category × Status Breakdown
+              <button class="info-btn" data-info="platform-status" title="Table info">i</button>
+              <span style="float:right;font-weight:400;text-transform:none">
+                <label style="font-size:11px;color:var(--muted)">Table mode</label>
+                <select id="filter-table" style="margin-left:6px">
+                  <option value="All">Default (status-specific month)</option>
+                  <option value="SameMonth">Same Month (CTM)</option>
+                  <option value="AnyMonth">Any Month (created before selected)</option>
+                </select>
+              </span>
+            </h2>
+            <div style="display:flex;gap:16px;flex-wrap:wrap">
+              <div id="ps-team-filter-wrap" style="margin-bottom:6px"></div>
+            </div>
+            <div id="legend-platform-status"></div>
+            <div class="table-wrap" id="tbl-platform-status"></div>
+          </div>
+
+          <div class="section bar-pink" id="sec-lp-status">
+            <h2>Landing Page × Status Breakdown
+              <button class="info-btn" data-info="lp-status" title="Table info">i</button>
+              <span style="float:right;font-weight:400;text-transform:none;display:flex;align-items:center;gap:10px">
+                <label style="font-size:11px;color:var(--muted)">Table mode</label>
+                <span id="lp-mode-wrap"></span>
+              </span>
+            </h2>
+            <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:6px;align-items:flex-start">
+              <div id="lp-team-filter-wrap" style="display:flex;align-items:center"></div>
+              <div id="lp-campaign-filter-wrap" style="display:flex;align-items:center"></div>
+              <div id="lp-lp-filter-wrap" style="display:flex;align-items:center;position:relative"></div>
+            </div>
+            <div id="legend-lp-status"></div>
+            <div class="table-wrap" id="tbl-lp-status"></div>
+          </div>
+
+          <div class="section bar-cyan" id="sec-workshop">
+            <h2>Workshop Status Distribution
+              <button class="info-btn" data-info="workshop-status" title="Table info">i</button>
+            </h2>
+            <div id="legend-workshop-status"></div>
+            <div class="table-wrap" id="tbl-workshop-status"></div>
+            <div class="hint">Platform = <strong>BTL Marketing</strong> only. Landing pages containing "-D" → Devanshi, "-H" → Himanshi, "-S" → Shreya.</div>
+          </div>
+        </div>
+
+        <!-- ===== Team Performance ===== -->
+        <div class="dash-subpanel" id="dashsub-team">
+          <div class="grid cols-2" id="sec-status-teams">
+            <div class="section bar-blue">
+              <h2>Status Distribution · Mapped Teams
+                <button class="info-btn" data-info="status-month-mapped" title="Table info">i</button>
+              </h2>
+              <div id="legend-status-month-mapped"></div>
+              <div class="table-wrap" id="tbl-status-month-mapped"></div>
+            </div>
+            <div class="section bar-blue">
+              <h2>Status Distribution · SV (Unmapped)
+                <button class="info-btn" data-info="status-month-sv" title="Table info">i</button>
+              </h2>
+              <div id="legend-status-month-sv"></div>
+              <div class="table-wrap" id="tbl-status-month-sv"></div>
+            </div>
+          </div>
+
+          <div class="section bar-green" id="sec-team-perf">
+            <h2>Team Performance Matrix
+              <button class="info-btn" data-info="team-perf" title="Table info">i</button>
+              <span style="float:right;font-weight:400;text-transform:none;display:flex;align-items:center;gap:10px">
+                <label style="font-size:11px;color:var(--muted)">Team</label>
+                <span id="team-perf-team-filter-wrap"></span>
+                <span id="team-perf-toggle"></span>
+              </span>
+            </h2>
+            <div id="legend-team"></div>
+            <div class="table-wrap" id="tbl-team"></div>
+          </div>
+
+          <div class="section bar-violet" id="sec-campaign-team">
+            <h2>Leads per Campaign · Team × Campaign
+              <button class="info-btn" data-info="campaign-team" title="Table info">i</button>
+              <span style="float:right;font-weight:400;text-transform:none;display:flex;align-items:center;gap:10px">
+                <span id="campaign-team-toggle"></span>
+                <span id="hdr-campaign-team" style="color:var(--muted);font-size:11px"></span>
+              </span>
+            </h2>
+            <div id="legend-campaign-team"></div>
+            <div class="table-wrap" id="tbl-campaign-team"></div>
+            <div class="hint">Rows = teams, columns = campaigns. Counts use <strong>CreateMonth (CTM)</strong>. Honors global Month + Ref/Cold filter.</div>
+          </div>
+        </div>
+
+        <!-- ===== Team Transfers / Retention ===== -->
+        <div class="dash-subpanel" id="dashsub-transfers">
+          <div class="section bar-red" id="sec-rm-transfer">
+            <h2>FirstRM to CurrentRM Transfer
+              <button class="info-btn" data-info="rm-transfer" title="Table info">i</button>
+            </h2>
+            <div class="table-wrap" id="tbl-rm-transfer"></div>
+            <div class="hint">Click a team row to expand RM-level transfer details. Only leads where FirstRM ≠ CurrentRM are shown.</div>
+
+            <div class="mtd-block" style="margin-top:20px">
+              <h3>Retention vs Transfer Summary</h3>
+              <div class="table-wrap" id="tbl-rm-transfer-summary"></div>
+              <div class="hint">Every lead is counted (not only the ones that were transferred): stayed on the same team (even if handed to a teammate), transferred into the SV pool (includes generic placeholder RMs like "Support Wealth Manager"), or transferred to another team. Honors Ref+Cold/Status/Lead Head, but "All Months" here means literally every lead ever — not the Apr-2026-onward range used elsewhere on this dashboard — matching how this is tracked outside the app; pick specific month(s) to narrow it.</div>
+            </div>
+
+            <div class="mtd-block" style="margin-top:20px">
+              <h3>Retention vs Transfer · By Category</h3>
+              <div class="table-wrap" id="tbl-rm-transfer-category"></div>
+              <div class="hint">Same three buckets, broken down by Category Name (e.g. Branding, Corporate, Google, Social Media — read dynamically from the uploaded data).</div>
+            </div>
+
+            <div class="mtd-block" style="margin-top:20px">
+              <h3>Retention vs Transfer · By Team</h3>
+              <div class="table-wrap" id="tbl-rm-transfer-team"></div>
+              <div class="hint">Same three buckets, broken down by the originating team (FirstRM's team) — the same "From Team" grouping the main table above uses.</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ===== Cost ===== -->
+        <div class="dash-subpanel" id="dashsub-cost">
+          <div class="section bar-yellow" id="sec-cost-summary">
+            <h2>Cost Summary by Campaign
+              <button class="info-btn" data-info="cost-summary" title="Table info">i</button>
+            </h2>
+            <div id="legend-cost-summary"></div>
+            <div class="table-wrap" id="tbl-cost-summary"></div>
+            <div class="hint">Costs from the editable <strong>Cost Per Campaign</strong> tab.</div>
+          </div>
+
+          <div class="section bar-red" id="sec-cpl-rm">
+            <h2>Cost Per Lead · per Team / RM
+              <button class="info-btn" data-info="cpl-rm" title="Table info">i</button>
+            </h2>
+            <div id="legend-cpl-rm"></div>
+            <div class="table-wrap" id="tbl-cpl-rm"></div>
+          </div>
+        </div>
+
+        <!-- ===== Income Segment Analysis ===== -->
+        <div class="dash-subpanel" id="dashsub-income">
+          <div class="section bar-cyan" id="sec-income">
+            <h2>Income Segment Analysis
+              <button class="info-btn" data-info="income" title="Table info">i</button>
+            </h2>
+            <div id="legend-income"></div>
+            <div class="table-wrap" id="tbl-income"></div>
+          </div>
+        </div>
+
+        <!-- ===== B2B Corporate Leads ===== -->
+        <div class="dash-subpanel" id="dashsub-b2b">
+          <div class="section bar-orange" id="sec-b2b" style="border-top-color:var(--orange)">
+            <h2 id="b2b-table-title">B2B Corp Leads — RM × Status
+              <button class="info-btn" data-info="b2b" title="Table info">i</button>
+            </h2>
+            <div class="table-wrap" id="tbl-b2b"></div>
+            <div class="hint">Add <strong>B2B.xlsx</strong> to the repo to populate this table.</div>
+          </div>
+        </div>
+
+        <!-- ===== Other Reports ===== -->
+        <div class="dash-subpanel" id="dashsub-other">
+          <div class="grid cols-2" id="sec-inprocess-converted">
+            <div class="section bar-pink">
+              <h2 id="inprocess-ds-title">In-Process Date Set, Status ≠ IN PROCESS
+                <button class="info-btn" data-info="inprocess-ds" title="Table info">i</button>
+              </h2>
+              <div class="table-wrap" id="tbl-inprocess-ds"></div>
+            </div>
+            <div class="section bar-violet">
+              <h2 id="converted-ds-title">Converted Date Set, Status ≠ CONVERTED
+                <button class="info-btn" data-info="converted-ds" title="Table info">i</button>
+              </h2>
+              <div class="table-wrap" id="tbl-converted-ds"></div>
+            </div>
+          </div>
+        </div>
+
+      </div>
     </div>
-
-    <!-- Platform × Month -->
-    <div class="section bar-yellow" id="sec-platform-month">
-      <h2>Leads Generated · Platform × Month
-        <button class="info-btn" data-info="platform-month" title="Table info">i</button>
-      </h2>
-      <div id="legend-platform-month"></div>
-      <div class="table-wrap" id="tbl-platform-month"></div>
-    </div>
-
-    <!-- Status Distribution — Mapped (non-SV) + SV -->
-    <div class="grid cols-2" id="sec-status-teams">
-      <div class="section bar-blue">
-        <h2>Status Distribution · Mapped Teams
-          <button class="info-btn" data-info="status-month-mapped" title="Table info">i</button>
-        </h2>
-        <div id="legend-status-month-mapped"></div>
-        <div class="table-wrap" id="tbl-status-month-mapped"></div>
-      </div>
-      <div class="section bar-blue">
-        <h2>Status Distribution · SV (Unmapped)
-          <button class="info-btn" data-info="status-month-sv" title="Table info">i</button>
-        </h2>
-        <div id="legend-status-month-sv"></div>
-        <div class="table-wrap" id="tbl-status-month-sv"></div>
-      </div>
-    </div>
-
-    <!-- Category × Status -->
-    <div class="section bar-pink" id="sec-platform-status">
-      <h2>Category × Status Breakdown
-        <button class="info-btn" data-info="platform-status" title="Table info">i</button>
-        <span style="float:right;font-weight:400;text-transform:none">
-          <label style="font-size:11px;color:var(--muted)">Table mode</label>
-          <select id="filter-table" style="margin-left:6px">
-            <option value="All">Default (status-specific month)</option>
-            <option value="SameMonth">Same Month (CTM)</option>
-            <option value="AnyMonth">Any Month (created before selected)</option>
-          </select>
-        </span>
-      </h2>
-      <div style="display:flex;gap:16px;flex-wrap:wrap">
-        <div id="ps-team-filter-wrap" style="margin-bottom:6px"></div>
-      </div>
-      <div id="legend-platform-status"></div>
-      <div class="table-wrap" id="tbl-platform-status"></div>
-    </div>
-
-    <!-- Landing Page × Status -->
-    <div class="section bar-pink" id="sec-lp-status">
-      <h2>Landing Page × Status Breakdown
-        <button class="info-btn" data-info="lp-status" title="Table info">i</button>
-        <span style="float:right;font-weight:400;text-transform:none;display:flex;align-items:center;gap:10px">
-          <label style="font-size:11px;color:var(--muted)">Table mode</label>
-          <span id="lp-mode-wrap"></span>
-        </span>
-      </h2>
-      <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:6px;align-items:flex-start">
-        <div id="lp-team-filter-wrap" style="display:flex;align-items:center"></div>
-        <div id="lp-campaign-filter-wrap" style="display:flex;align-items:center"></div>
-        <div id="lp-lp-filter-wrap" style="display:flex;align-items:center;position:relative"></div>
-      </div>
-      <div id="legend-lp-status"></div>
-      <div class="table-wrap" id="tbl-lp-status"></div>
-    </div>
-
-    <!-- Team Performance -->
-    <div class="section bar-green" id="sec-team-perf">
-      <h2>Team Performance Matrix
-        <button class="info-btn" data-info="team-perf" title="Table info">i</button>
-        <span style="float:right;font-weight:400;text-transform:none;display:flex;align-items:center;gap:10px">
-          <label style="font-size:11px;color:var(--muted)">Team</label>
-          <span id="team-perf-team-filter-wrap"></span>
-          <span id="team-perf-toggle"></span>
-        </span>
-      </h2>
-      <div id="legend-team"></div>
-      <div class="table-wrap" id="tbl-team"></div>
-    </div>
-
-    <!-- FirstRM to CurrentRM Transfer -->
-    <div class="section bar-red" id="sec-rm-transfer">
-      <h2>FirstRM to CurrentRM Transfer
-        <button class="info-btn" data-info="rm-transfer" title="Table info">i</button>
-      </h2>
-      <div class="table-wrap" id="tbl-rm-transfer"></div>
-      <div class="hint">Click a team row to expand RM-level transfer details. Only leads where FirstRM ≠ CurrentRM are shown.</div>
-
-      <div class="mtd-block" style="margin-top:20px">
-        <h3>Retention vs Transfer Summary</h3>
-        <div class="table-wrap" id="tbl-rm-transfer-summary"></div>
-        <div class="hint">Every lead is counted (not only the ones that were transferred): stayed on the same team (even if handed to a teammate), transferred into the SV pool (includes generic placeholder RMs like "Support Wealth Manager"), or transferred to another team. Honors Ref+Cold/Status/Lead Head, but "All Months" here means literally every lead ever — not the Apr-2026-onward range used elsewhere on this dashboard — matching how this is tracked outside the app; pick specific month(s) to narrow it.</div>
-      </div>
-
-      <div class="mtd-block" style="margin-top:20px">
-        <h3>Retention vs Transfer · By Category</h3>
-        <div class="table-wrap" id="tbl-rm-transfer-category"></div>
-        <div class="hint">Same three buckets, broken down by Category Name (e.g. Branding, Corporate, Google, Social Media — read dynamically from the uploaded data).</div>
-      </div>
-
-      <div class="mtd-block" style="margin-top:20px">
-        <h3>Retention vs Transfer · By Team</h3>
-        <div class="table-wrap" id="tbl-rm-transfer-team"></div>
-        <div class="hint">Same three buckets, broken down by the originating team (FirstRM's team) — the same "From Team" grouping the main table above uses.</div>
-      </div>
-    </div>
-
-    <!-- Leads per Campaign × Team -->
-    <div class="section bar-violet" id="sec-campaign-team">
-      <h2>Leads per Campaign · Team × Campaign
-        <button class="info-btn" data-info="campaign-team" title="Table info">i</button>
-        <span style="float:right;font-weight:400;text-transform:none;display:flex;align-items:center;gap:10px">
-          <span id="campaign-team-toggle"></span>
-          <span id="hdr-campaign-team" style="color:var(--muted);font-size:11px"></span>
-        </span>
-      </h2>
-      <div id="legend-campaign-team"></div>
-      <div class="table-wrap" id="tbl-campaign-team"></div>
-      <div class="hint">Rows = teams, columns = campaigns. Counts use <strong>CreateMonth (CTM)</strong>. Honors global Month + Ref/Cold filter.</div>
-    </div>
-
-    <!-- Income + Cost -->
-    <div class="grid cols-2" id="sec-income-cost">
-      <div class="section bar-cyan">
-        <h2>Income Segment Analysis
-          <button class="info-btn" data-info="income" title="Table info">i</button>
-        </h2>
-        <div id="legend-income"></div>
-        <div class="table-wrap" id="tbl-income"></div>
-      </div>
-      <div class="section bar-yellow">
-        <h2>Cost Summary by Campaign
-          <button class="info-btn" data-info="cost-summary" title="Table info">i</button>
-        </h2>
-        <div id="legend-cost-summary"></div>
-        <div class="table-wrap" id="tbl-cost-summary"></div>
-        <div class="hint">Costs from the editable <strong>Cost Per Campaign</strong> tab.</div>
-      </div>
-    </div>
-
-    <!-- CPL per RM -->
-    <div class="section bar-red" id="sec-cpl-rm">
-      <h2>Cost Per Lead · per Team / RM
-        <button class="info-btn" data-info="cpl-rm" title="Table info">i</button>
-      </h2>
-      <div id="legend-cpl-rm"></div>
-      <div class="table-wrap" id="tbl-cpl-rm"></div>
-    </div>
-
-    <!-- InProcess + Converted Datasets -->
-    <div class="grid cols-2" id="sec-inprocess-converted">
-      <div class="section bar-pink">
-        <h2 id="inprocess-ds-title">In-Process Date Set, Status ≠ IN PROCESS
-          <button class="info-btn" data-info="inprocess-ds" title="Table info">i</button>
-        </h2>
-        <div class="table-wrap" id="tbl-inprocess-ds"></div>
-      </div>
-      <div class="section bar-violet">
-        <h2 id="converted-ds-title">Converted Date Set, Status ≠ CONVERTED
-          <button class="info-btn" data-info="converted-ds" title="Table info">i</button>
-        </h2>
-        <div class="table-wrap" id="tbl-converted-ds"></div>
-      </div>
-    </div>
-
-    <!-- Page break: everything below is B2B corp data, not B2C -->
-    <div class="section-divider"><span class="sd-label">⬇ B2B Corporate Data Below</span></div>
-
-    <!-- B2B Corp Leads -->
-    <div class="section bar-orange" id="sec-b2b" style="border-top-color:var(--orange)">
-      <h2 id="b2b-table-title">B2B Corp Leads — RM × Status
-        <button class="info-btn" data-info="b2b" title="Table info">i</button>
-      </h2>
-      <div class="table-wrap" id="tbl-b2b"></div>
-      <div class="hint">Add <strong>B2B.xlsx</strong> to the repo to populate this table.</div>
-    </div>
-
-    <!-- Page break: back to B2C data for the Workshop breakdown -->
-    <div class="section-divider"><span class="sd-label">⬇ Workshop Status Distribution</span></div>
-
-    <!-- Workshop Status Distribution (BTL Marketing platform, by landing-page owner) -->
-    <div class="section bar-cyan" id="sec-workshop">
-      <h2>Workshop Status Distribution
-        <button class="info-btn" data-info="workshop-status" title="Table info">i</button>
-      </h2>
-      <div id="legend-workshop-status"></div>
-      <div class="table-wrap" id="tbl-workshop-status"></div>
-      <div class="hint">Platform = <strong>BTL Marketing</strong> only. Landing pages containing "-D" → Devanshi, "-H" → Himanshi, "-S" → Shreya.</div>
-    </div>
-
   </div>
 
   <!-- ===== RM PERFORMANCE ===== -->
