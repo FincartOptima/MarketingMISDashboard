@@ -56,6 +56,7 @@ const STATE = {
   rawFilters: {},
   premiumUnlocked: false,
   dashSubtab: 'overview',
+  bdSubtab: 'callflow',
   teamPerfMode: 'first',
   campaignTeamMode: 'first',
 };

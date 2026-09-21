@@ -225,6 +225,7 @@ async function bootApp(){
   bindUI();
   tabBar();
   initDashSubtabs();
+  initBdSubtabs();
   initPremiumLock();
   // A self-contained "Download Webpage" export embeds its own data — use it directly
   // instead of fetching from the repo.

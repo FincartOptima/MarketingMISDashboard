@@ -1273,66 +1273,78 @@ table.data.editable td input:focus{outline:2px solid var(--orange);background:va
           <button class="secondary" id="bdperf-reset-filters" style="margin-left:6px">Reset filters</button>
         </span>
       </h2>
-      <div class="meta">This tab reads two sheets from the same BD Accountability Tracker upload. The <strong>call funnel below</strong> comes from the <strong>BD Daily Log</strong> sheet (per rep, per day) plus the tracker's own GMeet Joined? column. The <strong>lead-level sections further down</strong> come from the "&lt;Person&gt; Q&lt;N&gt;" sheets, matched to B2C by email for Stage/RM/Team/Platform. Month + Person apply to everything; Team + Platform only apply to the lead-level sections, since the Daily Log has no per-lead linkage to derive them from.</div>
+      <div class="meta">This tab reads two sheets from the same BD Accountability Tracker upload. The <strong>Call Flow</strong> subsection comes from the <strong>BD Daily Log</strong> sheet (per rep, per day) plus the tracker's own GMeet Joined? column. The <strong>Lead-Level Detail</strong> subsection comes from the "&lt;Person&gt; Q&lt;N&gt;" sheets, matched to B2C by email for Stage/RM/Team/Platform. Month + Person apply to everything; Team + Platform only apply to Lead-Level Detail, since the Daily Log has no per-lead linkage to derive them from.</div>
     </div>
 
-    <!-- ===== 1. THE FUNNEL: calls -> connected -> meetings -> joined ===== -->
-    <div class="section bar-blue">
-      <h2>Call Flow — Calls to Meetings Joined
-        <button class="info-btn" data-info="bdcallflow" title="Flow info">i</button>
-      </h2>
-      <div id="bd-call-flow"></div>
-    </div>
+    <div class="dash-layout">
+      <nav class="dash-subnav" aria-label="BD Performance subsections">
+        <button class="dash-subtab active" data-bdsubtab="callflow">Call Flow</button>
+        <button class="dash-subtab" data-bdsubtab="leadlevel">Lead-Level Detail — Tracker Sheets</button>
+      </nav>
 
-    <div class="section bar-blue">
-      <h2>Call Flow — Stage by Stage</h2>
-      <div class="table-wrap" id="tbl-bd-call-flow"></div>
-      <div class="hint">Each stage as a share of the stage it came from — e.g. Meeting Joined ÷ Meetings Scheduled. Meetings Scheduled and everything below it come from the tracker sheets (Date Assigned / GMeet Joined?): Joined + Not Joined + Pending + Not Logged always add up to Meetings Scheduled exactly ("Not Logged" = no GMeet Joined? value entered yet). Only Calls Connected → Meetings Scheduled crosses from the Daily Log into the tracker, so treat that one percentage as directional. See the <strong>Source</strong> column for exactly where each row comes from.</div>
-    </div>
+      <div class="dash-content">
 
-    <div class="section bar-green">
-      <h2>Calls by Month — Made vs Connected vs CNP
-        <button class="info-btn" data-info="bdcalls" title="Chart info">i</button>
-      </h2>
-      <div id="bd-calls-chart-wrap" style="height:300px"><canvas id="bd-calls-chart"></canvas></div>
-      <div class="hint">Three bars side by side per month, counts printed above each. Honors the Month/Person filters above — Team/Platform don't apply to this sheet.</div>
-    </div>
+        <!-- ===== 1. THE FUNNEL: calls -> connected -> meetings -> joined ===== -->
+        <div class="dash-subpanel active" id="bdsub-callflow">
+          <div class="section bar-blue">
+            <h2>Call Flow — Calls to Meetings Joined
+              <button class="info-btn" data-info="bdcallflow" title="Flow info">i</button>
+            </h2>
+            <div id="bd-call-flow"></div>
+          </div>
 
-    <div class="section bar-green">
-      <h2>Call Activity by BD Rep</h2>
-      <div class="table-wrap" id="tbl-bdcalls"></div>
-      <div class="hint">Total Calls Made / Calls Connected / CNP as entered in the BD Daily Log sheet (not recomputed from each other) — a handful of rows in the source don't add up exactly; see the chart's info button for details. Connected % and CNP % are ÷ Total Calls Made. Meetings Scheduled is tracker-sourced, not from this sheet — see the Call Flow section above. Click any column header to sort.</div>
-    </div>
+          <div class="section bar-blue">
+            <h2>Call Flow — Stage by Stage</h2>
+            <div class="table-wrap" id="tbl-bd-call-flow"></div>
+          </div>
 
-    <!-- ===== 2. LEAD-LEVEL: what happened to the leads behind those meetings ===== -->
-    <div class="section-divider"><span class="sd-label">⬇ Lead-Level Detail — Tracker Sheets</span></div>
+          <div class="section bar-green">
+            <h2>Calls by Month — Made vs Connected vs CNP
+              <button class="info-btn" data-info="bdcalls" title="Chart info">i</button>
+            </h2>
+            <div id="bd-calls-chart-wrap" style="height:300px"><canvas id="bd-calls-chart"></canvas></div>
+            <div class="hint">Three bars side by side per month, counts printed above each. Honors the Month/Person filters above — Team/Platform don't apply to this sheet.</div>
+          </div>
 
-    <div class="grid cols-2">
-      <div class="section bar-green">
-        <h2>GMeet Joined? <span id="bd-gmeet-total" style="font-weight:400;text-transform:none;font-size:12px;color:var(--muted)"></span></h2>
-        <div style="height:260px"><canvas id="bd-gmeet-chart"></canvas></div>
-        <div class="hint">Click a slice to filter the Current Stage chart &amp; the Team / RM Breakdown table — click it again to clear.</div>
+          <div class="section bar-green">
+            <h2>Call Activity by BD Rep</h2>
+            <div class="table-wrap" id="tbl-bdcalls"></div>
+            <div class="hint">Total Calls Made / Calls Connected / CNP as entered in the BD Daily Log sheet (not recomputed from each other) — a handful of rows in the source don't add up exactly; see the chart's info button for details. Connected % and CNP % are ÷ Total Calls Made. Meetings Scheduled is tracker-sourced, not from this sheet — see the Call Flow section above. Click any column header to sort.</div>
+          </div>
+        </div>
+
+        <!-- ===== 2. LEAD-LEVEL: what happened to the leads behind those meetings ===== -->
+        <div class="dash-subpanel" id="bdsub-leadlevel">
+          <div class="grid cols-2">
+            <div class="section bar-green">
+              <h2>GMeet Joined? <span id="bd-gmeet-total" style="font-weight:400;text-transform:none;font-size:12px;color:var(--muted)"></span></h2>
+              <div style="height:260px"><canvas id="bd-gmeet-chart"></canvas></div>
+              <div class="hint">Click a slice to filter the Current Stage chart &amp; the Team / RM Breakdown table — click it again to clear.</div>
+            </div>
+            <div class="section bar-violet">
+              <h2>Current Stage <span id="bd-stage-source-label" style="font-weight:400;text-transform:none;font-size:12px;color:var(--muted)"></span></h2>
+              <div style="height:260px"><canvas id="bd-stage-chart"></canvas></div>
+              <div class="hint">Follows the Workpoint Status / BD Team Status toggle below.</div>
+            </div>
+          </div>
+
+          <div class="section bar-cyan">
+            <h2>GMeet Joined? vs In Process</h2>
+            <div class="table-wrap" id="tbl-bdperf-gmeet"></div>
+            <div class="hint">Data as per the BD Performance Tracker Google Sheet maintained by the BD Team (Current Stage column) — not the B2C-derived status. Always shows all three GMeet states side by side (ignores the pie chart's click-filter above) — honors Month/Team/Person/Platform.</div>
+          </div>
+
+          <div class="section bar-orange">
+            <h2>Team / RM Breakdown
+              <span id="bdperf-status-source-toggle"></span>
+            </h2>
+            <div id="legend-bdperf"></div>
+            <div class="table-wrap" id="tbl-bdperf"></div>
+            <div class="hint">Add <strong>BD Accountability Tracker.xlsx</strong> to the repo to populate this table.</div>
+          </div>
+        </div>
+
       </div>
-      <div class="section bar-violet">
-        <h2>Current Stage <span id="bd-stage-source-label" style="font-weight:400;text-transform:none;font-size:12px;color:var(--muted)"></span></h2>
-        <div style="height:260px"><canvas id="bd-stage-chart"></canvas></div>
-        <div class="hint">Follows the Workpoint Status / BD Team Status toggle below.</div>
-      </div>
-    </div>
-
-    <div class="section bar-cyan">
-      <h2>GMeet Joined? vs In Process</h2>
-      <div class="table-wrap" id="tbl-bdperf-gmeet"></div>
-      <div class="hint">Data as per the BD Performance Tracker Google Sheet maintained by the BD Team (Current Stage column) — not the B2C-derived status. Always shows all three GMeet states side by side (ignores the pie chart's click-filter above) — honors Month/Team/Person/Platform.</div>
-    </div>
-
-    <div class="section bar-orange">
-      <h2>Team / RM Breakdown
-        <span id="bdperf-status-source-toggle"></span>
-      </h2>
-      <div id="legend-bdperf"></div>
-      <div class="table-wrap" id="tbl-bdperf"></div>
-      <div class="hint">Add <strong>BD Accountability Tracker.xlsx</strong> to the repo to populate this table.</div>
     </div>
   </div>
 

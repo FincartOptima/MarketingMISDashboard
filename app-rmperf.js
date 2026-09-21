@@ -535,14 +535,6 @@ function renderBDCallFlow(){
         ${node('Pending', f.pending, fmtPct(f.pendingPct)+' of meetings scheduled', 'amber')}
         ${node('Not Logged', f.notLogged, fmtPct(f.notLoggedPct)+' of meetings scheduled', 'muted')}
       </div>
-     </div>
-     <div class="cf-note">
-       <strong>Meetings Scheduled</strong> is every lead in the tracker sheets whose <strong>Date Assigned</strong> falls in the
-       selected month(s) — each lead handed to a BD rep counts as a meeting scheduled with them. <strong>Joined / Not Joined /
-       Pending / Not Logged</strong> is that exact same set of leads broken down by their <strong>GMeet Joined?</strong> column
-       (Not Logged = no value entered yet), so those four always add up to Meetings Scheduled exactly. The one join that
-       <em>is</em> across two different sheets is Connected → Meetings Scheduled (Daily Log calls vs. tracker leads), so
-       treat that percentage as directional rather than a strict conversion.
      </div>`;
 }
 
