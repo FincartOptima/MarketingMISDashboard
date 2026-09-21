@@ -920,6 +920,7 @@ table.data.editable td input:focus{outline:2px solid var(--orange);background:va
         <button class="dash-subtab" data-subtab="cost">Cost</button>
         <button class="dash-subtab" data-subtab="income">Income Segment Analysis</button>
         <button class="dash-subtab" data-subtab="b2b">B2B Corporate Leads</button>
+        <button class="dash-subtab" data-subtab="stagnant">Stagnant In-Process Leads</button>
         <button class="dash-subtab" data-subtab="other">Other Reports</button>
       </nav>
 
@@ -1108,6 +1109,40 @@ table.data.editable td input:focus{outline:2px solid var(--orange);background:va
             <div id="legend-workshop-status"></div>
             <div class="table-wrap" id="tbl-workshop-status"></div>
             <div class="hint">Platform = <strong>BTL Marketing</strong> only. Landing pages containing "-D" → Devanshi, "-H" → Himanshi, "-S" → Shreya.</div>
+          </div>
+        </div>
+
+        <!-- ===== Stagnant In-Process Leads ===== -->
+        <div class="dash-subpanel" id="dashsub-stagnant">
+          <div class="section bar-red" id="sec-stagnant-inprocess">
+            <h2>Stagnant In-Process Leads
+              <button class="info-btn" data-info="stagnant-inprocess" title="Table info">i</button>
+            </h2>
+            <div class="hint">Leads currently In Process whose In-Process date is more than 2 months old — stuck with no resolution for over 2 months. Measured against today's real date; ignores every other filter on this dashboard since this is a right-now operational list, not a historical one.</div>
+
+            <div class="kpis" id="stagnant-overview" style="margin-top:14px"></div>
+
+            <div class="mtd-block" style="margin-top:20px">
+              <h3>By Team</h3>
+              <div class="table-wrap" id="tbl-stagnant-team"></div>
+            </div>
+
+            <div class="mtd-block" style="margin-top:20px">
+              <h3>By Client</h3>
+              <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+                <label style="font-size:12px;color:var(--muted)">Team:</label>
+                <div id="stagnant-team-filter-wrap"></div>
+              </div>
+              <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:8px">
+                <span id="stagnant-page-info" style="font-size:12px;color:var(--muted)"></span>
+                <span style="display:flex;gap:8px;align-items:center">
+                  <button class="secondary" id="stagnant-prev">&larr; Prev</button>
+                  <button class="secondary" id="stagnant-next">Next &rarr;</button>
+                  <button class="btn-blue" id="stagnant-download">&#8595; Download Excel</button>
+                </span>
+              </div>
+              <div class="table-wrap" id="tbl-stagnant-clients"></div>
+            </div>
           </div>
         </div>
 

@@ -596,6 +596,85 @@ function renderConvertedDataset(){
   renderTable('#tbl-converted-ds', headers, rows);
 }
 
+// Stagnant In-Process Leads: overview tiles, team-wise breakdown, then a
+// paginated (10/page) client-level table with a full-list Excel download.
+// Deliberately unfiltered by Month/Ref+Cold/Status/Lead Head — see
+// stagnantInProcessLeads() — so page state alone drives re-renders here.
+function renderStagnantInProcess(){
+  if(!STATE.filesLoaded.fin23){
+    setNotUploaded('#tbl-stagnant-clients','fin23');
+    const ov = $('#stagnant-overview'); if(ov) ov.innerHTML = '';
+    $('#tbl-stagnant-team').innerHTML = '';
+    return;
+  }
+  const leads = stagnantInProcessLeads();
+
+  const ov = stagnantInProcessOverview(leads);
+  const tiles = [
+    {label:'Total Stagnant Leads', value: fmtIN(ov.total), tone:'red'},
+    {label:'2–3 Months', value: fmtIN(ov.b2to3), tone:'amber'},
+    {label:'3–6 Months', value: fmtIN(ov.b3to6), tone:'orange'},
+    {label:'6+ Months', value: fmtIN(ov.b6plus), tone:'red'},
+    {label:'Avg Days Stagnant', value: fmtIN(ov.avgDays), tone:'violet'},
+    {label:'Oldest (Days)', value: fmtIN(ov.oldestDays), tone:'red'},
+  ];
+  const ovEl = $('#stagnant-overview');
+  if(ovEl) ovEl.innerHTML = tiles.map(c => `
+    <div class="kpi kpi-${c.tone}">
+      <div class="kpi-value">${c.value}</div>
+      <div class="kpi-label">${c.label}</div>
+    </div>`).join('');
+
+  const teamData = stagnantInProcessByTeam(leads);
+  renderTable('#tbl-stagnant-team', ['Team','Count','Avg Days Stagnant'], teamData.map(r => ({
+    Team: r.Team, Count: fmtIN(r.Count), 'Avg Days Stagnant': fmtIN(r['Avg Days Stagnant']), _tot: !!r._tot,
+  })));
+
+  // Team filter — scoped to the By Client table/list only; Overview and By
+  // Team above always reflect every team.
+  const teamWrap = $('#stagnant-team-filter-wrap');
+  if(teamWrap && !teamWrap.querySelector('select')){
+    const sel = document.createElement('select');
+    sel.id = 'stagnant-team-filter';
+    sel.style.cssText = 'font-size:12px';
+    ['All', ...FIXED_TEAMS].forEach(t => { const o=document.createElement('option'); o.value=t; o.textContent=t; sel.appendChild(o); });
+    sel.value = STATE.stagnantTeamFilter;
+    sel.onchange = e => { STATE.stagnantTeamFilter = e.target.value; STATE.stagnantPage = 1; renderStagnantInProcess(); };
+    teamWrap.appendChild(sel);
+  } else if(teamWrap){
+    const sel = teamWrap.querySelector('select');
+    if(sel) sel.value = STATE.stagnantTeamFilter;
+  }
+  const clientLeads = STATE.stagnantTeamFilter === 'All' ? leads : leads.filter(l => l.Team === STATE.stagnantTeamFilter);
+
+  const clientHeaders = ['Client Name','RM','Team','Platform','Campaign','In-Process Since','Days Stagnant'];
+  const toClientRow = l => ({
+    'Client Name': l.clientName, RM: l.currentRmName, Team: l.Team, Platform: l.platformName,
+    Campaign: l.campaignName, 'In-Process Since': l.leadInProcessDate, 'Days Stagnant': l.daysStagnant,
+  });
+
+  const perPage = 10;
+  const totalPages = Math.max(1, Math.ceil(clientLeads.length / perPage));
+  STATE.stagnantPage = Math.min(Math.max(1, STATE.stagnantPage), totalPages);
+  const startIdx = (STATE.stagnantPage-1)*perPage;
+  const pageRows = clientLeads.slice(startIdx, startIdx+perPage).map(l => {
+    const o = toClientRow(l); o['Days Stagnant'] = fmtIN(o['Days Stagnant']); return o;
+  });
+  renderTable('#tbl-stagnant-clients', clientHeaders, pageRows);
+
+  const pageInfo = $('#stagnant-page-info');
+  if(pageInfo) pageInfo.textContent = `Page ${STATE.stagnantPage} of ${totalPages} (${fmtIN(clientLeads.length)} total)`;
+  const prevBtn = $('#stagnant-prev');
+  if(prevBtn){ prevBtn.disabled = STATE.stagnantPage<=1; prevBtn.onclick = () => { STATE.stagnantPage--; renderStagnantInProcess(); }; }
+  const nextBtn = $('#stagnant-next');
+  if(nextBtn){ nextBtn.disabled = STATE.stagnantPage>=totalPages; nextBtn.onclick = () => { STATE.stagnantPage++; renderStagnantInProcess(); }; }
+
+  const dlBtn = $('#stagnant-download');
+  if(dlBtn) dlBtn.onclick = () => {
+    downloadRowsAsXlsx(clientHeaders, clientLeads.map(toClientRow), 'Stagnant In-Process Leads', 'Stagnant_InProcess_Leads.xlsx');
+  };
+}
+
 function renderMTD(){
   if(!STATE.filesLoaded.fin23){ tabNotUploaded('#mtd-tables','fin23'); return; }
   const data = mtdPerformance();
@@ -1094,6 +1173,7 @@ function renderDashboard(){
   renderCplRm();
   renderInProcessDataset();
   renderConvertedDataset();
+  renderStagnantInProcess();
   renderB2BTable();
   renderWorkshopStatus();
   requestAnimationFrame(attachAllMirrors);

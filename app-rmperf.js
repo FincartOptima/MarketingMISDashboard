@@ -703,8 +703,13 @@ function mtdPerformance(){
         return day >= sd && day <= ed;
       }).length;
 
+      // CONVERTED gate: CM-presence (isConvertedLead), not leadStatus — same
+      // rule as everywhere else on this dashboard. Was leadStatus==='CONVERTED'
+      // literally, which misses any lead that converted (has a CM/convertedDate)
+      // but was later moved to a different status label — undercounted by 27
+      // for a real July-2026 check (106 by the standard rule vs 79 here).
       const conv = pool.filter(r => {
-        if(r.leadStatus !== 'CONVERTED') return false;
+        if(!isConvertedLead(r)) return false;
         const d = r.convertedDate;
         if(!d || d.length < 10) return false;
         if(d.substring(0,7) !== yyyymm) return false;
@@ -712,8 +717,10 @@ function mtdPerformance(){
         return day >= sd && day <= ed;
       }).length;
 
+      // Also excludes CM-having leads now, so a lead that has since converted
+      // can't double up as both "In Process" here and "Converted" above.
       const ip = pool.filter(r => {
-        if(r.leadStatus !== 'IN PROCESS') return false;
+        if(r.leadStatus !== 'IN PROCESS' || isConvertedLead(r)) return false;
         const d = r.leadInProcessDate;
         if(!d || d.length < 10) return false;
         if(d.substring(0,7) !== yyyymm) return false;

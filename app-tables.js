@@ -17,6 +17,16 @@ function renderTable(host, headers, rows, opts={}){
   if(typeof host==='string') $(host).innerHTML = html; else host.innerHTML = html;
 }
 
+// Downloads any headers+rows pair (the same shape renderTable takes — an
+// array of plain objects keyed by header name) as an .xlsx file.
+function downloadRowsAsXlsx(headers, rows, sheetName, fileName){
+  const aoa = [headers, ...rows.map(r => headers.map(h => r[h] ?? ''))];
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, sheetName);
+  XLSX.writeFile(wb, fileName);
+}
+
 // ---- heat tiers (quartile-based row highlighting) ----
 function numFromCell(v){
   if(v==null) return 0;

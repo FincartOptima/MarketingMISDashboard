@@ -640,6 +640,66 @@ function inProcessDataset(){
   return {statuses, data: out};
 }
 
+// ---- Stagnant In-Process Leads ----
+// Every currently-In-Process lead (same rule as everywhere else: leadStatus
+// === 'IN PROCESS' AND not already converted by CM-presence) whose
+// leadInProcessDate is more than 2 calendar months before today — i.e. it's
+// been sitting in that status for over 2 months with no resolution. This is
+// a point-in-time operational list (who needs follow-up right now), not a
+// historical one, so it deliberately ignores the Month/Ref+Cold/Status/Lead
+// Head filters and is always measured against today's real date.
+function stagnantInProcessLeads(){
+  const today = new Date();
+  const cutoff = new Date(today.getFullYear(), today.getMonth()-2, today.getDate());
+  const out = [];
+  for(const r of STATE.raw){
+    if(r.leadStatus !== 'IN PROCESS' || isConvertedLead(r)) continue;
+    const d = r.leadInProcessDate;
+    if(!d || d==='N/A' || d.length<10) continue;
+    const dt = new Date(d);
+    if(isNaN(dt.getTime()) || dt >= cutoff) continue;
+    const daysStagnant = Math.floor((today - dt) / 86400000);
+    out.push({
+      clientName: r.clientName || '(blank)',
+      currentRmName: r.currentRmName || '(unassigned)',
+      Team: r.Team || 'SV',
+      platformName: r.platformName || '',
+      campaignName: r['Campaign Name'] || '',
+      leadInProcessDate: d.substring(0,10),
+      daysStagnant,
+    });
+  }
+  out.sort((a,b) => b.daysStagnant - a.daysStagnant);
+  return out;
+}
+
+// Overview tiles: total count, plus a severity breakdown (2-3mo / 3-6mo /
+// 6mo+) so a glance shows not just how many but how bad.
+function stagnantInProcessOverview(leads){
+  const b2to3 = leads.filter(l => l.daysStagnant < 90).length;
+  const b3to6 = leads.filter(l => l.daysStagnant >= 90 && l.daysStagnant < 180).length;
+  const b6plus = leads.filter(l => l.daysStagnant >= 180).length;
+  const avgDays = leads.length ? Math.round(leads.reduce((s,l)=>s+l.daysStagnant,0)/leads.length) : 0;
+  const oldestDays = leads.length ? Math.max(...leads.map(l=>l.daysStagnant)) : 0;
+  return { total: leads.length, b2to3, b3to6, b6plus, avgDays, oldestDays };
+}
+
+// Team-wise breakdown of the same list.
+function stagnantInProcessByTeam(leads){
+  const present = new Set(leads.map(l => l.Team));
+  const teams = FIXED_TEAMS.filter(t => present.has(t));
+  for(const t of present){ if(!teams.includes(t)) teams.push(t); }
+  const out = teams.map(team => {
+    const rows = leads.filter(l => l.Team === team);
+    const avgDays = rows.length ? Math.round(rows.reduce((s,l)=>s+l.daysStagnant,0)/rows.length) : 0;
+    return { Team: team, Count: rows.length, 'Avg Days Stagnant': avgDays };
+  });
+  const total = leads.length;
+  const totalAvg = total ? Math.round(leads.reduce((s,l)=>s+l.daysStagnant,0)/total) : 0;
+  out.push({ Team: 'Grand Total', Count: total, 'Avg Days Stagnant': totalAvg, _tot: true });
+  return out;
+}
+
 // Landing pages under the BTL Marketing platform are run by three people;
 // the owner is encoded as a "-D"/"-H"/"-S" suffix in the landing page name.
 function workshopOwnerForLandingPage(lp){

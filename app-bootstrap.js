@@ -114,6 +114,13 @@ const TABLE_INFO = {
     cols: 'currentRmName (for Total Leads, Total Cost &amp; Quality Leads) · Campaign Name (all campaigns) · CTM (selected months) · leadStatus (CONVERTED / IN PROCESS, for Quality Leads)',
     source: 'RAW_DATA sheet, Cost Per Campaign tab, EMPLOYEE_REF sheet'
   },
+  'stagnant-inprocess': {
+    title: 'Stagnant In-Process Leads',
+    desc: 'Every lead currently <strong>In Process</strong> (same rule as everywhere else: leadStatus is IN PROCESS and it hasn\'t since converted) whose <strong>leadInProcessDate</strong> is more than 2 calendar months before today — i.e. it\'s been sitting with no resolution for over 2 months. <strong>Overview</strong> gives the total plus a severity split (2–3 / 3–6 / 6+ months). <strong>By Team</strong> breaks the same list down by current Team. <strong>By Client</strong> lists every one of them, 10 per page — use Download Excel to get the complete list in one file regardless of which page you\'re on.',
+    cols: 'leadStatus (IN PROCESS) · CM (must be blank — excludes leads that have since converted) · leadInProcessDate (compared against today minus 2 months) · currentRmName · Team · platformName · Campaign Name',
+    source: 'RAW_DATA sheet',
+    note: 'Deliberately ignores the Month/Ref+Cold/Status/Lead Head filters — this is a point-in-time "who needs follow-up right now" list, always measured against today\'s real date, not a historical breakdown. The <strong>By Client</strong> table has its own <strong>Team</strong> filter (default All) that narrows just that table and its Excel download — Overview and By Team above it always cover every team regardless of this filter.'
+  },
   'inprocess-ds': {
     title: 'In-Process Date Set, Status ≠ IN PROCESS',
     desc: 'Data quality check: rows where leadInProcessDate is populated but leadStatus is not IN PROCESS — the lead moved out of in-process without the date being cleared.',

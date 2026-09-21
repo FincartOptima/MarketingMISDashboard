@@ -57,6 +57,8 @@ const STATE = {
   premiumUnlocked: false,
   dashSubtab: 'overview',
   bdSubtab: 'callflow',
+  stagnantPage: 1,
+  stagnantTeamFilter: 'All',
   teamPerfMode: 'first',
   campaignTeamMode: 'first',
 };
