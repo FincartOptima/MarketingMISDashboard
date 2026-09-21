@@ -579,25 +579,25 @@ table.data.editable td input:focus{outline:2px solid var(--orange);background:va
    on every filter change exactly as before, this just changes what's shown. */
 .dash-layout{display:flex;align-items:flex-start;gap:20px}
 .dash-subnav{
-  flex:none;width:220px;display:flex;flex-direction:column;gap:2px;
+  flex:none;width:220px;display:flex;flex-direction:column;gap:8px;
   position:sticky;top:76px;
+  background:var(--text);padding:12px;
 }
 .dash-subnav .dash-subtab{
-  display:block;width:100%;text-align:left;background:#fff;color:var(--muted);
-  border:2px solid var(--line);border-left-width:4px;
+  display:block;width:100%;text-align:left;background:transparent;color:#94a3b8;
+  border:2px solid transparent;
   padding:10px 14px;font:600 12px/1.3 var(--font-body,inherit);cursor:pointer;
   transition:background .1s,color .1s,border-color .1s;
 }
-.dash-subnav .dash-subtab + .dash-subtab{border-top:0}
-.dash-subnav .dash-subtab:hover{background:var(--orange-tint);color:var(--orange)}
-.dash-subnav .dash-subtab.active{background:var(--orange-tint);color:var(--orange);border-left-color:var(--orange)}
+.dash-subnav .dash-subtab:hover{background:rgba(255,255,255,.08);color:#fff}
+.dash-subnav .dash-subtab.active{background:var(--orange);color:#fff;border-color:var(--orange)}
 .dash-content{flex:1;min-width:0}
 .dash-subpanel{display:none}
 .dash-subpanel.active{display:block}
 @media(max-width:860px){
   .dash-layout{flex-direction:column}
   .dash-subnav{position:static;width:100%;flex-direction:row;flex-wrap:wrap}
-  .dash-subnav .dash-subtab{width:auto;flex:1 1 auto;border-left-width:2px;border-top-width:4px}
+  .dash-subnav .dash-subtab{width:auto;flex:1 1 auto}
 }
 </style>
 </head>
@@ -983,14 +983,6 @@ table.data.editable td input:focus{outline:2px solid var(--orange);background:va
             <div class="table-wrap" id="tbl-lp-status"></div>
           </div>
 
-          <div class="section bar-cyan" id="sec-workshop">
-            <h2>Workshop Status Distribution
-              <button class="info-btn" data-info="workshop-status" title="Table info">i</button>
-            </h2>
-            <div id="legend-workshop-status"></div>
-            <div class="table-wrap" id="tbl-workshop-status"></div>
-            <div class="hint">Platform = <strong>BTL Marketing</strong> only. Landing pages containing "-D" → Devanshi, "-H" → Himanshi, "-S" → Shreya.</div>
-          </div>
         </div>
 
         <!-- ===== Team Performance ===== -->
@@ -1108,11 +1100,20 @@ table.data.editable td input:focus{outline:2px solid var(--orange);background:va
             <div class="table-wrap" id="tbl-b2b"></div>
             <div class="hint">Add <strong>B2B.xlsx</strong> to the repo to populate this table.</div>
           </div>
+
+          <div class="section bar-cyan" id="sec-workshop">
+            <h2>Workshop Status Distribution
+              <button class="info-btn" data-info="workshop-status" title="Table info">i</button>
+            </h2>
+            <div id="legend-workshop-status"></div>
+            <div class="table-wrap" id="tbl-workshop-status"></div>
+            <div class="hint">Platform = <strong>BTL Marketing</strong> only. Landing pages containing "-D" → Devanshi, "-H" → Himanshi, "-S" → Shreya.</div>
+          </div>
         </div>
 
         <!-- ===== Other Reports ===== -->
         <div class="dash-subpanel" id="dashsub-other">
-          <div class="grid cols-2" id="sec-inprocess-converted">
+          <div id="sec-inprocess-converted">
             <div class="section bar-pink">
               <h2 id="inprocess-ds-title">In-Process Date Set, Status ≠ IN PROCESS
                 <button class="info-btn" data-info="inprocess-ds" title="Table info">i</button>

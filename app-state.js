@@ -57,7 +57,7 @@ const STATE = {
   premiumUnlocked: false,
   dashSubtab: 'overview',
   teamPerfMode: 'first',
-  campaignTeamMode: 'current',
+  campaignTeamMode: 'first',
 };
 
 function notUploadedHTML(key){

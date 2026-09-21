@@ -194,9 +194,10 @@ function renderLandingPageStatus(){
     applyRefColdFilter(STATE.raw).map(r => r['Campaign Name']).filter(Boolean)
   )).sort()];
 
-  // Default to first actual campaign if not yet set
+  // Default to Google if not yet set (or no longer valid); fall back to the
+  // first actual campaign if Google isn't present in the uploaded data.
   if(!STATE.lpCampaignFilter || !campaigns.includes(STATE.lpCampaignFilter)){
-    STATE.lpCampaignFilter = campaigns[1] || 'All';
+    STATE.lpCampaignFilter = campaigns.includes('Google') ? 'Google' : (campaigns[1] || 'All');
   }
 
   // ---- Table mode selector ----
