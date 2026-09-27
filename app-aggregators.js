@@ -866,10 +866,20 @@ function bdFilteredRows(){
 // (Workpoint Status — B2C-derived, current CRM ownership/status) or
 // 'currentStage' (BD Team Status — the tracker's own self-reported stage,
 // as logged by the BD rep). See the toggle in renderBDPerformance().
+//
+// "Not Logged" catches every row whose stageField value isn't one of the 7
+// BD_STAGES — under Workpoint Status that's leads with no B2C match at all
+// (bdStageFromB2C has nothing to resolve); under BD Team Status that's leads
+// whose Current Stage cell the BD rep simply hasn't filled in yet. Without
+// this bucket those rows still counted toward Total but vanished from every
+// stage column, so Total silently didn't equal the sum of the columns —
+// same "Not Logged" naming as the GMeet Joined? breakdown in Call Flow, for
+// the same reason (a value that was never entered, not a real 8th stage).
 function bdSummarize(rows, stageField){
   stageField = stageField || 'effectiveStage';
   const obj = {};
   for(const st of BD_STAGES) obj[st] = rows.filter(r => r[stageField] === st).length;
+  obj['Not Logged'] = rows.filter(r => !BD_STAGES.includes(r[stageField])).length;
   obj.Total = rows.length;
   obj['GMeet Joined'] = rows.filter(r => r.gmeetJoined === 'Yes').length;
   obj['Conv. Rate'] = rows.length>0 ? (obj['CONVERTED']||0)/rows.length : 0;
@@ -881,7 +891,7 @@ function bdPerformanceByTeam(stageField){
   const rows = bdFilteredRows();
   const teams = bdTeamList();
   const out = teams.map(team => ({Team: team, ...bdSummarize(rows.filter(r => r.effectiveTeam === team), stageField)}));
-  const gt = buildGrandTotalRow('Team', 'Grand Total', [...BD_STAGES,'Total','GMeet Joined'], out);
+  const gt = buildGrandTotalRow('Team', 'Grand Total', [...BD_STAGES,'Not Logged','Total','GMeet Joined'], out);
   gt['Conv. Rate'] = gt.Total>0 ? (gt['CONVERTED']||0)/gt.Total : 0;
   gt['QL Conv. Rate'] = gt.Total>0 ? ((gt['CONVERTED']||0)+(gt['IN PROCESS']||0))/gt.Total : 0;
   out.push(gt);
@@ -893,7 +903,7 @@ function bdPerformanceByRM(team, stageField){
   const rms = [...new Set(rows.map(r => (r.effectiveRM||'').trim()).filter(Boolean))];
   const out = rms.map(rm => ({RM: rm, ...bdSummarize(rows.filter(r => (r.effectiveRM||'').trim() === rm), stageField)}))
                  .sort((a,b) => b.Total - a.Total);
-  const gt = buildGrandTotalRow('RM', team+' Total', [...BD_STAGES,'Total','GMeet Joined'], out);
+  const gt = buildGrandTotalRow('RM', team+' Total', [...BD_STAGES,'Not Logged','Total','GMeet Joined'], out);
   gt['Conv. Rate'] = gt.Total>0 ? (gt['CONVERTED']||0)/gt.Total : 0;
   gt['QL Conv. Rate'] = gt.Total>0 ? ((gt['CONVERTED']||0)+(gt['IN PROCESS']||0))/gt.Total : 0;
   out.push(gt);
@@ -931,6 +941,48 @@ function bdGmeetCorrelation(){
   return out;
 }
 
+// Per-BD-rep summary joining the two data sources the whole tab is built
+// from: Calls Made (BD Daily Log, only Month + Person apply — no Team/
+// Platform link, same as everywhere else this sheet is used) and Total
+// Leads / GMeet Joined / Converted (tracker + B2C match, full Month/Team/
+// Person/Platform scope). The two are correlated by matching the tracker's
+// own `person` against the Daily Log's `bdName` — the same join Call Flow
+// already relies on (verified there against a real rep's day-by-day count).
+// Converted uses effectiveStage (the CM-presence/B2C-derived rule used
+// dashboard-wide), NOT currentStage — the tracker's own Current Stage
+// column is the BD team's self-reported stage (LEAD ASSIGNED / IN
+// FOLLOW-UP / IN PROCESS / DROPPED / TAX FILING DONE / ON HOLD-DEAD) and
+// never actually contains the literal value "CONVERTED" in practice, so a
+// currentStage-based check here would always read zero.
+//
+// Conversion Rate = Converted ÷ Total Leads — the same CONVERTED ÷ Total
+// definition used dashboard-wide (Team/RM Breakdown, MTD, etc.), not ÷
+// Calls Made: Calls Made counts every dial across the month (often
+// thousands per rep), so dividing lead-level Converted by it produced a
+// misleadingly tiny rate (e.g. 0.1%-0.3%) that didn't read as a real
+// conversion rate next to every other rate on this page.
+function bdCallsToConversion(){
+  const leadRows = bdFilteredRowsBase();
+  const callRows = bdCallsFilteredRows();
+  const people = [...new Set([...leadRows.map(r=>r.person), ...callRows.map(r=>r.bdName)].filter(Boolean))].sort();
+
+  const out = people.map(person => {
+    const calls = callRows.filter(r => r.bdName === person).reduce((s,r) => s + (r.totalCalls||0), 0);
+    const personLeads = leadRows.filter(r => r.person === person);
+    const totalLeads = personLeads.length;
+    const gmeetJoined = personLeads.filter(r => r.gmeetJoined === 'Yes').length;
+    const converted = personLeads.filter(r => r.effectiveStage === 'CONVERTED').length;
+    return {
+      Person: person, 'Calls Made': calls, 'Total Leads': totalLeads, 'GMeet Joined': gmeetJoined, Converted: converted,
+      'Conversion Rate': totalLeads>0 ? converted/totalLeads : 0,
+    };
+  });
+  const gt = buildGrandTotalRow('Person', 'Grand Total', ['Calls Made','Total Leads','GMeet Joined','Converted'], out);
+  gt['Conversion Rate'] = gt['Total Leads']>0 ? gt['Converted']/gt['Total Leads'] : 0;
+  out.push(gt);
+  return out;
+}
+
 // Chart data — both reflect the currently active Month/Team/Person/Platform
 // filters via bdFilteredRows(), regardless of whether the table above is
 // showing team-level or RM-drilldown rows.
@@ -945,6 +997,7 @@ function bdStageBreakdown(stageField){
   const rows = bdFilteredRows();
   const out = {};
   for(const st of BD_STAGES) out[st] = rows.filter(r => r[stageField] === st).length;
+  out['Not Logged'] = rows.filter(r => !BD_STAGES.includes(r[stageField])).length;
   return out;
 }
 

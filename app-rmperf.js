@@ -423,9 +423,9 @@ function renderBDStageChart(){
   const canvas = $('#bd-stage-chart'); if(!canvas) return;
   if(STATE.bdStageChart){ STATE.bdStageChart.destroy(); STATE.bdStageChart = null; }
   const counts = bdStageBreakdown(bdActiveStageField());
-  const labels = BD_STAGES;
+  const labels = [...BD_STAGES, 'Not Logged'];
   const values = labels.map(l => counts[l]);
-  const colors = ['#3b82f6','#b45309','#0891b2','#16a34a','#7c3aed','#e11d48','#db2777'];
+  const colors = ['#3b82f6','#b45309','#0891b2','#16a34a','#7c3aed','#e11d48','#db2777','#94a3b8'];
   STATE.bdStageChart = new Chart(canvas.getContext('2d'), {
     type:'bar',
     plugins: window.ChartDataLabels ? [window.ChartDataLabels] : [],
@@ -623,6 +623,7 @@ function renderBDPerformance(){
   renderBDGmeetChart();
   renderBDStageChart();
   renderBDGmeetCorrelation();
+  renderBDCallsToConversion();
 
   const toggleWrap = $('#bdperf-status-source-toggle');
   if(toggleWrap){
@@ -636,7 +637,7 @@ function renderBDPerformance(){
   }
   const stageField = bdActiveStageField();
 
-  const headers = ['Person', ...BD_STAGES, 'Total', 'GMeet Joined', 'Conv. Rate', 'QL Conv. Rate'];
+  const headers = ['Person', ...BD_STAGES, 'Not Logged', 'Total', 'GMeet Joined', 'Conv. Rate', 'QL Conv. Rate'];
   const selectedTeam = STATE.bdTeamFilter;
   const isSingleTeam = selectedTeam && selectedTeam !== 'All' && !Array.isArray(selectedTeam);
 
@@ -647,6 +648,7 @@ function renderBDPerformance(){
   const rows = data.map(r => {
     const o = {[rowLabelField]: r[rowLabelField]};
     BD_STAGES.forEach(s => o[s] = fmtIN(r[s]));
+    o['Not Logged'] = fmtIN(r['Not Logged']);
     o.Total = fmtIN(r.Total);
     o['GMeet Joined'] = fmtIN(r['GMeet Joined']);
     o['Conv. Rate'] = fmtPct(r['Conv. Rate']);
@@ -673,6 +675,21 @@ function renderBDGmeetCorrelation(){
     _tot: !!r._tot,
   }));
   renderTable('#tbl-bdperf-gmeet', headers, rows);
+}
+
+function renderBDCallsToConversion(){
+  const data = bdCallsToConversion();
+  const headers = ['Person', 'Calls Made', 'Total Leads', 'GMeet Joined', 'Converted', 'Conversion Rate'];
+  const rows = data.map(r => ({
+    Person: r.Person,
+    'Calls Made': fmtIN(r['Calls Made']),
+    'Total Leads': fmtIN(r['Total Leads']),
+    'GMeet Joined': fmtIN(r['GMeet Joined']),
+    Converted: fmtIN(r.Converted),
+    'Conversion Rate': fmtPct(r['Conversion Rate']),
+    _tot: !!r._tot,
+  }));
+  renderTable('#tbl-bd-calls-conversion', headers, rows);
 }
 
 function mtdPerformance(){
