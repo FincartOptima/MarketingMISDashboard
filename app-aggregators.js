@@ -178,9 +178,13 @@ function landingPageStatusBreakdown(){
   const mode = STATE.lpTableMode || 'All';
   let rows = applyRefColdFilter(STATE.raw);
   if(STATE.lpTeamFilter !== 'All') rows = rows.filter(r => r.Team === STATE.lpTeamFilter);
-  if(STATE.lpCampaignFilter && STATE.lpCampaignFilter !== 'All')
-    rows = rows.filter(r => r['Campaign Name'] === STATE.lpCampaignFilter);
-  if(STATE.lpLandingPages.length)
+  // `!== null` (not `.length`): a real empty array means the user
+  // deselected every option and the table should show nothing, not fall
+  // back to unfiltered. null-only means "not yet initialized by the
+  // renderer" and is treated as no filter.
+  if(STATE.lpCampaignFilter !== null)
+    rows = rows.filter(r => STATE.lpCampaignFilter.includes(r['Campaign Name']));
+  if(STATE.lpLandingPages !== null)
     rows = rows.filter(r => STATE.lpLandingPages.includes(r.landingPage || '(Blank)'));
 
   // Group by landingPage — every row lands in exactly one bucket so grand total reconciles

@@ -47,7 +47,7 @@ const STATE = {
   lpTableMode: 'All',
   lpTeamFilter: 'All',
   lpCampaignFilter: null,
-  lpLandingPages: [],
+  lpLandingPages: null,
   revChart: null,
   statusChart: null,
   bdGmeetChart: null,

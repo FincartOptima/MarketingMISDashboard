@@ -190,14 +190,19 @@ function renderLandingPageStatus(){
   if(!STATE.filesLoaded.fin23){ setNotUploaded('#tbl-lp-status','fin23'); $('#legend-lp-status').innerHTML=''; return; }
 
   // Build campaign list from current raw data (after ref/cold filter)
-  const campaigns = ['All', ...Array.from(new Set(
+  const campaigns = Array.from(new Set(
     applyRefColdFilter(STATE.raw).map(r => r['Campaign Name']).filter(Boolean)
-  )).sort()];
+  )).sort();
 
-  // Default to Google if not yet set (or no longer valid); fall back to the
-  // first actual campaign if Google isn't present in the uploaded data.
-  if(!STATE.lpCampaignFilter || !campaigns.includes(STATE.lpCampaignFilter)){
-    STATE.lpCampaignFilter = campaigns.includes('Google') ? 'Google' : (campaigns[1] || 'All');
+  // Default to Google if not yet set; otherwise drop any selections that are
+  // no longer valid campaigns (e.g. data was reloaded). null is the "never
+  // initialized" sentinel — a real empty array means the user deliberately
+  // deselected every campaign and must stay that way (see Landing Page
+  // filter below for why `.length === 0` alone can't be used as the signal).
+  if(STATE.lpCampaignFilter === null){
+    STATE.lpCampaignFilter = campaigns.includes('Google') ? ['Google'] : (campaigns[0] ? [campaigns[0]] : []);
+  } else {
+    STATE.lpCampaignFilter = STATE.lpCampaignFilter.filter(c => campaigns.includes(c));
   }
 
   // ---- Table mode selector ----
@@ -226,7 +231,7 @@ function renderLandingPageStatus(){
     sel.style.cssText = 'font-size:12px';
     allTeams.forEach(t=>{ const o=document.createElement('option'); o.value=t; o.textContent=t; sel.appendChild(o); });
     sel.value = STATE.lpTeamFilter;
-    sel.onchange = e => { STATE.lpTeamFilter = e.target.value; STATE.lpLandingPages = []; renderLandingPageStatus(); };
+    sel.onchange = e => { STATE.lpTeamFilter = e.target.value; STATE.lpLandingPages = null; renderLandingPageStatus(); };
     teamWrap.innerHTML = '<label style="font-size:12px;color:var(--muted);margin-right:6px">Team:</label>';
     teamWrap.appendChild(sel);
   } else if(teamWrap){
@@ -234,17 +239,58 @@ function renderLandingPageStatus(){
     if(sel) sel.value = STATE.lpTeamFilter;
   }
 
-  // ---- Campaign filter ----
+  // ---- Campaign filter (multi-select) ----
+  // Mirrors the Landing Page filter's hand-rolled multi-select below (not
+  // buildMultiSelect, for the same reason: must allow 0 selected).
   const campWrap = $('#lp-campaign-filter-wrap');
   if(campWrap){
+    const selCountC = STATE.lpCampaignFilter.length;
+    const btnLabelC = selCountC === campaigns.length ? 'All Campaigns' :
+                     selCountC === 0 ? 'None selected' :
+                     selCountC === 1 ? STATE.lpCampaignFilter[0] :
+                     selCountC + ' selected';
     campWrap.innerHTML = '<label style="font-size:12px;color:var(--muted);margin-right:6px">Campaign:</label>';
-    const sel = document.createElement('select');
-    sel.id = 'lp-campaign-filter';
-    sel.style.cssText = 'font-size:12px';
-    campaigns.forEach(c=>{ const o=document.createElement('option'); o.value=c; o.textContent=c; sel.appendChild(o); });
-    sel.value = STATE.lpCampaignFilter;
-    sel.onchange = e => { STATE.lpCampaignFilter = e.target.value; STATE.lpLandingPages = []; renderLandingPageStatus(); };
-    campWrap.appendChild(sel);
+    const cWrap = document.createElement('div');
+    cWrap.className = 'ms-wrap';
+    const cBtn = document.createElement('div');
+    cBtn.className = 'ms-btn';
+    cBtn.innerHTML = '<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:160px">'+escHtml(btnLabelC)+'</span><span class="ms-arrow">▼</span>';
+    cBtn.onclick = e => { e.stopPropagation(); cWrap.classList.toggle('open'); };
+    const cDd = document.createElement('div');
+    cDd.className = 'ms-dropdown';
+    const cAllOpt = document.createElement('label');
+    cAllOpt.className = 'ms-opt ms-all';
+    const cAllCb = document.createElement('input');
+    cAllCb.type = 'checkbox';
+    cAllCb.checked = selCountC === campaigns.length;
+    cAllCb.onchange = () => {
+      STATE.lpCampaignFilter = cAllCb.checked ? campaigns.slice() : [];
+      STATE.lpLandingPages = null;
+      renderLandingPageStatus();
+    };
+    cAllOpt.appendChild(cAllCb);
+    cAllOpt.appendChild(document.createTextNode(' Select All'));
+    cDd.appendChild(cAllOpt);
+    for(const c of campaigns){
+      const opt = document.createElement('label');
+      opt.className = 'ms-opt' + (STATE.lpCampaignFilter.includes(c) ? ' ms-selected' : '');
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.checked = STATE.lpCampaignFilter.includes(c);
+      cb.onchange = () => {
+        if(cb.checked){ if(!STATE.lpCampaignFilter.includes(c)) STATE.lpCampaignFilter.push(c); }
+        else { STATE.lpCampaignFilter = STATE.lpCampaignFilter.filter(x => x !== c); }
+        STATE.lpLandingPages = null;
+        renderLandingPageStatus();
+      };
+      opt.appendChild(cb);
+      opt.appendChild(document.createTextNode(' ' + c));
+      cDd.appendChild(opt);
+    }
+    cWrap.appendChild(cBtn);
+    cWrap.appendChild(cDd);
+    campWrap.appendChild(cWrap);
+    document.addEventListener('click', () => cWrap.classList.remove('open'), {once:true});
   }
 
   // ---- Landing Page filter (multi-select) ----
@@ -255,12 +301,20 @@ function renderLandingPageStatus(){
   if(lpWrap){
     let base = applyRefColdFilter(STATE.raw);
     if(STATE.lpTeamFilter !== 'All') base = base.filter(r => r.Team === STATE.lpTeamFilter);
-    if(STATE.lpCampaignFilter && STATE.lpCampaignFilter !== 'All')
-      base = base.filter(r => r['Campaign Name'] === STATE.lpCampaignFilter);
+    // Same `!== null` reasoning as the aggregator: 0 campaigns selected
+    // means 0 available landing pages, not "ignore the campaign filter".
+    base = base.filter(r => STATE.lpCampaignFilter.includes(r['Campaign Name']));
     const allLPs = [...new Set(base.map(r => r.landingPage || '(Blank)').filter(Boolean))].sort();
-    if(!STATE.lpLandingPages.length) STATE.lpLandingPages = allLPs.slice();
+    // null means "never initialized / scope just reset" -> default to all.
+    // A real empty array means the user deliberately deselected everything
+    // via Select-All or one-by-one, and must stay empty across re-renders
+    // (previously this line read `if(!STATE.lpLandingPages.length)`, which
+    // made 0-selected unreachable: unchecking Select All set [] but the very
+    // next render refilled it right back to "all selected").
+    if(STATE.lpLandingPages === null) STATE.lpLandingPages = allLPs.slice();
     const selCount = STATE.lpLandingPages.length;
-    const btnLabel = selCount === allLPs.length ? 'All Landing Pages' :
+    const btnLabel = allLPs.length === 0 ? 'No Landing Pages' :
+                     selCount === allLPs.length ? 'All Landing Pages' :
                      selCount === 0 ? 'None selected' :
                      selCount === 1 ? STATE.lpLandingPages[0] :
                      selCount + ' selected';
