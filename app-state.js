@@ -61,6 +61,9 @@ const STATE = {
   stagnantTeamFilter: 'All',
   teamPerfMode: 'first',
   campaignTeamMode: 'first',
+  categorizedLeads: [],
+  categorizedCategoryFilter: 'All',
+  categorizedPage: 1,
 };
 
 function notUploadedHTML(key){

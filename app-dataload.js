@@ -300,6 +300,19 @@ async function loadAllFromRepo(){
     STATE.bdCalls = [];
   }
 
+  // On-Hold lead remarks, bucketed into categories by a calibrated
+  // rule-based matcher (see scratch_mfsa/classify.py) — extracted locally,
+  // same non-live pattern as the file uploads above, into
+  // categorized_leads_data.js (window.CATEGORIZED_LEADS_DATA).
+  if(window.CATEGORIZED_LEADS_DATA && window.CATEGORIZED_LEADS_DATA.rows && window.CATEGORIZED_LEADS_DATA.rows.length){
+    STATE.categorizedLeads = window.CATEGORIZED_LEADS_DATA.rows;
+    STATE.categorizedGeneratedAt = window.CATEGORIZED_LEADS_DATA.generatedAt;
+    STATE.filesLoaded.categorized = true;
+  } else {
+    console.warn('[MIS] Categorized leads data missing (categorized_leads_data.js not found or empty)');
+    STATE.categorizedLeads = [];
+  }
+
   if(STATE.fy && STATE.fy.length) STATE.fy.forEach(r => { r.mappedRM = mapRM(r.rmName); });
   if(STATE.pa && STATE.pa.length) STATE.pa.forEach(r => { r.mappedRM = mapRM(r.advisor); });
 

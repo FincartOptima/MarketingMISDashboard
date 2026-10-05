@@ -1399,6 +1399,38 @@ table.data.editable td input:focus{outline:2px solid var(--orange);background:va
     </div>
   </div>
 
+  <!-- ===== CATEGORIZED LEADS ===== -->
+  <div class="tab-panel" id="tab-categorized">
+    <div class="section bar-pink">
+      <h2>Categorized Leads — On-Hold Remark Buckets
+        <span style="float:right;font-weight:400;text-transform:none;display:flex;align-items:center;gap:10px">
+          <label style="font-size:11px;color:var(--muted)">Category</label>
+          <div id="categorized-category-filter-wrap" style="display:inline-block;vertical-align:middle"></div>
+        </span>
+      </h2>
+      <div class="meta">Every On-Hold lead's most recent remark, bucketed into a category by a calibrated rule-based matcher (not an exact science — see the note below the detail table).</div>
+      <div id="categorized-generated-note" style="font-size:12px;color:var(--muted);margin-top:2px"></div>
+    </div>
+
+    <div class="section">
+      <h2>Summary</h2>
+      <div class="table-wrap" id="tbl-categorized-summary"></div>
+    </div>
+
+    <div class="section bar-blue">
+      <h2>Detail
+        <span style="float:right;font-weight:400;text-transform:none;display:flex;align-items:center;gap:10px">
+          <span id="categorized-page-info" style="font-size:12px;color:var(--muted)"></span>
+          <button class="secondary" id="categorized-prev">&larr; Prev</button>
+          <button class="secondary" id="categorized-next">Next &rarr;</button>
+          <button class="secondary" id="categorized-download">Download as Excel</button>
+        </span>
+      </h2>
+      <div class="table-wrap" id="tbl-categorized-detail"></div>
+      <div class="hint">Pick a category above to narrow the table (and the Excel download) to just that bucket — "All" shows every On-Hold lead. Categories were derived from a prior manually-reviewed batch of 7,599 leads and matched here with a keyword-based classifier (~87% agreement against that batch) — treat individual category assignments as a strong starting point, not a guarantee, especially for less common buckets.</div>
+    </div>
+  </div>
+
   <!-- ===== COST PER CAMPAIGN ===== -->
   <div class="tab-panel" id="tab-cpc">
     <div class="section bar-yellow">
@@ -1604,7 +1636,7 @@ table.data.editable td input:focus{outline:2px solid var(--orange);background:va
   (function(){
     var t = Date.now();
     var parent = document.currentScript.parentNode;
-    ['data.js','snapshot.js','app-config.js','app-dateutils.js','app-state.js','app-dataload.js','app-filters.js','app-aggregators.js','app-rmperf.js','app-tables.js','app-renderers.js','app-ui.js','app-bootstrap.js'].forEach(function(src){
+    ['data.js','snapshot.js','categorized_leads_data.js','app-config.js','app-dateutils.js','app-state.js','app-dataload.js','app-filters.js','app-aggregators.js','app-rmperf.js','app-categorized.js','app-tables.js','app-renderers.js','app-ui.js','app-bootstrap.js'].forEach(function(src){
       var s = document.createElement('script');
       s.src = src + '?t=' + t;
       s.async = false;
