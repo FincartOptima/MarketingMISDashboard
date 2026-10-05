@@ -684,6 +684,17 @@ function renderStagnantInProcess(){
     Team: r.Team, Count: fmtIN(r.Count), 'Avg Days Stagnant': fmtIN(r['Avg Days Stagnant']), _tot: !!r._tot,
   })));
 
+  const teamSummary = stagnantInProcessTeamSummary();
+  renderTable('#tbl-stagnant-team-summary', ['Team','Total Leads','Total In-Process Leads','Stagnant In-Process Leads','% Stagnant of In-Process','% Stagnant of Total Leads'], teamSummary.map(r => ({
+    Team: r.Team,
+    'Total Leads': fmtIN(r['Total Leads']),
+    'Total In-Process Leads': fmtIN(r['Total In-Process Leads']),
+    'Stagnant In-Process Leads': fmtIN(r['Stagnant In-Process Leads']),
+    '% Stagnant of In-Process': fmtPct(r['% Stagnant of In-Process']),
+    '% Stagnant of Total Leads': fmtPct(r['% Stagnant of Total Leads']),
+    _tot: !!r._tot,
+  })));
+
   // Team filter — scoped to the By Client table/list only; Overview and By
   // Team above always reflect every team.
   const teamWrap = $('#stagnant-team-filter-wrap');

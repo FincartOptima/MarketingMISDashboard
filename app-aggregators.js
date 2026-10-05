@@ -666,7 +666,10 @@ function stagnantInProcessLeads(){
     out.push({
       clientName: r.clientName || '(blank)',
       currentRmName: r.currentRmName || '(unassigned)',
-      Team: r.Team || 'SV',
+      // First RM's team, not current — same convention as campaignByTeam's
+      // "first" mode, so this section doesn't disagree with itself about
+      // which team a lead belongs to.
+      Team: STATE.teamMap[(r.firstRmName||'').toLowerCase()] || 'SV',
       platformName: r.platformName || '',
       campaignName: r['Campaign Name'] || '',
       leadInProcessDate: d.substring(0,10),
@@ -701,6 +704,68 @@ function stagnantInProcessByTeam(leads){
   const total = leads.length;
   const totalAvg = total ? Math.round(leads.reduce((s,l)=>s+l.daysStagnant,0)/total) : 0;
   out.push({ Team: 'Grand Total', Count: total, 'Avg Days Stagnant': totalAvg, _tot: true });
+  return out;
+}
+
+// Team-wise reconciliation table: Total Leads / Total In-Process / Stagnant
+// In-Process, plus what share of each denominator the stagnant count is.
+// Deliberately built as three strictly nested pools over the SAME base
+// STATE.raw rows (Total Leads ⊇ Total In-Process ⊇ Stagnant In-Process),
+// each just adding one more condition on top of the last — that nesting is
+// what guarantees Stagnant ≤ In-Process ≤ Total for every team and that
+// every team row sums to the Grand Total row, with no separate "top-down"
+// vs "bottom-up" pass to reconcile. Ignores every dashboard filter, same as
+// the rest of the Stagnant In-Process section — this is a real-time
+// operational snapshot, not a historical/filtered one.
+function stagnantInProcessTeamSummary(){
+  const today = new Date();
+  const cutoff = new Date(today.getFullYear(), today.getMonth()-2, today.getDate());
+
+  const allLeads = STATE.raw;
+  const inProcessLeads = allLeads.filter(r => r.leadStatus === 'IN PROCESS' && !isConvertedLead(r));
+  const stagnantLeads = inProcessLeads.filter(r => {
+    const d = r.leadInProcessDate;
+    if(!d || d==='N/A' || d.length<10) return false;
+    const dt = new Date(d);
+    return !isNaN(dt.getTime()) && dt < cutoff;
+  });
+
+  // First RM's team, not current — matches stagnantInProcessLeads() above,
+  // so this table and the By Team/By Client tables never disagree about
+  // which team a given lead belongs to.
+  const teamOf = r => STATE.teamMap[(r.firstRmName||'').toLowerCase()] || 'SV';
+  const present = new Set([...allLeads.map(teamOf), ...inProcessLeads.map(teamOf), ...stagnantLeads.map(teamOf)]);
+  const teams = FIXED_TEAMS.filter(t => present.has(t));
+  for(const t of present){ if(!teams.includes(t)) teams.push(t); }
+
+  const countBy = (rows, team) => rows.filter(r => teamOf(r) === team).length;
+
+  const out = teams.map(team => {
+    const totalLeads = countBy(allLeads, team);
+    const totalInProcess = countBy(inProcessLeads, team);
+    const stagnant = countBy(stagnantLeads, team);
+    return {
+      Team: team,
+      'Total Leads': totalLeads,
+      'Total In-Process Leads': totalInProcess,
+      'Stagnant In-Process Leads': stagnant,
+      '% Stagnant of In-Process': totalInProcess>0 ? stagnant/totalInProcess : 0,
+      '% Stagnant of Total Leads': totalLeads>0 ? stagnant/totalLeads : 0,
+    };
+  });
+
+  const gtTotalLeads = allLeads.length;
+  const gtInProcess = inProcessLeads.length;
+  const gtStagnant = stagnantLeads.length;
+  out.push({
+    Team: 'Grand Total',
+    'Total Leads': gtTotalLeads,
+    'Total In-Process Leads': gtInProcess,
+    'Stagnant In-Process Leads': gtStagnant,
+    '% Stagnant of In-Process': gtInProcess>0 ? gtStagnant/gtInProcess : 0,
+    '% Stagnant of Total Leads': gtTotalLeads>0 ? gtStagnant/gtTotalLeads : 0,
+    _tot: true,
+  });
   return out;
 }
 
