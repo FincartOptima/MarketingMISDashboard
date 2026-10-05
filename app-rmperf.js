@@ -9,6 +9,40 @@ function rmPerfMonthMatch(m){
   if(Array.isArray(sel)) return sel.includes(m);
   return m === sel;
 }
+// ---- guard: revenue reconciliation ----
+// This section goes to real lengths to make sure no revenue row is dropped:
+// teams are resolved by a cascade (RM Master Mapping → EMPLOYEE_REF →
+// 'Unmatched'), and unmatched rows are deliberately surfaced so the grand
+// total still ties out to the Revenue Input file. That's a promise worth
+// actually checking — if an RM silently stops resolving, revenue quietly
+// goes missing from a team's row while the page looks perfectly normal.
+const RM_REVENUE_CHECK = { expected: 0, reported: 0, reconciles: true, unmatchedRMs: [], unmatchedRevenue: 0 };
+
+/** @returns {{headline:string, detail:string, fix:string}|null} null when revenue ties out and every RM resolves. */
+function rmRevenueIssueReport(){
+  const { expected, reported, reconciles, unmatchedRMs, unmatchedRevenue } = RM_REVENUE_CHECK;
+  if(reconciles && !unmatchedRMs.length) return null;
+
+  if(!reconciles){
+    return {
+      headline: 'RM Performance revenue does not tie out to the Revenue Input file',
+      detail: `The table totals ${fmtINR(reported)} but the matching rows in the Revenue Input file ` +
+              `add up to ${fmtINR(expected)} — a gap of ${fmtINR(Math.abs(expected - reported))}. ` +
+              'Some revenue is being attributed to no team at all.',
+      fix: 'This is a code-level fault rather than a data one: a revenue row is passing the month/platform ' +
+           'filters but not landing in any team bucket. Check teamForRevRow in app-rmperf.js.',
+    };
+  }
+  return {
+    headline: `${unmatchedRMs.length} RM(s) on the Revenue Input file don't map to a team`,
+    detail: `${fmtINR(unmatchedRevenue)} of revenue is shown under "Unmatched RM" instead of a real team, ` +
+            `so team totals understate it: ${unmatchedRMs.slice(0, 10).join(', ')}.`,
+    fix: 'Add each name to RM MASTER MAPPING (source name → canonical RM name → team), or to EMPLOYEE_REF ' +
+         'if the RM is genuinely new. The revenue is counted in the grand total either way — only the ' +
+         'team split is affected.',
+  };
+}
+
 function rmPerformance(){
   const monthMatch = m => rmPerfMonthMatch(m);
   const refExclude = STATE.rmPerfRefCold === 'Exclude';
@@ -157,6 +191,16 @@ function rmPerformance(){
     leads:g.leads+s.leads, quality:g.quality+s.quality, fp:g.fp+s.fp,
     rev15k:g.rev15k+s.rev15k, trans:g.trans+s.trans, revenue:g.revenue+s.revenue,
   }), {leads:0,quality:0,fp:0,rev15k:0,trans:0,revenue:0});
+
+  // Verify the "no revenue row is lost" promise above, rather than trusting it.
+  // Compared on rounded rupees so float addition order can't raise a false alarm.
+  RM_REVENUE_CHECK.expected = STATE.rev.reduce((s, r) => s + (revRowMatches(r) ? revAmount(r) : 0), 0);
+  RM_REVENUE_CHECK.reported = grand.revenue;
+  RM_REVENUE_CHECK.reconciles = Math.round(RM_REVENUE_CHECK.expected) === Math.round(grand.revenue);
+  RM_REVENUE_CHECK.unmatchedRMs = Object.keys(revByTeamRM['Unmatched'] || {});
+  RM_REVENUE_CHECK.unmatchedRevenue = (revTeamAgg['Unmatched'] || {}).revenue || 0;
+  const revenueReport = rmRevenueIssueReport();
+  if(revenueReport) console.warn(`[MIS] ${revenueReport.headline}: ${revenueReport.detail} Fix: ${revenueReport.fix}`);
   // Direct count from FY/PA sheets so plans for unmapped RMs are never lost
   grand.fp = STATE.fy.filter(r => monthMatch(r.Month) && lsOK(r.leadSource)).length
            + STATE.pa.filter(r => r.clientType.toUpperCase()==='NEW' && monthMatch(r.Month) && lsOK(r.leadSource)).length;
@@ -712,38 +756,29 @@ function mtdPerformance(){
     for(const c of buckets){
       const pool = STATE.raw.filter(r => r['Campaign Name']===c);
 
-      const leads = pool.filter(r => {
-        const d = r.createdDate;
+      // All three measures ask the same question of a different date column:
+      // does this ISO date fall in this month, within the selected day window?
+      const inDayWindow = d => {
         if(!d || d.length < 10) return false;
-        if(d.substring(0,7) !== yyyymm) return false;
-        const day = parseInt(d.substring(8,10), 10);
+        if(d.substring(0, 7) !== yyyymm) return false;
+        const day = parseInt(d.substring(8, 10), 10);
         return day >= sd && day <= ed;
-      }).length;
+      };
+
+      const leads = pool.filter(r => inDayWindow(r.createdDate)).length;
 
       // CONVERTED gate: CM-presence (isConvertedLead), not leadStatus — same
       // rule as everywhere else on this dashboard. Was leadStatus==='CONVERTED'
       // literally, which misses any lead that converted (has a CM/convertedDate)
       // but was later moved to a different status label — undercounted by 27
       // for a real July-2026 check (106 by the standard rule vs 79 here).
-      const conv = pool.filter(r => {
-        if(!isConvertedLead(r)) return false;
-        const d = r.convertedDate;
-        if(!d || d.length < 10) return false;
-        if(d.substring(0,7) !== yyyymm) return false;
-        const day = parseInt(d.substring(8,10), 10);
-        return day >= sd && day <= ed;
-      }).length;
+      const conv = pool.filter(r => isConvertedLead(r) && inDayWindow(r.convertedDate)).length;
 
       // Also excludes CM-having leads now, so a lead that has since converted
       // can't double up as both "In Process" here and "Converted" above.
-      const ip = pool.filter(r => {
-        if(r.leadStatus !== 'IN PROCESS' || isConvertedLead(r)) return false;
-        const d = r.leadInProcessDate;
-        if(!d || d.length < 10) return false;
-        if(d.substring(0,7) !== yyyymm) return false;
-        const day = parseInt(d.substring(8,10), 10);
-        return day >= sd && day <= ed;
-      }).length;
+      const ip = pool.filter(r =>
+        r.leadStatus === 'IN PROCESS' && !isConvertedLead(r) && inDayWindow(r.leadInProcessDate)
+      ).length;
 
       out.push({Month:m, Campaign:c, Leads:leads, LeadsProj:proj(leads),
         Conv:conv, ConvProj:proj(conv), InProc:ip, InProcProj:proj(ip),
@@ -783,71 +818,69 @@ function processedStatus(){
 }
 
 // ---- RM Revenue ----
-function revenueAggregatedByTeam(){
+// Revenue Input column names vary between exports, hence the fallback
+// chains. NOTE: rmPerformance() above reads the same concepts with a
+// slightly wider set of aliases ('OldCheck', 'Current RM', 'Client Type').
+// That difference is pre-existing and load-bearing — the two sections can
+// disagree on a row whose header casing only one of them recognizes — so
+// it's preserved rather than unified, and called out here so the next
+// person sees it on purpose instead of discovering it in a number mismatch.
+const revOldCheckOf = r => String(r['OLD CHECK'] || r['Old Check'] || r['old check'] || '');
+const revLeadPlatformOf = r => (r.LP || r.lp || r['Campaign Category'] || '').toString().trim();
+const revRmNameOf = r => (r.RM || r.rm || r['Curren RM'] || '').toString().trim();
+const revClientTypeOf = r => (r['CLIENT TYPE'] || r['client type'] || '').toString().toUpperCase();
+const revTotalOf = r => Number(r.Total || r.TOTAL || r.total || 0) || 0;
+
+/** Revenue rows passing the RM Revenue tab's month and lead-platform filters. */
+function revenueRowsInScope(){
   let rows = STATE.rev;
-  if(!isAllRevMonths()){
-    rows = rows.filter(r => revMonthMatch(String(r['OLD CHECK']||r['Old Check']||r['old check']||'')));
-  }
+  if(!isAllRevMonths()) rows = rows.filter(r => revMonthMatch(revOldCheckOf(r)));
+
   const lpMode = STATE.revLPFilter;
   if(lpMode === 'Exclude'){
     rows = rows.filter(r => {
-      const lp = (r.LP||r.lp||r['Campaign Category']||'').toString().trim();
+      const lp = revLeadPlatformOf(r);
       return lp !== 'Referral' && lp !== 'Cold Data';
     });
   } else if(lpMode === 'Only Referral'){
-    rows = rows.filter(r => {
-      const lp = (r.LP||r.lp||r['Campaign Category']||'').toString().trim();
-      return lp === 'Referral';
-    });
+    rows = rows.filter(r => revLeadPlatformOf(r) === 'Referral');
   }
-  const teamMap = {};
-  for(const r of rows){
-    const rm = (r.RM||r.rm||r['Curren RM']||'').toString().trim();
-    if(!rm) continue;
-    const key = rm.toLowerCase();
-    const team = STATE.teamMap[key] || '';
-    if(!teamMap[team]) teamMap[team] = {Team: team||'(unassigned)', RevBased:0, NotEligible:0, Total:0};
-    const ct = (r['CLIENT TYPE']||r['client type']||'').toString().toUpperCase();
-    if(ct==='REVENUE BASED') teamMap[team].RevBased++;
-    if(ct==='NOT ELIGIBLE') teamMap[team].NotEligible++;
-    teamMap[team].Total += Number(r.Total||r.TOTAL||r.total||0) || 0;
-  }
-  let arr = Object.values(teamMap);
-  arr.sort((a,b) => b.Total - a.Total);
-  return arr;
+  return rows;
 }
+
+/**
+ * Group in-scope revenue rows and tally the same three measures either way.
+ * @param {Function} keyOf Grouping key for a row ('' is a valid key).
+ * @param {Function} seed Initial accumulator for a newly seen key.
+ */
+function aggregateRevenueBy(keyOf, seed){
+  const groups = {};
+  for(const r of revenueRowsInScope()){
+    const rm = revRmNameOf(r);
+    if(!rm) continue; // a row with no RM can't be attributed to anyone
+    const key = keyOf(r, rm);
+    if(!groups[key]) groups[key] = seed(r, rm, key);
+    const clientType = revClientTypeOf(r);
+    if(clientType === 'REVENUE BASED') groups[key].RevBased++;
+    if(clientType === 'NOT ELIGIBLE') groups[key].NotEligible++;
+    groups[key].Total += revTotalOf(r);
+  }
+  return Object.values(groups).sort((a, b) => b.Total - a.Total);
+}
+
+function revenueAggregatedByTeam(){
+  return aggregateRevenueBy(
+    (r, rm) => STATE.teamMap[rm.toLowerCase()] || '',
+    (r, rm, team) => ({ Team: team || '(unassigned)', RevBased: 0, NotEligible: 0, Total: 0 })
+  );
+}
+
 function revenueAggregated(){
-  let rows = STATE.rev;
-  if(!isAllRevMonths()){
-    rows = rows.filter(r => revMonthMatch(String(r['OLD CHECK']||r['Old Check']||r['old check']||'')));
-  }
-  const lpMode = STATE.revLPFilter;
-  if(lpMode === 'Exclude'){
-    rows = rows.filter(r => {
-      const lp = (r.LP||r.lp||r['Campaign Category']||'').toString().trim();
-      return lp !== 'Referral' && lp !== 'Cold Data';
-    });
-  } else if(lpMode === 'Only Referral'){
-    rows = rows.filter(r => {
-      const lp = (r.LP||r.lp||r['Campaign Category']||'').toString().trim();
-      return lp === 'Referral';
-    });
-  }
-  const map = {};
-  for(const r of rows){
-    const rm = (r.RM||r.rm||r['Curren RM']||'').toString().trim();
-    if(!rm) continue;
-    const key = rm.toLowerCase();
-    if(!map[key]) map[key] = {RM: rm, Team: STATE.teamMap[key] || '', RevBased:0, NotEligible:0, Total:0};
-    const ct = (r['CLIENT TYPE']||r['client type']||'').toString().toUpperCase();
-    if(ct==='REVENUE BASED') map[key].RevBased++;
-    if(ct==='NOT ELIGIBLE') map[key].NotEligible++;
-    map[key].Total += Number(r.Total||r.TOTAL||r.total||0) || 0;
-  }
-  let arr = Object.values(map);
-  if(!isAllRevTeams()) arr = arr.filter(o => revTeamMatch(o.Team));
-  arr.sort((a,b) => b.Total - a.Total);
-  return arr;
+  const rows = aggregateRevenueBy(
+    (r, rm) => rm.toLowerCase(),
+    (r, rm, key) => ({ RM: rm, Team: STATE.teamMap[key] || '', RevBased: 0, NotEligible: 0, Total: 0 })
+  );
+  return isAllRevTeams() ? rows : rows.filter(o => revTeamMatch(o.Team));
 }
 
 function drawRevChart(){
