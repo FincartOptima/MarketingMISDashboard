@@ -283,6 +283,68 @@ function renderCostSyncWarning(){
   else editor.insertAdjacentHTML('afterend', html);
 }
 
+/**
+ * rebuildTeamMap() falls an RM with no EMPLOYEE_REF row back to team 'SV'
+ * (app-state.js). The fallback is silent, so a newly hired or renamed RM
+ * quietly parks their whole book on SV — which is how "Kajal Kumari" and
+ * "Kunal Kar" stayed invisible until the BD Team split. This surfaces it.
+ * @returns {{names:{name:string,leads:number}[], leads:number, blankRm:number}}
+ */
+function unmappedRmLeadCounts(){
+  const byName = new Map();
+  let leads = 0, blankRm = 0;
+  for(const row of STATE.raw){
+    if(row._hasSourceTeam) continue;                         // never consults teamMap
+    if((row.Team||'').toString().trim() !== 'SV') continue;  // a real team already named
+    const name = (row.currentRmName||'').toString().trim();
+    if(!name){ blankRm++; continue; }
+    if(STATE.teamMap[normalizeNameKey(name)]) continue;      // mapped (SV included)
+    byName.set(name, (byName.get(name)||0) + 1);
+    leads++;
+  }
+  const names = [...byName].map(([name, n]) => ({ name, leads: n }))
+    .sort((a,b) => b.leads - a.leads);
+  return { names, leads, blankRm };
+}
+
+/** @returns {{headline:string, detail:string, fix:string}|null} null when every RM in the data is mapped. */
+function unmappedRmIssueReport(){
+  const { names, leads, blankRm } = unmappedRmLeadCounts();
+  if(!names.length) return null;
+  const top = names.slice(0, 5).map(n => `${n.name} (${fmtIN(n.leads)})`).join(', ');
+  const more = names.length > 5 ? `, and ${names.length - 5} more` : '';
+  return {
+    headline: `${names.length} RM name${names.length>1?'s':''} missing from EMPLOYEE_REF — ${fmtIN(leads)} lead${leads>1?'s':''} counted under team SV`,
+    detail: `Every team view (Team Performance, Campaign by Team, Stagnant In-Process, RM Performance) reads a lead's team from its RM's EMPLOYEE_REF row. These names have no row, so their leads land on SV instead of the team they belong to: ${top}${more}.`
+      + (blankRm ? ` Separately, ${fmtIN(blankRm)} lead(s) carry no RM name at all and also sit on SV — a CRM gap, not a mapping one.` : ''),
+    fix: 'Add a row here for each name — Team, plus the Name spelled exactly as the CRM writes it — then press "Calculate". Add the same name to RM MASTER MAPPING so spelling variants fold onto it, and "Export snapshot.js" to make the fix permanent for everyone.',
+  };
+}
+
+let _unmappedRmWarnedFor = null;
+
+/**
+ * Show or clear the unmapped-RM warning above the EMPLOYEE_REF editor.
+ * Inserted as a sibling before #emp-editor so renderEmployee's redraws
+ * (which replace only the editor's contents) don't wipe it.
+ */
+function renderUnmappedRmWarning(){
+  const editor = $('#emp-editor');
+  if(!editor || !editor.parentNode) return;
+  const existing = $('#emp-unmapped-warning');
+  const report = unmappedRmIssueReport();
+  if(!report){ existing?.remove(); _unmappedRmWarnedFor = null; return; }
+  if(_unmappedRmWarnedFor !== report.headline){
+    console.warn(`[MIS] ${report.headline}. ${report.detail} Fix: ${report.fix}`);
+    _unmappedRmWarnedFor = report.headline;
+  }
+  const html = `<div class="file-not-uploaded" id="emp-unmapped-warning">` +
+    `<span class="fnu-icon">&#9888;</span><strong>${escHtml(report.headline)}</strong><br>` +
+    `${escHtml(report.detail)}<br><em>${escHtml(report.fix)}</em></div>`;
+  if(existing) existing.outerHTML = html;
+  else editor.insertAdjacentHTML('beforebegin', html);
+}
+
 async function syncCostFromSheets(silent){
   const s = loadSettings();
   // Prefer the user's own configured URL, otherwise fall back to CONFIG.DEFAULT_GS_URL

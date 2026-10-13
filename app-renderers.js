@@ -1118,6 +1118,7 @@ function renderEmployee(){
       +`<td><button class="secondary emp-del" data-r="${ri+1}">×</button></td></tr>`;
   }).join('')+'</tbody>';
   $('#emp-editor').innerHTML = '<table class="data editable">'+head+body+'</table>';
+  renderUnmappedRmWarning();
   $$('.emp-input').forEach(inp => {
     inp.oninput = () => {
       STATE.empref[+inp.dataset.r][+inp.dataset.c] = inp.value;
