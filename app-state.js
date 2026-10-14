@@ -182,9 +182,10 @@ function mapRM(rawName){
 // the RM breakdown from fragmenting the same person into multiple rows.
 //
 // No match found (lead not yet in the CRM, or an email typo) means there's
-// no Stage/RM/Team data at all for that lead: it's labeled "(Not in CRM)"
-// under the SV team and excluded from the Stage breakdown (still counted in
-// Total). Month falls back to the tracker's own Date Assigned (Column A).
+// no Stage/RM/Team data in the CRM for that lead. It gets a team row of its
+// own (BD_NOT_IN_CRM) rather than being folded into SV, and shows the status
+// the BD rep logged in the tracker (Current Stage) since the CRM has none.
+// Month falls back to the tracker's own Date Assigned (Column A).
 function annotateBDWithB2CMatch(){
   const b2cIndex = buildB2CEmailIndex();
   for(const r of STATE.bd){
@@ -199,9 +200,9 @@ function annotateBDWithB2CMatch(){
       r.effectivePlatform = b2cRow.platformName || '';
     } else {
       r.crmMatched = false;
-      r.effectiveStage = '';
+      r.effectiveStage = BD_STAGES.includes(r.currentStage) ? r.currentStage : '';
       r.effectiveRM = '(Not in CRM)';
-      r.effectiveTeam = 'SV';
+      r.effectiveTeam = BD_NOT_IN_CRM;
       r.effectiveMonth = toMmmYyyy(r.dateAssigned) || 'N/A';
       r.effectivePlatform = '';
     }

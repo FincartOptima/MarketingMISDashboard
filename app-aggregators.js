@@ -816,11 +816,18 @@ function workshopStatusDistribution(){
 // userId is a misleadingly-named field that is actually the client's email,
 // and is unique across B2C (verified: 0 duplicates in a 12k+ row export). A
 // lead with no match (not yet in the CRM, or an email typo) has no B2C data
-// to draw on: it's labeled "(Not in CRM)" under team SV, excluded from the
-// Stage breakdown, and falls back to the tracker's own Date Assigned for
-// Month. See annotateBDWithB2CMatch() in app-state.js, which sets
-// effectiveStage/effectiveRM/effectiveTeam/effectiveMonth/crmMatched on
-// every STATE.bd row once at load time.
+// to draw on: it gets a team row of its own, BD_NOT_IN_CRM, instead of being
+// folded into SV; it shows the status the BD rep logged in the tracker
+// (there is no CRM status to offer); and its Month falls back to the
+// tracker's own Date Assigned. See annotateBDWithB2CMatch() in app-state.js,
+// which sets effectiveStage/effectiveRM/effectiveTeam/effectiveMonth/
+// crmMatched on every STATE.bd row once at load time.
+//
+// The tracker can list the same client more than once (logged twice by one
+// rep, or by two reps), so every lead-level view counts DISTINCT clients, not
+// rows — see bdLatestEntries(). Call Flow is the one exception: it counts
+// assignments (a lead handed to a rep in a month), so it stays row-based.
+const BD_NOT_IN_CRM = 'Not in CRM';
 const B2C_STATUS_TO_BD_STAGE = {
   'ASSIGNED': 'LEAD ASSIGNED',
   'RE-ASSIGNED': 'LEAD ASSIGNED',
@@ -859,7 +866,13 @@ function bdPersonList(){
 }
 function bdTeamList(){
   const present = new Set(STATE.bd.map(r => r.effectiveTeam));
-  return FIXED_TEAMS.filter(t => present.has(t));
+  const teams = FIXED_TEAMS.filter(t => present.has(t));
+  // Not in CRM sits after the real teams. Any other team value that isn't in
+  // FIXED_TEAMS is appended too, so no row can silently drop out of the table
+  // and leave the Grand Total short of the Total.
+  if(present.has(BD_NOT_IN_CRM)) teams.push(BD_NOT_IN_CRM);
+  for(const t of present){ if(t && !teams.includes(t)) teams.push(t); }
+  return teams;
 }
 function bdMonthList(){
   const fromTracker = STATE.bd.map(r => r.effectiveMonth);
@@ -917,10 +930,128 @@ function bdActiveStageField(){
 // table (which deliberately does NOT apply it, since collapsing to a single
 // GMeet state would defeat a table whose whole point is comparing all three).
 function bdFilteredRowsBase(){
+  return bdLatestEntries(bdScopedRows());
+}
+
+// Every tracker ENTRY inside the current Month/Team/Person/Platform scope — a
+// client logged twice appears twice. Use bdFilteredRowsBase() for client
+// counts; this is only for callers that must dedupe at their own level.
+function bdScopedRows(){
   return STATE.bd.filter(r =>
     bdMonthMatch(r.effectiveMonth) && bdTeamMatch(r.effectiveTeam) && bdPersonMatch(r.person) &&
     bdPlatformMatch(r.effectivePlatform)
   );
+}
+
+const bdClientKey = r => (r.email || '').toString().trim().toLowerCase();
+
+// One entry per client. The tracker can list the same email more than once —
+// a lead logged twice by one rep, or by two reps — so counting rows
+// double-counts the client. Keeps the MOST RECENT entry (latest Date Assigned;
+// the later row on a tie) so Stage and GMeet reflect where the client stands
+// now, the same "current owner" principle the Team/RM already follow.
+//
+// Applied within whatever scope the caller passes, so filtered to a rep you see
+// the distinct clients THAT rep logged, and with no rep filter every client
+// counts once overall. A row with no email can't be told apart from another,
+// so each one stands as its own client.
+function bdLatestEntries(rows){
+  const latest = new Map();
+  for(const r of rows){
+    const k = bdClientKey(r);
+    if(!k) continue;
+    const cur = latest.get(k);
+    if(!cur || toIsoDate(r.dateAssigned) >= toIsoDate(cur.dateAssigned)) latest.set(k, r);
+  }
+  return rows.filter(r => { const k = bdClientKey(r); return !k || latest.get(k) === r; });
+}
+
+// ---- Tracker data quality ----
+// Describes the tracker sheet itself, so it ignores every filter. Feeds the
+// note under the Team/RM table and the "download affected rows" list.
+function bdTrackerStats(){
+  const byEmail = new Map();
+  let blank = 0, notInCrmRows = 0;
+  const unmatchedKeys = new Set();
+  for(const r of STATE.bd){
+    const k = bdClientKey(r);
+    if(!k){ blank++; if(!r.crmMatched) notInCrmRows++; continue; }
+    if(!byEmail.has(k)) byEmail.set(k, []);
+    byEmail.get(k).push(r);
+    if(!r.crmMatched){ notInCrmRows++; unmatchedKeys.add(k); }
+  }
+  let repeatedEmails = 0, duplicateRows = 0, byTwoReps = 0;
+  for(const v of byEmail.values()){
+    if(v.length < 2) continue;
+    repeatedEmails++;
+    duplicateRows += v.length - 1;
+    if(new Set(v.map(r => r.person)).size > 1) byTwoReps++;
+  }
+  return {
+    rows: STATE.bd.length,
+    clients: byEmail.size + blank,       // blank-email rows can't be merged
+    repeatedEmails, duplicateRows, byTwoReps, blank,
+    notInCrmRows,                        // rows with no B2C match (incl. blank email)
+    notInCrmClients: unmatchedKeys.size + blank,
+  };
+}
+
+// Every tracker row involved in one of the three problems, flagged with
+// whether it made it into the counts — what the BD team needs to clean the
+// sheet.
+function bdTrackerIssueRows(){
+  const counted = new Set(bdLatestEntries(STATE.bd));
+  const byEmail = new Map();
+  for(const r of STATE.bd){
+    const k = bdClientKey(r);
+    if(k){ if(!byEmail.has(k)) byEmail.set(k, []); byEmail.get(k).push(r); }
+  }
+  const line = (issue, r, inCounts) => ({
+    // String(): a stray number (e.g. a phone no. typed in the Email column) is a real value here
+    Issue: issue, 'BD Rep': r.person || '', Sheet: r.sourceSheet || '', Email: String(r.email == null ? '' : r.email),
+    'Date Assigned': toIsoDate(r.dateAssigned) || '', 'Current Stage': r.currentStage || '',
+    'GMeet Joined': r.gmeetJoined || '', 'In the counts?': inCounts,
+  });
+  const out = [];
+  for(const v of byEmail.values()){
+    if(v.length < 2) continue;
+    for(const r of v) out.push(line('Duplicate email', r,
+      counted.has(r) ? 'Yes — most recent entry' : 'No — repeat entry'));
+  }
+  for(const r of STATE.bd){
+    if(!bdClientKey(r)) out.push(line('No email', r, 'Yes — as its own client'));
+    else if(!r.crmMatched) out.push(line('Not in CRM', r,
+      counted.has(r) ? 'Yes — under Not in CRM' : 'No — repeat entry'));
+  }
+  const order = {'Duplicate email': 0, 'Not in CRM': 1, 'No email': 2};
+  out.sort((a, b) => order[a.Issue] - order[b.Issue] ||
+    a.Email.localeCompare(b.Email) || a['Date Assigned'].localeCompare(b['Date Assigned']));
+  return out;
+}
+
+// Same {headline, detail, fix} shape as the other data guards; null when the
+// tracker is clean.
+function bdTrackerIssueReport(){
+  const s = bdTrackerStats();
+  if(!s.duplicateRows && !s.notInCrmRows && !s.blank) return null;
+  const f = fmtIN;
+  const detail = [];
+  if(s.duplicateRows) detail.push(
+    f(s.duplicateRows) + ' row' + (s.duplicateRows===1?'':'s') + ' repeat a client already listed ('
+    + f(s.repeatedEmails) + ' email' + (s.repeatedEmails===1?'':'s') + (s.byTwoReps ? '; ' + f(s.byTwoReps)
+    + ' logged by two different reps' : '') + ') — each client is counted once, using their most recent entry');
+  if(s.notInCrmRows) detail.push(
+    f(s.notInCrmRows) + ' row' + (s.notInCrmRows===1?'':'s') + ' ('
+    + f(s.notInCrmClients) + ' client' + (s.notInCrmClients===1?'':'s')
+    + ') have no match in B2C and show as “' + BD_NOT_IN_CRM + '” with the status logged in the tracker');
+  if(s.blank) detail.push(f(s.blank) + ' row' + (s.blank===1?'':'s') + ' ha' + (s.blank===1?'s':'ve')
+    + ' no email, so can’t be matched or de-duplicated');
+  return {
+    headline: f(s.rows) + ' tracker rows = ' + f(s.clients) + ' distinct clients',
+    detail: detail.join('. ') + '.',
+    fix: 'In the tracker sheet: delete repeat rows, correct typo’d or blank emails, and make sure each client '
+       + 'exists in B2C. “Download affected rows” lists every row involved.',
+  };
 }
 // The GMeet filter is set by clicking a pie slice (see renderBDGmeetChart)
 // rather than a dropdown — it folds into the same filtered scope as
@@ -1032,22 +1163,35 @@ function bdGmeetCorrelation(){
 // misleadingly tiny rate (e.g. 0.1%-0.3%) that didn't read as a real
 // conversion rate next to every other rate on this page.
 function bdCallsToConversion(){
-  const leadRows = bdFilteredRowsBase();
+  const scoped = bdScopedRows();
   const callRows = bdCallsFilteredRows();
-  const people = [...new Set([...leadRows.map(r=>r.person), ...callRows.map(r=>r.bdName)].filter(Boolean))].sort();
+  const people = [...new Set([...scoped.map(r=>r.person), ...callRows.map(r=>r.bdName)].filter(Boolean))].sort();
+
+  const tally = leads => ({
+    totalLeads: leads.length,
+    gmeetJoined: leads.filter(r => r.gmeetJoined === 'Yes').length,
+    converted: leads.filter(r => r.effectiveStage === 'CONVERTED').length,
+  });
 
   const out = people.map(person => {
     const calls = callRows.filter(r => r.bdName === person).reduce((s,r) => s + (r.totalCalls||0), 0);
-    const personLeads = leadRows.filter(r => r.person === person);
-    const totalLeads = personLeads.length;
-    const gmeetJoined = personLeads.filter(r => r.gmeetJoined === 'Yes').length;
-    const converted = personLeads.filter(r => r.effectiveStage === 'CONVERTED').length;
+    // Each rep is credited with the distinct clients THEY logged — a client
+    // two reps both logged counts for each, since both worked it.
+    const t = tally(bdLatestEntries(scoped.filter(r => r.person === person)));
     return {
-      Person: person, 'Calls Made': calls, 'Total Leads': totalLeads, 'GMeet Joined': gmeetJoined, Converted: converted,
-      'Conversion Rate': totalLeads>0 ? converted/totalLeads : 0,
+      Person: person, 'Calls Made': calls, 'Total Leads': t.totalLeads, 'GMeet Joined': t.gmeetJoined, Converted: t.converted,
+      'Conversion Rate': t.totalLeads>0 ? t.converted/t.totalLeads : 0,
     };
   });
   const gt = buildGrandTotalRow('Person', 'Grand Total', ['Calls Made','Total Leads','GMeet Joined','Converted'], out);
+  // ...but the Grand Total counts each client ONCE, so it can sit below the
+  // sum of the rep rows by exactly the clients two reps both logged (see
+  // 'sharedByReps' — the renderer prints the footnote).
+  const all = tally(bdLatestEntries(scoped));
+  gt.sharedByReps = gt['Total Leads'] - all.totalLeads;
+  gt['Total Leads'] = all.totalLeads;
+  gt['GMeet Joined'] = all.gmeetJoined;
+  gt['Converted'] = all.converted;
   gt['Conversion Rate'] = gt['Total Leads']>0 ? gt['Converted']/gt['Total Leads'] : 0;
   out.push(gt);
   return out;
@@ -1187,11 +1331,17 @@ function bdCallFlowStages(){
 function bdMonthMismatchList(){
   const b2cIndex = buildB2CEmailIndex();
   const rows = STATE.bd.filter(r => bdPersonMatch(r.person));
+  // The entries Lead-Level Detail actually counts: one per client, drawn from
+  // the rows whose Created Month is in the selection. A row outside this set
+  // is either in the wrong month or a repeat entry of a client counted
+  // elsewhere — both explain a gap, so both are named below.
+  const counted = new Set(bdLatestEntries(rows.filter(r => bdMonthMatch(r.effectiveMonth))));
   const out = [];
   for(const r of rows){
     const inByAssigned = bdMonthMatch(toMmmYyyy(r.dateAssigned));
     const inByCreated  = bdMonthMatch(r.effectiveMonth);
-    if(inByAssigned === inByCreated) continue;
+    const inLeadLevel  = counted.has(r);
+    if(inByAssigned === inLeadLevel) continue;
     const email = (r.email || '').toString().trim().toLowerCase();
     const b2cRow = email ? b2cIndex[email] : null;
     out.push({
@@ -1201,6 +1351,11 @@ function bdMonthMismatchList(){
       'Date Assigned (Tracker)': toMmmYyyy(r.dateAssigned) || 'N/A',
       'Created Month (B2C)': r.effectiveMonth || 'N/A',
       'Counted In': inByAssigned ? 'Call Flow only' : 'Lead-Level Detail only',
+      // Same month on both sides but not counted in Lead-Level Detail = a
+      // repeat entry; otherwise the two month anchors disagree.
+      'Why': (inByAssigned && inByCreated)
+        ? 'Repeat entry — client counted once in Lead-Level Detail'
+        : 'Date Assigned and Created Month fall in different months',
     });
   }
   out.sort((a,b) => a['Counted In'].localeCompare(b['Counted In']) || a['Client Name'].localeCompare(b['Client Name']));

@@ -603,7 +603,7 @@ function renderBDMonthMismatch(){
   const data = bdMonthMismatchList();
   const countEl = $('#bd-month-mismatch-count');
   if(countEl) countEl.textContent = data.length ? `(${fmtIN(data.length)} lead${data.length===1?'':'s'} for this selection)` : '(none for this selection — the two totals agree exactly)';
-  const headers = ['Client Name', 'Email', 'BD Rep', 'Date Assigned (Tracker)', 'Created Month (B2C)', 'Counted In'];
+  const headers = ['Client Name', 'Email', 'BD Rep', 'Date Assigned (Tracker)', 'Created Month (B2C)', 'Counted In', 'Why'];
   renderTable('#tbl-bd-month-mismatch', headers, data);
 }
 
@@ -701,6 +701,39 @@ function renderBDPerformance(){
     return o;
   });
   makeSortableTable('#tbl-bdperf', headers, rows, renderBDPerformance);
+  renderBDDataNote();
+}
+
+// The note above the Team/RM table: what the totals count, what is wrong with
+// the tracker sheet (bdTrackerIssueReport) and how to fix it. Also warns in
+// the console once, for whoever is debugging rather than reading the page.
+function renderBDDataNote(){
+  const anchor = $('#legend-bdperf');
+  if(!anchor) return;
+  let el = $('#bdperf-data-note');
+  if(!el){
+    el = document.createElement('div');
+    el.id = 'bdperf-data-note';
+    el.className = 'hint';
+    anchor.insertAdjacentElement('afterend', el);
+  }
+  const scoped = bdScopedRows().length, clients = bdFilteredRowsBase().length;
+  const scope = scoped !== clients
+    ? `<br>In this selection: <strong>${fmtIN(clients)}</strong> clients from ${fmtIN(scoped)} tracker rows.` : '';
+  const rep = bdTrackerIssueReport();
+  if(!rep){ el.innerHTML = `Each row counts one client.${scope}`; return; }
+  el.innerHTML = `<strong>${escHtml(rep.headline)}.</strong> ${escHtml(rep.detail)}${scope}<br>`
+    + `<em>To fix:</em> ${escHtml(rep.fix)} <a href="#" id="bdperf-issues-dl">Download affected rows</a>`;
+  const dl = $('#bdperf-issues-dl');
+  if(dl) dl.onclick = e => {
+    e.preventDefault();
+    downloadRowsAsXlsx(['Issue','BD Rep','Sheet','Email','Date Assigned','Current Stage','GMeet Joined','In the counts?'],
+      bdTrackerIssueRows(), 'BD Tracker issues', 'BD_Tracker_Issues.xlsx');
+  };
+  if(!renderBDDataNote.warned){
+    renderBDDataNote.warned = true;
+    console.warn('[MIS] BD tracker: ' + rep.headline + '. ' + rep.detail + ' Fix: ' + rep.fix);
+  }
 }
 
 // Separate table (not affected by the GMeet pie's click-filter — see
@@ -734,6 +767,20 @@ function renderBDCallsToConversion(){
     _tot: !!r._tot,
   }));
   renderTable('#tbl-bd-calls-conversion', headers, rows);
+  // The Grand Total counts each client once, but a client two reps both logged
+  // is credited to each of them — so the rep rows can add up to more.
+  const shared = (data.find(r => r._tot) || {}).sharedByReps || 0;
+  let note = $('#bd-calls-conversion-note');
+  if(!note){
+    note = document.createElement('div');
+    note.id = 'bd-calls-conversion-note';
+    note.className = 'hint';
+    $('#tbl-bd-calls-conversion').insertAdjacentElement('afterend', note);
+  }
+  note.textContent = shared > 0
+    ? `Grand Total counts each client once. ${fmtIN(shared)} client${shared===1?' was':'s were'} logged by two reps and `
+      + `${shared===1?'is':'are'} credited to both, so the rep rows add up to ${fmtIN(shared)} more than the Grand Total.`
+    : '';
 }
 
 function mtdPerformance(){
