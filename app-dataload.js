@@ -299,6 +299,7 @@ async function loadAllFromRepo(){
     console.warn('[MIS] bdcalls data missing from data.js');
     STATE.bdCalls = [];
   }
+  canonicalizeBDNames();
 
   // On-Hold lead remarks, bucketed into categories by a calibrated
   // rule-based matcher (see scratch_mfsa/classify.py) — extracted locally,

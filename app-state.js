@@ -208,6 +208,46 @@ function annotateBDWithB2CMatch(){
     }
   }
 }
+// The tracker (its sheet names) and the BD Daily Log both name the BD rep, and
+// the two are joined by that name. A capitalisation or spacing slip in either
+// ("kajal" vs "Kajal") would split one person in two: a Person filter that
+// matches only half their rows, and a rep row with calls but no leads. This
+// folds spellings that differ only by case/space onto one name, preferring the
+// tracker's since its sheet names are the authoritative labels. Runs once at
+// load, so every BD view sees a single spelling.
+function canonicalizeBDNames(){
+  const tidy = v => String(v == null ? '' : v).trim().replace(/\s+/g, ' ');
+  const canon = new Map();                       // lower-cased key -> chosen spelling
+  const decide = (rows, field) => {
+    const spellings = new Map();                 // key -> Map(spelling -> count)
+    for(const r of rows){
+      const s = tidy(r[field]); if(!s) continue;
+      const k = s.toLowerCase();
+      if(canon.has(k)) continue;                 // an earlier (more authoritative) source decided it
+      if(!spellings.has(k)) spellings.set(k, new Map());
+      spellings.get(k).set(s, (spellings.get(k).get(s) || 0) + 1);
+    }
+    for(const [k, m] of spellings) canon.set(k, [...m.entries()].sort((a, b) => b[1] - a[1])[0][0]);
+  };
+  decide(STATE.bd, 'person');                    // tracker first
+  decide(STATE.bdCalls, 'bdName');               // then the Daily Log, for names the tracker lacks
+
+  const changed = new Set();
+  const apply = (rows, field, source) => {
+    for(const r of rows){
+      const s = tidy(r[field]); if(!s) continue;
+      const c = canon.get(s.toLowerCase());
+      if(c && c !== r[field]){ changed.add('"' + r[field] + '" (' + source + ') -> "' + c + '"'); r[field] = c; }
+    }
+  };
+  apply(STATE.bd, 'person', 'tracker');
+  apply(STATE.bdCalls, 'bdName', 'BD Daily Log');
+  if(changed.size){
+    console.warn('[MIS] BD names: ' + [...changed].join(', ') + ' — same person, different capitalisation or spacing, '
+      + 'so they were merged. To fix at source, use one spelling in the tracker sheet names and the BD Daily Log.');
+  }
+}
+
 function persistRMMaster(){
   persistOverride(CONFIG.STORAGE_KEYS.RM_MASTER, 'RM Master Mapping', STATE.rmMaster);
 }
