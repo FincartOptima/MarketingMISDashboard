@@ -201,7 +201,7 @@ const TABLE_INFO = {
   },
   'lp-status': {
     title: 'Landing Page × Status Breakdown',
-    desc: 'Lead counts by landing page and status, filtered by campaign. <strong>Landing pages are dynamically read from uploaded data and mapped to their Campaign Name.</strong> CONVERTED uses CM, IN PROCESS uses LPM, all other statuses use CTM.<br><strong>Same Month:</strong> status column matches selected month(s) AND CTM matches.<br><strong>Any Month:</strong> status column matches selected month(s) but CTM outside (only applies to CONVERTED/IN PROCESS).<br><strong>Default:</strong> status column matches selected month(s).',
+    desc: 'Lead counts by landing page and status, filtered by campaign(s) (multi-select, with Select All). <strong>Landing pages are dynamically read from uploaded data and mapped to their Campaign Name.</strong> CONVERTED uses CM, IN PROCESS uses LPM, all other statuses use CTM.<br><strong>Same Month:</strong> status column matches selected month(s) AND CTM matches.<br><strong>Any Month:</strong> status column matches selected month(s) but CTM outside (only applies to CONVERTED/IN PROCESS).<br><strong>Default:</strong> status column matches selected month(s).',
     cols: 'landingPage (dynamic) · Campaign Name (mapped from landing page rows) · leadStatus · CTM (Created Month, used for ASSIGNED / RE-ASSIGNED / FOLLOW UP / ON HOLD / DEAD) · CM (Converted Month, for CONVERTED) · LPM (Lead In-Process Month, for IN PROCESS)',
     source: 'RAW_DATA sheet',
     note: 'FMONTH and LSM are not used in this table. Each landing page is mapped to the most common Campaign Name among its rows. For ASSIGNED, RE-ASSIGNED, FOLLOW UP, ON HOLD, DEAD — only CTM and leadStatus are used. AnyMonth only affects CONVERTED (CM) and IN PROCESS (LPM).'
