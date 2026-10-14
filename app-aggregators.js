@@ -666,10 +666,11 @@ function stagnantInProcessLeads(){
     out.push({
       clientName: r.clientName || '(blank)',
       currentRmName: r.currentRmName || '(unassigned)',
-      // First RM's team, not current — same convention as campaignByTeam's
-      // "first" mode, so this section doesn't disagree with itself about
-      // which team a lead belongs to.
-      Team: STATE.teamMap[(r.firstRmName||'').toLowerCase()] || 'SV',
+      // Current RM's team — this section answers "who is sitting on this lead
+      // now", so attribution follows the current owner, not whoever first
+      // touched it. Leads parked with the Support Wealth Manager pool land in
+      // SV, which is where they genuinely are.
+      Team: r.Team || 'SV',
       platformName: r.platformName || '',
       campaignName: r['Campaign Name'] || '',
       leadInProcessDate: d.substring(0,10),
@@ -730,10 +731,10 @@ function stagnantInProcessTeamSummary(){
     return !isNaN(dt.getTime()) && dt < cutoff;
   });
 
-  // First RM's team, not current — matches stagnantInProcessLeads() above,
-  // so this table and the By Team/By Client tables never disagree about
-  // which team a given lead belongs to.
-  const teamOf = r => STATE.teamMap[(r.firstRmName||'').toLowerCase()] || 'SV';
+  // Current RM's team — matches stagnantInProcessLeads() above, so this table
+  // and the By Team/By Client tables never disagree about which team a given
+  // lead belongs to.
+  const teamOf = r => r.Team || 'SV';
   const present = new Set([...allLeads.map(teamOf), ...inProcessLeads.map(teamOf), ...stagnantLeads.map(teamOf)]);
   const teams = FIXED_TEAMS.filter(t => present.has(t));
   for(const t of present){ if(!teams.includes(t)) teams.push(t); }
