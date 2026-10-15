@@ -239,6 +239,9 @@ function annotateBDWithB2CMatch(){
       r.effectiveMonth = toMmmYyyy(r.dateAssigned) || 'N/A';
       r.effectivePlatform = '';
     }
+    const a = resolveBDAssignment(r);
+    r.assignedTeam = a.team;
+    r.assignedRM = a.rm;
   }
 }
 // The tracker (its sheet names) and the BD Daily Log both name the BD rep, and

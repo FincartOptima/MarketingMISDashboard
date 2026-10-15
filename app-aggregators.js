@@ -1116,11 +1116,76 @@ function bdSummarize(rows, stageField){
   return obj;
 }
 
+// ---- Assigned by BD / Mapped to CRM ----
+// "Assigned by BD" is what the BD rep logged: the tracker's Team Leader (-> team)
+// and Assigned RM (-> RM). It is separate from the breakdown's other columns,
+// which follow live CRM ownership. "Mapped to CRM" is the part of it found in
+// the CRM and still held by that team / RM. Both are dated by Date Assigned.
+const BD_UNKNOWN_TEAM = 'Team Leader not recognised';
+const BD_UNKNOWN_RM = 'Assigned RM not recognised';
+const BD_ASSIGN_COLS = ['Assigned by BD', 'Mapped to CRM'];
+
+// False until the backend that reads Team Leader / Assigned RM has synced the
+// tracker; the columns are then left out instead of showing everything as unrecognised.
+const bdHasAssignment = () => STATE.bd.some(r => r.teamLeader || r.assignedRm);
+
+// Team and RM a tracker row was assigned to ('' when not recognised). Assigned
+// RM is free text, often a first name only, so a bare first name is matched
+// inside the team.
+function resolveBDAssignment(r){
+  const asTeam = n => FIXED_TEAMS.find(t => normalizeNameKey(t) === normalizeNameKey(n)) || teamForRmName(n);
+  const leader = cleanName(r.teamLeader), rmText = cleanName(r.assignedRm);
+  const team = (leader && asTeam(leader)) || (rmText && teamForRmName(rmText)) || '';
+  let rm = '';
+  if(rmText && team){
+    const canon = mapRM(rmText);
+    if(teamForRmName(canon)){
+      rm = canon;
+    } else {
+      const first = normalizeNameKey(rmText).split(' ')[0];
+      const hits = STATE.empref.slice(1)
+        .filter(e => e && (e[1]||'').toString().trim() === team)
+        .map(e => cleanName(e[2]))
+        .filter(n => normalizeNameKey(n).split(' ')[0] === first);
+      if(hits.length === 1) rm = hits[0];
+    }
+  }
+  return { team, rm };
+}
+
+// One entry per client, scoped by Date Assigned month, Person, Platform and GMeet
+// (not by Team: the team here is the assigned one).
+function bdAssignedEntries(){
+  return bdLatestEntries(STATE.bd.filter(r =>
+    bdMonthMatch(toMmmYyyy(r.dateAssigned)) && bdPersonMatch(r.person) && bdPlatformMatch(r.effectivePlatform)
+  )).filter(r => STATE.bdGmeetFilter === 'All' || r.gmeetJoined === STATE.bdGmeetFilter);
+}
+
+function bdAssignedCounts(entries, assignedTo, heldBy){
+  const mine = entries.filter(assignedTo);
+  return {
+    'Assigned by BD': mine.length,
+    'Mapped to CRM': mine.filter(r => r.crmMatched && heldBy(r)).length,
+  };
+}
+
 function bdPerformanceByTeam(stageField){
   const rows = bdFilteredRows();
+  const assigned = bdAssignedEntries();
   const teams = bdTeamList();
-  const out = teams.map(team => ({Team: team, ...bdSummarize(rows.filter(r => r.effectiveTeam === team), stageField)}));
-  const gt = buildGrandTotalRow('Team', 'Grand Total', [...BD_STAGES,'Not Logged','Total','GMeet Joined'], out);
+  for(const t of new Set(assigned.map(r => r.assignedTeam))){
+    if(t && !teams.includes(t)) teams.push(t);
+  }
+  const out = teams.map(team => ({
+    Team: team,
+    ...bdSummarize(rows.filter(r => r.effectiveTeam === team), stageField),
+    ...bdAssignedCounts(assigned, r => r.assignedTeam === team, r => r.effectiveTeam === team),
+  }));
+  if(bdHasAssignment() && assigned.some(r => !r.assignedTeam)){
+    out.push({Team: BD_UNKNOWN_TEAM, ...bdSummarize([], stageField),
+      ...bdAssignedCounts(assigned, r => !r.assignedTeam, () => false)});
+  }
+  const gt = buildGrandTotalRow('Team', 'Grand Total', [...BD_STAGES,'Not Logged','Total','GMeet Joined', ...BD_ASSIGN_COLS], out);
   gt['Conv. Rate'] = gt.Total>0 ? (gt['CONVERTED']||0)/gt.Total : 0;
   gt['QL Conv. Rate'] = gt.Total>0 ? ((gt['CONVERTED']||0)+(gt['IN PROCESS']||0))/gt.Total : 0;
   out.push(gt);
@@ -1129,10 +1194,21 @@ function bdPerformanceByTeam(stageField){
 
 function bdPerformanceByRM(team, stageField){
   const rows = bdFilteredRows().filter(r => r.effectiveTeam === team);
-  const rms = [...new Set(rows.map(r => (r.effectiveRM||'').trim()).filter(Boolean))];
-  const out = rms.map(rm => ({RM: rm, ...bdSummarize(rows.filter(r => (r.effectiveRM||'').trim() === rm), stageField)}))
-                 .sort((a,b) => b.Total - a.Total);
-  const gt = buildGrandTotalRow('RM', team+' Total', [...BD_STAGES,'Not Logged','Total','GMeet Joined'], out);
+  const assigned = bdAssignedEntries().filter(r => r.assignedTeam === team);
+  const key = normalizeNameKey;
+  const names = new Map();   // key -> display name; CRM owners first, then RMs only assigned to
+  for(const r of rows){ const nm = (r.effectiveRM||'').trim(); if(nm && !names.has(key(nm))) names.set(key(nm), nm); }
+  for(const r of assigned){ if(r.assignedRM && !names.has(key(r.assignedRM))) names.set(key(r.assignedRM), r.assignedRM); }
+  const out = [...names].map(([k, rm]) => ({
+    RM: rm,
+    ...bdSummarize(rows.filter(r => key(r.effectiveRM) === k), stageField),
+    ...bdAssignedCounts(assigned, r => key(r.assignedRM) === k, r => key(r.effectiveRM) === k),
+  })).sort((a,b) => b.Total - a.Total || b['Assigned by BD'] - a['Assigned by BD']);
+  if(bdHasAssignment() && assigned.some(r => !r.assignedRM)){
+    out.push({RM: BD_UNKNOWN_RM, ...bdSummarize([], stageField),
+      ...bdAssignedCounts(assigned, r => !r.assignedRM, () => false)});
+  }
+  const gt = buildGrandTotalRow('RM', team+' Total', [...BD_STAGES,'Not Logged','Total','GMeet Joined', ...BD_ASSIGN_COLS], out);
   gt['Conv. Rate'] = gt.Total>0 ? (gt['CONVERTED']||0)/gt.Total : 0;
   gt['QL Conv. Rate'] = gt.Total>0 ? ((gt['CONVERTED']||0)+(gt['IN PROCESS']||0))/gt.Total : 0;
   out.push(gt);

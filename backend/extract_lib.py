@@ -216,6 +216,9 @@ BD_SHEET_PATTERN = re.compile(r'^(.+?)\s+Q(\d+)$', re.IGNORECASE)
 # self-reported progress — shown separately from the B2C-derived Stage (see
 # the Workpoint Status / BD Team Status toggle on the dashboard) since the
 # two can disagree once a lead is reassigned after the BD rep logged it.
+# assignedRm / teamLeader are who the BD rep handed the lead to. They don't
+# drive the RM/Team breakdown (CRM ownership does); they feed the "Assigned by
+# BD" and "Mapped to CRM" columns.
 # Source headers are inconsistent across sheets (trailing spaces, casing) —
 # matched case/space-insensitively.
 BD_TRACKER_COLUMNS = {
@@ -223,7 +226,12 @@ BD_TRACKER_COLUMNS = {
     'email':        {'email'},
     'gmeetJoined':  {'gmeet joined?'},
     'currentStage': {'current stage'},
+    'assignedRm':   {'assigned rm'},
+    'teamLeader':   {'team leader'},
 }
+# Only these decide whether a row is a real lead: Assigned RM / Team Leader can
+# be pre-filled on otherwise empty rows.
+BD_ROW_DEFINING = {'dateAssigned', 'email', 'gmeetJoined', 'currentStage'}
 
 # "Current Stage" free-text values seen in the wild, collapsed onto one
 # canonical label per real-world stage. Unrecognized non-blank values pass
@@ -288,7 +296,7 @@ def load_bd_tracker_rows(file_like):
                 else:
                     v = cell_value(v)
                 obj[canon] = v
-                if v not in ('', None):
+                if canon in BD_ROW_DEFINING and v not in ('', None):
                     any_val = True
             if not any_val:
                 continue

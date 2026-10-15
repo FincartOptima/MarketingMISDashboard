@@ -708,7 +708,8 @@ function renderBDPerformance(){
   }
   const stageField = bdActiveStageField();
 
-  const headers = ['Person', ...BD_STAGES, 'Not Logged', 'Total', 'GMeet Joined', 'Conv. Rate', 'QL Conv. Rate'];
+  const assignCols = bdHasAssignment() ? BD_ASSIGN_COLS : [];
+  const headers = ['Person', ...assignCols, ...BD_STAGES, 'Not Logged', 'Total', 'GMeet Joined', 'Conv. Rate', 'QL Conv. Rate'];
   const selectedTeam = STATE.bdTeamFilter;
   const isSingleTeam = selectedTeam && selectedTeam !== 'All' && !Array.isArray(selectedTeam);
 
@@ -718,6 +719,7 @@ function renderBDPerformance(){
   applyHeatAndLegend(data, 'Total', '#legend-bdperf', 'Row heat by Total Leads');
   const rows = data.map(r => {
     const o = {[rowLabelField]: r[rowLabelField]};
+    assignCols.forEach(c => o[c] = fmtIN(r[c]));
     BD_STAGES.forEach(s => o[s] = fmtIN(r[s]));
     o['Not Logged'] = fmtIN(r['Not Logged']);
     o.Total = fmtIN(r.Total);

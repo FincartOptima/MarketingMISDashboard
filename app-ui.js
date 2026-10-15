@@ -586,6 +586,7 @@ function setStatus(sel, msg, kind = 'ok'){
 function recalcAll(){
   buildRMMasterLookup();      // before rebuildTeamMap, which resolves aliases through it
   rebuildTeamMap();
+  if(STATE.bd.length) annotateBDWithB2CMatch();
   remapAdvisorNames();
   detectMonths();
   initFilters();
