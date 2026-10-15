@@ -284,21 +284,25 @@ function renderCostSyncWarning(){
 }
 
 /**
- * rebuildTeamMap() falls an RM with no EMPLOYEE_REF row back to team 'SV'
+ * rebuildTeamMap() falls an RM it can't resolve back to team 'SV'
  * (app-state.js). The fallback is silent, so a newly hired or renamed RM
  * quietly parks their whole book on SV — which is how "Kajal Kumari" and
  * "Kunal Kar" stayed invisible until the BD Team split. This surfaces it.
+ *
+ * `field` picks which RM is being checked: the CURRENT holder (drives every
+ * CurrentRM view) or the FIRST one (drives every FirstRM view, which used to
+ * have no guard at all — 70 leads sat on SV that way).
  * @returns {{names:{name:string,leads:number}[], leads:number, blankRm:number}}
  */
-function unmappedRmLeadCounts(){
+function unmappedRmLeadCounts(field){
+  field = field || 'currentRmName';
   const byName = new Map();
   let leads = 0, blankRm = 0;
   for(const row of STATE.raw){
-    if(row._hasSourceTeam) continue;                         // never consults teamMap
-    if((row.Team||'').toString().trim() !== 'SV') continue;  // a real team already named
-    const name = (row.currentRmName||'').toString().trim();
+    if(field === 'currentRmName' && row._hasSourceTeam) continue;   // never consults teamMap
+    const name = (row[field]||'').toString().trim();
     if(!name){ blankRm++; continue; }
-    if(STATE.teamMap[normalizeNameKey(name)]) continue;      // mapped (SV included)
+    if(teamForRmName(name)) continue;                               // mapped (SV included)
     byName.set(name, (byName.get(name)||0) + 1);
     leads++;
   }
@@ -308,15 +312,21 @@ function unmappedRmLeadCounts(){
 }
 
 /** @returns {{headline:string, detail:string, fix:string}|null} null when every RM in the data is mapped. */
-function unmappedRmIssueReport(){
-  const { names, leads, blankRm } = unmappedRmLeadCounts();
+function unmappedRmIssueReport(field){
+  field = field || 'currentRmName';
+  const { names, leads, blankRm } = unmappedRmLeadCounts(field);
   if(!names.length) return null;
+  const isFirst = field === 'firstRmName';
   const top = names.slice(0, 5).map(n => `${n.name} (${fmtIN(n.leads)})`).join(', ');
   const more = names.length > 5 ? `, and ${names.length - 5} more` : '';
+  const who = isFirst ? 'first RM' : 'current RM';
   return {
-    headline: `${names.length} RM name${names.length>1?'s':''} missing from EMPLOYEE_REF — ${fmtIN(leads)} lead${leads>1?'s':''} counted under team SV`,
-    detail: `Every team view (Team Performance, Campaign by Team, Stagnant In-Process, RM Performance) reads a lead's team from its RM's EMPLOYEE_REF row. These names have no row, so their leads land on SV instead of the team they belong to: ${top}${more}.`
-      + (blankRm ? ` Separately, ${fmtIN(blankRm)} lead(s) carry no RM name at all and also sit on SV — a CRM gap, not a mapping one.` : ''),
+    headline: `${names.length} ${who} name${names.length>1?'s':''} missing from EMPLOYEE_REF — ${fmtIN(leads)} lead${leads>1?'s':''} counted under team SV`,
+    detail: (isFirst
+        ? `Every FirstRM view (Team Performance FirstRM, Campaign by Team, Team Transfers) reads a lead's team from its FIRST RM's EMPLOYEE_REF row. `
+        : `Every CurrentRM view (Team Performance, Stagnant In-Process, RM Performance) reads a lead's team from its current RM's EMPLOYEE_REF row. `)
+      + `These names have no row, so their leads land on SV instead of the team they belong to: ${top}${more}.`
+      + (blankRm ? ` Separately, ${fmtIN(blankRm)} lead(s) carry no ${who} name at all and also sit on SV — a CRM gap, not a mapping one.` : ''),
     fix: 'Add a row here for each name — Team, plus the Name spelled exactly as the CRM writes it — then press "Calculate". Add the same name to RM MASTER MAPPING so spelling variants fold onto it, and "Export snapshot.js" to make the fix permanent for everyone.',
   };
 }
@@ -332,15 +342,17 @@ function renderUnmappedRmWarning(){
   const editor = $('#emp-editor');
   if(!editor || !editor.parentNode) return;
   const existing = $('#emp-unmapped-warning');
-  const report = unmappedRmIssueReport();
-  if(!report){ existing?.remove(); _unmappedRmWarnedFor = null; return; }
-  if(_unmappedRmWarnedFor !== report.headline){
-    console.warn(`[MIS] ${report.headline}. ${report.detail} Fix: ${report.fix}`);
-    _unmappedRmWarnedFor = report.headline;
+  const reports = ['currentRmName', 'firstRmName'].map(unmappedRmIssueReport).filter(Boolean);
+  if(!reports.length){ existing?.remove(); _unmappedRmWarnedFor = null; return; }
+  const sig = reports.map(r => r.headline).join('|');
+  if(_unmappedRmWarnedFor !== sig){
+    reports.forEach(r => console.warn(`[MIS] ${r.headline}. ${r.detail} Fix: ${r.fix}`));
+    _unmappedRmWarnedFor = sig;
   }
   const html = `<div class="file-not-uploaded" id="emp-unmapped-warning">` +
-    `<span class="fnu-icon">&#9888;</span><strong>${escHtml(report.headline)}</strong><br>` +
-    `${escHtml(report.detail)}<br><em>${escHtml(report.fix)}</em></div>`;
+    `<span class="fnu-icon">&#9888;</span><div>` +
+    reports.map(r => `<strong>${escHtml(r.headline)}</strong><br>${escHtml(r.detail)}<br><em>${escHtml(r.fix)}</em>`).join('<hr style="border:0;border-top:1px solid #fed7aa;margin:8px 0">') +
+    `</div></div>`;
   if(existing) existing.outerHTML = html;
   else editor.insertAdjacentHTML('beforebegin', html);
 }
@@ -360,8 +372,13 @@ async function syncCostFromSheets(silent){
     if(!rows.length || !rows[0].length) throw new Error('Sheet is empty');
 
     COST_SYNC.shapeWarning = validateCostSheet(rows);
-    STATE.cost = rows;
-    persistOverride(CONFIG.STORAGE_KEYS.COST, 'Cost Per Campaign', STATE.cost);
+    // A sheet that came back but isn't a usable cost table (header only, one
+    // column…) used to replace the working snapshot anyway — every CPL/CAC on
+    // the page then read ₹0 until someone noticed. Keep what we had instead.
+    if(!COST_SYNC.shapeWarning){
+      STATE.cost = rows;
+      persistOverride(CONFIG.STORAGE_KEYS.COST, 'Cost Per Campaign', STATE.cost);
+    }
     COST_SYNC.ok = true;
     COST_SYNC.error = null;
     COST_SYNC.rowsLoaded = rows.length - 1;
@@ -572,8 +589,8 @@ function setStatus(sel, msg, kind = 'ok'){
 
 /** Full recalculation after a reference-table edit — every tab reflects the change. */
 function recalcAll(){
+  buildRMMasterLookup();      // first: rebuildTeamMap resolves aliases through it
   rebuildTeamMap();
-  buildRMMasterLookup();
   remapAdvisorNames();
   detectMonths();
   initFilters();

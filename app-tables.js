@@ -4,6 +4,9 @@
 /** Accept either a selector string or a live element, as every caller here does. */
 const resolveHost = host => (typeof host === 'string' ? $(host) : host);
 
+/** HTML-safe text for a table cell; null/undefined render as empty. */
+const cellText = v => escHtml(v ?? '');
+
 /** Row modifier classes: `_tot` marks a grand-total row, `_heat` a quartile tier. */
 const tableRowClass = r => [r._tot ? 'grand' : '', r._heat ? `heat-${r._heat}` : '']
   .filter(Boolean).join(' ');
@@ -63,12 +66,13 @@ function tableShapeIssueReport(){
  */
 function renderTable(host, headers, rows, opts = {}){
   const fmt = opts.fmt || (v => v);
+  const cell = opts.html ? (v => v ?? '') : cellText;
   checkTableShape(typeof host === 'string' ? host : (host?.id ? `#${host.id}` : 'element'), headers, rows);
   const body = rows.map(r =>
-    `<tr class="${tableRowClass(r)}">${headers.map(h => `<td>${fmt(r[h], h, r)}</td>`).join('')}</tr>`
+    `<tr class="${tableRowClass(r)}">${headers.map(h => `<td>${cell(fmt(r[h], h, r))}</td>`).join('')}</tr>`
   ).join('');
   resolveHost(host).innerHTML = `<table class="data ${opts.cls || ''}">
-    <thead><tr>${headers.map(h => `<th>${h}</th>`).join('')}</tr></thead>
+    <thead><tr>${headers.map(h => `<th>${escHtml(h)}</th>`).join('')}</tr></thead>
     <tbody>${body}</tbody>
   </table>`;
 }
@@ -140,9 +144,14 @@ function renderHeatLegend(host, metricLabel, invert){
     + '</div>';
 }
 
+/** "All", one month, or a comma list — a multi-select value is an array. */
+function monthSelectionLabel(){
+  return isAllMonths() ? 'All' : effectiveMonths().join(', ');
+}
+
 /** Human-readable echo of the active dashboard filters, shown above tables. */
 function filterSummary(extra = ''){
-  const parts = [`Month: ${STATE.filterMonth}`, `Ref+Cold: ${STATE.filterRefCold}`, `Lead Head: ${STATE.filterLeadHead}`];
+  const parts = [`Month: ${monthSelectionLabel()}`, `Ref+Cold: ${rcFilter(STATE.filterRefCold)}`, `Lead Head: ${STATE.filterLeadHead}`];
   const status = STATE.filterStatus;
   if(status && status !== 'All' && !(Array.isArray(status) && status.length === 0)){
     parts.push(`Status: ${Array.isArray(status) ? status.join(', ') : status}`);
@@ -188,7 +197,7 @@ function makeSortableTable(host, headers, rows, rerenderFn, opts = {}){
     return `<th class="srt-th" data-col="${escHtml(h)}" style="cursor:pointer;user-select:none;white-space:nowrap">${escHtml(h)} <span style="opacity:0.45;font-size:10px">${icon}</span></th>`;
   }).join('');
   const bodyHtml = [...body, ...totals].map(r =>
-    `<tr class="${tableRowClass(r)}">${headers.map(h => `<td>${r[h] ?? ''}</td>`).join('')}</tr>`
+    `<tr class="${tableRowClass(r)}">${headers.map(h => `<td>${opts.html ? (r[h] ?? '') : cellText(r[h])}</td>`).join('')}</tr>`
   ).join('');
 
   const el = resolveHost(host);

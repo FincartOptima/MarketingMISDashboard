@@ -15,6 +15,16 @@ const FULL_MONTHS = ['January','February','March','April','May','June',
 const BLANK_DATE_VALUES = new Set(['', 'N/A']);
 const isBlankDate = v => v == null || BLANK_DATE_VALUES.has(String(v).trim().toUpperCase());
 
+/**
+ * Local-midnight Date for a y/m/d triple, or null when the day doesn't exist.
+ * `new Date(2026, 1, 31)` silently becomes 3 March, which would file a lead
+ * under the wrong month with no trace — so the parts are checked back.
+ */
+function strictYmd(y, m, d){
+  const dt = new Date(y, m - 1, d);
+  return (dt.getFullYear() === y && dt.getMonth() === m - 1 && dt.getDate() === d) ? dt : null;
+}
+
 /** A Date is only trusted if it parsed AND lands in the plausible window. */
 function validDateOrNull(d){
   if(!(d instanceof Date) || isNaN(d)) return null;
@@ -112,7 +122,14 @@ function parseDateAny(v){
 
   // Excel serial date — days since the 1900 epoch (with Excel's leap-year bug
   // baked into the 1899-12-30 offset).
-  if(typeof v === 'number') return validDateOrNull(new Date(Date.UTC(1899, 11, 30) + v * 86400000));
+  // The calendar day is read back with the UTC getters and rebuilt as local
+  // midnight: reading a UTC-midnight instant with local getters lands on the
+  // previous day anywhere west of Greenwich.
+  if(typeof v === 'number'){
+    if(!isFinite(v)) return null;
+    const u = new Date(Date.UTC(1899, 11, 30) + Math.floor(v) * 86400000);
+    return validDateOrNull(strictYmd(u.getUTCFullYear(), u.getUTCMonth() + 1, u.getUTCDate()));
+  }
 
   if(typeof v !== 'string') return null;
   const s = v.trim();
@@ -121,10 +138,10 @@ function parseDateAny(v){
   // Explicit patterns first: both are ambiguous to Date's own parser, which
   // would read DD-MM-YYYY as a US month-first date and silently shift it.
   const dmy = s.match(/^(\d{1,2})-(\d{1,2})-(\d{4})$/);
-  if(dmy) return validDateOrNull(new Date(+dmy[3], +dmy[2] - 1, +dmy[1]));
+  if(dmy) return validDateOrNull(strictYmd(+dmy[3], +dmy[2], +dmy[1]));
 
   const ymd = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
-  if(ymd) return validDateOrNull(new Date(+ymd[1], +ymd[2] - 1, +ymd[3]));
+  if(ymd) return validDateOrNull(strictYmd(+ymd[1], +ymd[2], +ymd[3]));
 
   // Fall back to native parsing. Only the first space becomes 'T' so
   // "2026-08-14 10:00:00" is read as local time, not UTC.

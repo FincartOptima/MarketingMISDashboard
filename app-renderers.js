@@ -25,8 +25,7 @@ function renderKPIs(){
 function renderLiveKPIs(){
   if(!STATE.filesLoaded.fin23){ $('#live-kpis').innerHTML = ''; return; }
   const k = liveDataKPIs();
-  const month = STATE.filterMonth;
-  const hint = month==='All' ? '<span style="color:var(--muted);font-size:11px">(Select a month for AnyMonth data)</span>' : '';
+  const hint = isAllMonths() ? '<span style="color:var(--muted);font-size:11px">(Select a month for AnyMonth data)</span>' : '';
   const cards = [
     {label:'Assigned', value: fmtIN(k.assigned), tone:'blue'},
     {label:'AnyMonth Converted', value: k.anyConv!==null ? fmtIN(k.anyConv) : '—', tone:'green'},
@@ -418,33 +417,20 @@ function renderTeam(){
   }
 
   const selectedTeam = STATE.teamPerfTeamFilter;
-  if(selectedTeam && selectedTeam !== 'All'){
-    // Drill-down: one row per RM in the selected team, same status columns.
-    const data = teamPerformanceByRM(selectedTeam);
-    const headers = ['RM', 'Total Leads', 'CONVERTED', 'Conv. Rate', 'IN PROCESS', 'FOLLOW UP', 'ASSIGNED', 'RE-ASSIGNED', 'ON HOLD', 'DEAD'];
-    applyHeatAndLegend(data, 'Total Leads', '#legend-team', 'Row heat by Total Leads');
-    const rows = data.map(r => ({
-      RM: r.RM,
-      'Total Leads': fmtIN(r['Total Leads']),
-      CONVERTED: fmtIN(r.CONVERTED),
-      'Conv. Rate': fmtPct(r['Conv. Rate']),
-      'IN PROCESS': fmtIN(r['IN PROCESS']),
-      'FOLLOW UP': fmtIN(r['FOLLOW UP']),
-      ASSIGNED: fmtIN(r.ASSIGNED),
-      'RE-ASSIGNED': fmtIN(r['RE-ASSIGNED']),
-      'ON HOLD': fmtIN(r['ON HOLD']),
-      DEAD: fmtIN(r.DEAD),
-      _heat: r._heat, _tot: r._tot,
-    }));
-    makeSortableTable('#tbl-team', headers, rows, renderTeam);
-    return;
-  }
-
-  const data = teamPerformance();
-  const headers = ['Team', 'Total Leads', 'CONVERTED', 'Conv. Rate', 'IN PROCESS', 'FOLLOW UP', 'ASSIGNED', 'RE-ASSIGNED', 'ON HOLD', 'DEAD'];
+  const isDrill = !!(selectedTeam && selectedTeam !== 'All');
+  const data = isDrill ? teamPerformanceByRM(selectedTeam) : teamPerformance();
+  const labelField = isDrill ? 'RM' : 'Team';
+  const headers = [labelField, 'Total Leads', 'CONVERTED', 'Conv. Rate', 'IN PROCESS', 'FOLLOW UP', 'ASSIGNED', 'RE-ASSIGNED', 'ON HOLD', 'DEAD'];
   applyHeatAndLegend(data, 'Total Leads', '#legend-team', 'Row heat by Total Leads');
-  const rows = data.map(r => ({
-    Team: r.Team,
+  const rows = data.map(teamPerfCells.bind(null, labelField));
+  makeSortableTable('#tbl-team', headers, rows, renderTeam);
+  renderTeamPerfNote(data);
+}
+
+// One display row for the Team Performance Matrix (team and per-RM views alike).
+function teamPerfCells(labelField, r){
+  return {
+    [labelField]: r[labelField],
     'Total Leads': fmtIN(r['Total Leads']),
     CONVERTED: fmtIN(r.CONVERTED),
     'Conv. Rate': fmtPct(r['Conv. Rate']),
@@ -455,8 +441,34 @@ function renderTeam(){
     'ON HOLD': fmtIN(r['ON HOLD']),
     DEAD: fmtIN(r.DEAD),
     _heat: r._heat, _tot: r._tot,
-  }));
-  makeSortableTable('#tbl-team', headers, rows, renderTeam);
+  };
+}
+
+// Under-table footnote: says what "Total Leads" counts and, when it differs
+// from the created-in-period figure other tables show, by exactly how much —
+// so the 111-vs-113 style question answers itself on the page.
+function renderTeamPerfNote(data){
+  const host = $('#tbl-team');
+  if(!host || !host.parentNode) return;
+  let el = $('#team-perf-note');
+  if(!el){
+    el = document.createElement('div');
+    el.id = 'team-perf-note';
+    el.className = 'hint';
+    host.insertAdjacentElement('afterend', el);
+  }
+  const gt = data.find(r => r._tot);
+  if(!gt){ el.textContent = ''; return; }
+  const older = gt['Total Leads'] - gt.Created;
+  el.innerHTML = '<strong>Total Leads</strong> = the sum of the status columns: every lead with a status event in the '
+    + 'selected period, so each row adds up and Conv. Rate stays \u2264 100%.'
+    + (older !== 0
+      ? ' Of the ' + fmtIN(gt['Total Leads']) + ' shown, ' + fmtIN(gt.Created) + ' were created in the period; '
+        + fmtIN(Math.abs(older)) + (older > 0
+          ? ' were created earlier and converted / went in-process within it.'
+          : ' were created in the period but whose status event falls in a later month (e.g. in-process next month).')
+        + ' Generated Leads and Campaign \u00d7 Team count created-in-period only.'
+      : '');
 }
 
 function renderRmTransfer(){
@@ -620,8 +632,7 @@ function renderCplRm(){
 
 function renderInProcessDataset(){
   if(!STATE.filesLoaded.fin23){ setNotUploaded('#tbl-inprocess-ds','fin23'); return; }
-  const month = STATE.filterMonth;
-  const title = 'IN-PROCESS DATE SET, STATUS ≠ IN PROCESS   LPM: '+month+'  |  '+STATE.filterRefCold;
+  const title = 'IN-PROCESS DATE SET, STATUS ≠ IN PROCESS   LPM: '+monthSelectionLabel()+'  |  '+rcFilter(STATE.filterRefCold);
   $('#inprocess-ds-title').textContent = title;
   const {statuses, data} = inProcessDataset();
   const headers = ['Team', ...statuses, 'Total'];
@@ -636,8 +647,7 @@ function renderInProcessDataset(){
 
 function renderConvertedDataset(){
   if(!STATE.filesLoaded.fin23){ setNotUploaded('#tbl-converted-ds','fin23'); return; }
-  const month = STATE.filterMonth;
-  const title = 'CONVERTED DATE SET, STATUS ≠ CONVERTED   CM: '+month+'  |  '+STATE.filterRefCold;
+  const title = 'CONVERTED DATE SET, STATUS ≠ CONVERTED   CM: '+monthSelectionLabel()+'  |  '+rcFilter(STATE.filterRefCold);
   $('#converted-ds-title').textContent = title;
   const {statuses, data} = convertedDataset();
   const headers = ['Team', ...statuses, 'Total'];
@@ -755,7 +765,7 @@ function renderMTD(){
           <tr><th>MTD</th><th>Projected</th><th>MTD</th><th>Projected</th><th>MTD</th><th>Projected</th><th>MTD</th><th>Projected</th></tr>
         </thead>
         <tbody>${rows.map(r=>`<tr>
-          <td>${r.Campaign}</td>
+          <td>${escHtml(r.Campaign)}</td>
           <td>${fmtIN(r.Leads)}</td><td>${r.LeadsProj.toFixed(1)}</td>
           <td>${fmtIN(r.Conv)}</td><td>${r.ConvProj.toFixed(1)}</td>
           <td>${fmtIN(r.InProc)}</td><td>${r.InProcProj.toFixed(1)}</td>
@@ -807,24 +817,12 @@ function renderProcessed(){
   }));
   const data = teamPerformance();
   const headers = ['Team', 'Total Leads', 'CONVERTED', 'Conv. Rate', 'IN PROCESS', 'FOLLOW UP', 'ASSIGNED', 'RE-ASSIGNED', 'ON HOLD', 'DEAD'];
-  renderTable('#proc-team', headers, data.map(r => ({
-    Team: r.Team,
-    'Total Leads': fmtIN(r['Total Leads']),
-    CONVERTED: fmtIN(r.CONVERTED),
-    'Conv. Rate': fmtPct(r['Conv. Rate']),
-    'IN PROCESS': fmtIN(r['IN PROCESS']),
-    'FOLLOW UP': fmtIN(r['FOLLOW UP']),
-    ASSIGNED: fmtIN(r.ASSIGNED),
-    'RE-ASSIGNED': fmtIN(r['RE-ASSIGNED']),
-    'ON HOLD': fmtIN(r['ON HOLD']),
-    DEAD: fmtIN(r.DEAD),
-  })));
+  renderTable('#proc-team', headers, data.map(r => ({...teamPerfCells('Team', r), _heat: undefined})));
 }
 
 function rawCellValue(row, col){
   if(col === 'Team of FirstRM'){
-    const key = normalizeNameKey(row.firstRmName);
-    return key ? (STATE.teamMap[key] || 'SV') : '';
+    return normalizeNameKey(row.firstRmName) ? firstRmTeam(row) : '';
   }
   return String(row[col] ?? '');
 }
@@ -1195,7 +1193,7 @@ function renderMissing(){
   const rows = missingLeads();
   const cols = ['currentRmName','Team','clientName','Campaign Name','platformName','createdDate','leadStatus','Reason'];
   const head = '<thead><tr>'+cols.map(c=>`<th>${c}</th>`).join('')+'</tr></thead>';
-  const body = '<tbody>'+rows.slice(0,500).map(r=>'<tr>'+cols.map(c=>`<td>${r[c]??''}</td>`).join('')+'</tr>').join('')+'</tbody>';
+  const body = '<tbody>'+rows.slice(0,500).map(r=>'<tr>'+cols.map(c=>`<td>${escHtml(r[c]??'')}</td>`).join('')+'</tr>').join('')+'</tbody>';
   $('#tbl-missing').innerHTML = `<div class="meta">${rows.length.toLocaleString()} rows flagged (showing first 500).</div><table class="data compact">${head}${body}</table>`;
 }
 
@@ -1242,6 +1240,7 @@ function renderDashboard(){
   renderStagnantInProcess();
   renderB2BTable();
   renderWorkshopStatus();
+  renderDataHealth();     // last: reads the table-shape guard the renders above feed
   requestAnimationFrame(attachAllMirrors);
 }
 

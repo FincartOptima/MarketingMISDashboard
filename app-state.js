@@ -15,6 +15,7 @@ const STATE = {
   rmMaster: [],
   rmMasterLookup: {},
   rmMasterTeam: {},
+  rmMasterAmbiguous: {},
   months: [],
   empref: [],
   teamMap: {},
@@ -82,8 +83,12 @@ function tabNotUploaded(contentSelector, key){
 
 // Case/whitespace-insensitive lookup key for RM/team names, used wherever a
 // raw name needs to match a lookup table key (RM Master Mapping, team maps).
+// Collapses runs of inner whitespace as well as trimming the ends: the
+// EMPLOYEE_REF sheet carries names like "Swaraj  Singh Thakur" (two spaces)
+// and "Ravi Sharma " (trailing space) which would otherwise never match the
+// single-spaced spelling the CRM exports.
 function normalizeNameKey(name){
-  return (name || '').toString().trim().toLowerCase();
+  return (name == null ? '' : String(name)).replace(/\s+/g, ' ').trim().toLowerCase();
 }
 
 // ---- local-edit overrides (EMPLOYEE_REF / RM Master Mapping / Cost Per
@@ -139,14 +144,42 @@ function rebuildTeamMap(){
     if(name) STATE.teamMap[name] = team;
   }
   for(const row of STATE.raw){
-    const key = normalizeNameKey(row.currentRmName);
     const existingTeam = (row.Team||'').toString().trim();
     if(row._hasSourceTeam){
       row.Team = existingTeam || 'SV';
     } else {
-      row.Team = STATE.teamMap[key] || existingTeam || 'SV';
+      row.Team = teamForRmName(row.currentRmName) || existingTeam || 'SV';
     }
+    // The team of the RM who FIRST received the lead. Resolved once here, with
+    // exactly the same rules as the current-RM team above, so FirstRM-mode
+    // tables can't drift from CurrentRM-mode ones (they used to look the name
+    // up un-trimmed in six separate places, which silently parked every
+    // "Ravi Sharma " lead on SV).
+    row.FirstTeam = teamForRmName(row.firstRmName) || 'SV';
   }
+}
+
+// Team for one RM name, or '' when the name can't be resolved. Cascade:
+//   1. EMPLOYEE_REF, by the name exactly as written (case/space-insensitive)
+//   2. RM Master Mapping: the alias's canonical name, then that name's
+//      EMPLOYEE_REF team, then the mapping's own Team column
+// An alias that points at two different people ("Ankit", "Ayush", "Sahil")
+// is never guessed at — it stays unresolved so it is flagged, not misfiled.
+function teamForRmName(name){
+  const k = normalizeNameKey(name);
+  if(!k) return '';
+  if(STATE.teamMap[k]) return STATE.teamMap[k];
+  const canon = STATE.rmMasterLookup[k];
+  if(canon && !STATE.rmMasterAmbiguous[k]){
+    const ck = normalizeNameKey(canon);
+    return STATE.teamMap[ck] || STATE.rmMasterTeam[ck] || '';
+  }
+  return '';
+}
+
+// Team of a lead's FIRST RM — the single accessor every FirstRM view uses.
+function firstRmTeam(row){
+  return row.FirstTeam || teamForRmName(row.firstRmName) || 'SV';
 }
 
 function loadRMMasterFromStorage(){
@@ -156,13 +189,21 @@ function loadRMMasterFromStorage(){
 function buildRMMasterLookup(){
   STATE.rmMasterLookup = {};
   STATE.rmMasterTeam = {};
+  STATE.rmMasterAmbiguous = {};
   for(let i=1;i<STATE.rmMaster.length;i++){
     const r = STATE.rmMaster[i]; if(!r) continue;
     const src = normalizeNameKey(r[0]);
-    const correct = (r[1]||'').toString().trim();
+    const correct = (r[1]||'').toString().replace(/\s+/g,' ').trim();
     const team = (r[2]||'').toString().trim();
-    if(src && correct) STATE.rmMasterLookup[src] = correct;
-    if(correct && team) STATE.rmMasterTeam[correct.toLowerCase()] = team;
+    if(src && correct){
+      // Same source name pointing at two different canonical RMs: the later
+      // row still wins in mapRM() (long-standing behaviour), but the alias is
+      // recorded so team resolution refuses to guess between them.
+      const prev = STATE.rmMasterLookup[src];
+      if(prev && normalizeNameKey(prev) !== normalizeNameKey(correct)) STATE.rmMasterAmbiguous[src] = true;
+      STATE.rmMasterLookup[src] = correct;
+    }
+    if(correct && team) STATE.rmMasterTeam[normalizeNameKey(correct)] = team;
   }
 }
 function mapRM(rawName){

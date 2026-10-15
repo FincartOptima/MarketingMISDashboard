@@ -150,6 +150,9 @@ function platformStatusBreakdown(){
   // interchangeably) rather than platformName.
   const categoryNames = [...new Set(rows.map(r => r['Campaign Name']).filter(Boolean))].sort();
   const groups = categoryNames.map(c => ({label: c, match: r => r['Campaign Name'] === c}));
+  // A lead with no Category Name must still land on a row, or this table's
+  // Grand Total quietly sits below the Team Performance Matrix's.
+  if(rows.some(r => !r['Campaign Name'])) groups.push({label: '(Blank)', match: r => !r['Campaign Name']});
   const out = [];
   for(const g of groups){
     const sub = rows.filter(g.match);
@@ -230,72 +233,120 @@ function landingPageStatusBreakdown(){
   return out;
 }
 
-function teamPerformance(){
-  let base = applyRefColdFilter(STATE.raw);
+// Every team that has a lead in `rows`: FIXED_TEAMS first (stable order, shown
+// even when empty), then any other team name found in the data. Aggregators
+// that only walked FIXED_TEAMS silently dropped a lead the moment its team
+// wasn't on that list — a renamed team or a typo in EMPLOYEE_REF made leads
+// disappear from the table without trace. This keeps every lead on a row.
+function teamsForRows(rows, teamOf){
   const teams = FIXED_TEAMS.slice();
-  const useFirst = STATE.teamPerfMode === 'first';
+  const seen = new Set(teams);
+  for(const r of rows){
+    const t = teamOf(r);
+    if(t && !seen.has(t)){ seen.add(t); teams.push(t); }
+  }
+  return teams;
+}
 
-  return teams.map(team => {
-    const rows = useFirst
-      ? base.filter(r => (STATE.teamMap[(r.firstRmName||'').toLowerCase()] || 'SV') === team)
-      : base.filter(r => (r.Team || 'SV') === team);
-    const totalLeads = rows.filter(r => monthFilter(r.CTM)).length;
-    const obj = {Team: team, 'Total Leads': totalLeads};
-    for(const st of STATUSES){
-      // CONVERTED gate: CM-presence, not leadStatus (per 2026-07-29 rule).
-      // Leads with a CM are removed from all other status buckets.
-      const pool = st === 'CONVERTED'
-        ? rows.filter(r => isConvertedLead(r, monthFilter))
-        : rows.filter(r => r.leadStatus===st && !isConvertedLead(r) && monthFilter(r[statusMonthCol(st)]));
-      obj[st] = pool.length;
-    }
-    obj['Conv. Rate'] = totalLeads>0 ? obj.CONVERTED/totalLeads : 0;
-    return obj;
-  });
+// Which status column a lead is counted under, and in which month. This is
+// THE definition shared by every status table: a lead with a Converted Month
+// is CONVERTED whatever leadStatus says (2026-07-29 rule), IN PROCESS is
+// anchored on its in-process month, every other status on its created month.
+// Returns null when the lead's status isn't one the dashboard knows.
+function statusBucketOf(r){
+  const st = isConvertedLead(r) ? 'CONVERTED' : r.leadStatus;
+  if(!STATUSES.includes(st)) return null;
+  return { status: st, month: r[st === 'CONVERTED' ? 'CM' : statusMonthCol(st)] };
+}
+
+// Status columns for one group of leads. Total Leads is the SUM of the status
+// columns — i.e. every lead in the group with a status event in the selected
+// month(s) — so a row always adds up and its Conv. Rate can never exceed 100%.
+//
+// It used to be "leads created in the selected months", which is a different
+// population from the status columns: a lead created before the period but
+// converted or taken in-process inside it was counted under CONVERTED / IN
+// PROCESS yet missing from Total Leads. Ambika read 111 against 113 rows in
+// the source file for exactly that reason (two leads from Feb-2026 / Mar-2024
+// converted in FY), and teams with many such leads showed a Conv. Rate above
+// 100% (SV: 60 converted of "24" leads).
+//
+// `Created` keeps the old created-in-period figure for the footnote, so the
+// two numbers can be reconciled on screen rather than guessed at.
+function statusColumnsFor(rows){
+  const o = {};
+  let total = 0, created = 0;
+  for(const st of STATUSES) o[st] = 0;
+  for(const r of rows){
+    if(monthFilter(r.CTM)) created++;
+    const b = statusBucketOf(r);
+    if(b && monthFilter(b.month)){ o[b.status]++; total++; }
+  }
+  o['Total Leads'] = total;
+  o.Created = created;
+  o['Conv. Rate'] = total>0 ? o.CONVERTED/total : 0;
+  return o;
+}
+
+function teamOfMode(mode){
+  return mode === 'first' ? firstRmTeam : (r => r.Team || 'SV');
+}
+
+function teamPerformance(){
+  const base = applyRefColdFilter(STATE.raw);
+  const teamOf = teamOfMode(STATE.teamPerfMode);
+  const teams = teamsForRows(base, teamOf);
+
+  const byTeam = new Map(teams.map(t => [t, []]));
+  for(const r of base) byTeam.get(teamOf(r)).push(r);
+
+  const out = teams.map(team => ({Team: team, ...statusColumnsFor(byTeam.get(team))}));
+  const gt = buildGrandTotalRow('Team', 'Grand Total', [...STATUSES, 'Total Leads', 'Created'], out);
+  gt['Conv. Rate'] = gt['Total Leads']>0 ? gt.CONVERTED/gt['Total Leads'] : 0;
+  out.push(gt);
+  return out;
 }
 
 // Per-RM drill-down for the Team Performance Matrix's Team filter: same
 // status columns as teamPerformance(), one row per RM in the selected team
 // instead of one row per team.
+//
+// RMs are grouped by canonical name (RM Master Mapping, then
+// case/space-folded) so "Akanksha" and "Akanksha Agarwal" are one row. The
+// roster below used to be matched on the exact string, which meant a lead
+// whose RM differed from the EMPLOYEE_REF spelling by case or a stray space
+// was dropped from every RM row — and from the team total built from them.
 function teamPerformanceByRM(team){
   const base = applyRefColdFilter(STATE.raw);
   const useFirst = STATE.teamPerfMode === 'first';
   const rmField = useFirst ? 'firstRmName' : 'currentRmName';
-  const teamRows = useFirst
-    ? base.filter(r => (STATE.teamMap[(r.firstRmName||'').toLowerCase()] || 'SV') === team)
-    : base.filter(r => (r.Team || 'SV') === team);
+  const teamOf = teamOfMode(STATE.teamPerfMode);
+  const teamRows = base.filter(r => teamOf(r) === team);
+  const keyOf = name => normalizeNameKey(mapRM(name)) || '(unassigned)';
 
   // RM roster: everyone in EMPLOYEE_REF for this team, plus any RM appearing
   // in teamRows but missing from EMPLOYEE_REF, so no lead is silently dropped.
-  const rms = [];
-  const seen = new Set();
+  const groups = new Map();                       // key -> { name, rows }
+  const ensure = (key, name) => {
+    if(!groups.has(key)) groups.set(key, { name, rows: [] });
+    return groups.get(key);
+  };
   for(let i=1;i<STATE.empref.length;i++){
     const er = STATE.empref[i]; if(!er) continue;
     if((er[1]||'').toString().trim() === team){
-      const nm = (er[2]||'').toString().trim();
-      if(nm && !seen.has(nm.toLowerCase())){ rms.push(nm); seen.add(nm.toLowerCase()); }
+      const nm = cleanName(er[2]);
+      if(nm) ensure(keyOf(nm), nm);
     }
   }
   for(const r of teamRows){
-    const nm = (r[rmField]||'').toString().trim() || '(unassigned)';
-    if(!seen.has(nm.toLowerCase())){ rms.push(nm); seen.add(nm.toLowerCase()); }
+    const nm = cleanName(r[rmField]);
+    ensure(keyOf(nm), mapRM(nm) || '(unassigned)').rows.push(r);
   }
 
-  const out = rms.map(rm => {
-    const rmRows = teamRows.filter(r => ((r[rmField]||'').toString().trim() || '(unassigned)') === rm);
-    const totalLeads = rmRows.filter(r => monthFilter(r.CTM)).length;
-    const obj = {RM: rm, 'Total Leads': totalLeads};
-    for(const st of STATUSES){
-      const pool = st === 'CONVERTED'
-        ? rmRows.filter(r => isConvertedLead(r, monthFilter))
-        : rmRows.filter(r => r.leadStatus===st && !isConvertedLead(r) && monthFilter(r[statusMonthCol(st)]));
-      obj[st] = pool.length;
-    }
-    obj['Conv. Rate'] = totalLeads>0 ? obj.CONVERTED/totalLeads : 0;
-    return obj;
-  }).sort((a,b) => b['Total Leads'] - a['Total Leads']);
+  const out = [...groups.values()].map(g => ({RM: g.name, ...statusColumnsFor(g.rows)}))
+    .sort((a,b) => b['Total Leads'] - a['Total Leads']);
 
-  const gt = buildGrandTotalRow('RM', team+' Total', [...STATUSES, 'Total Leads'], out);
+  const gt = buildGrandTotalRow('RM', team+' Total', [...STATUSES, 'Total Leads', 'Created'], out);
   gt['Conv. Rate'] = gt['Total Leads']>0 ? gt.CONVERTED/gt['Total Leads'] : 0;
   out.push(gt);
   return out;
@@ -310,8 +361,9 @@ function rmTransferData(){
     const firstRm = (r.firstRmName || '').trim();
     const currentRm = (r.currentRmName || '').trim();
     if(!firstRm && !currentRm) continue;
-    if(firstRm.toLowerCase() === currentRm.toLowerCase()) continue;
-    const firstTeam = STATE.teamMap[firstRm.toLowerCase()] || 'SV';
+    // Same person under two spellings ("Ankit" / "Ankit Sadwal") is not a transfer.
+    if(normalizeNameKey(mapRM(firstRm)) === normalizeNameKey(mapRM(currentRm))) continue;
+    const firstTeam = firstRmTeam(r);
     const currentTeam = r.Team || 'SV';
     transfers.push({ firstRm: firstRm || '(blank)', firstTeam, currentRm: currentRm || '(blank)', currentTeam, campaign: r['Campaign Name'] || '(Blank)', status: r.leadStatus || '(Unknown)' });
   }
@@ -355,7 +407,7 @@ function rmTransferData(){
 //   - Transferred to another team: anything else.
 const RM_TRANSFER_BUCKETS = ['Same Team', 'Transferred to SV', 'Transferred to another team'];
 function rmTransferBucket(r){
-  const firstTeam = STATE.teamMap[(r.firstRmName||'').toLowerCase()] || 'SV';
+  const firstTeam = firstRmTeam(r);
   const currentTeam = r.Team || 'SV';
   if(firstTeam === currentTeam) return 'Same Team';
   return currentTeam === 'SV' ? 'Transferred to SV' : 'Transferred to another team';
@@ -407,7 +459,7 @@ function rmTransferByCategory(){
 // Transfer table above it, and the same FIXED_TEAMS-first ordering.
 function rmTransferByTeam(){
   const base = rmTransferFilteredBase();
-  const teamOf = r => STATE.teamMap[(r.firstRmName||'').toLowerCase()] || 'SV';
+  const teamOf = firstRmTeam;
   const present = new Set(base.map(teamOf));
   const teams = FIXED_TEAMS.filter(t => present.has(t));
   for(const t of present){ if(!teams.includes(t)) teams.push(t); }
@@ -441,9 +493,7 @@ function campaignByTeam(){
   }
 
   const useFirst = STATE.campaignTeamMode === 'first';
-  const getTeam = useFirst
-    ? r => STATE.teamMap[(r.firstRmName||'').toLowerCase()] || 'SV'
-    : r => r.Team || 'SV';
+  const getTeam = teamOfMode(useFirst ? 'first' : 'current');
 
   const teamSet = new Set(base.map(getTeam));
   const teams = FIXED_TEAMS.filter(t => teamSet.has(t));
@@ -529,7 +579,7 @@ function costSummaryByCampaign(){
 function costPerLeadPerRM(){
   const cpc = STATE.cost; const header = cpc[0]||[];
   const monthCols = header.slice(1).map(toMmmYyyy);
-  const month = STATE.filterMonth, refMode = STATE.filterRefCold;
+  const refMode = rcFilter(STATE.filterRefCold);
 
   const costSummary = costSummaryByCampaign();
   const cplMap = {};
@@ -537,7 +587,7 @@ function costPerLeadPerRM(){
 
   let scope = STATE.raw;
   if(refMode==='Exclude') scope = scope.filter(r => r['Campaign Name']!=='Referral' && r['Campaign Name']!=='Cold Data');
-  if(month!=='All') scope = scope.filter(r => r.CTM===month);
+  scope = scope.filter(r => monthFilter(r.CTM));
   scope = scope.filter(r => r.Team !== 'SV');
 
   const rms = {};
@@ -619,22 +669,24 @@ function costPerLeadPerRMWithTotals(){
   return rows;
 }
 
+// "All months" for the two Date-Set tables below means every dated lead (no FY
+// window), exactly as before; an explicit selection — one month or several —
+// is honoured via monthFilter. They compared against `STATE.filterMonth`
+// directly, so a multi-month selection (an array) matched nothing at all.
+function dateSetMonthMatch(m){
+  return isAllMonths() ? isValidMonth(m) : monthFilter(m);
+}
+
 function inProcessDataset(){
-  const month = STATE.filterMonth;
-  let base = applyRefColdFilter(STATE.raw);
+  const base = applyRefColdFilter(STATE.raw);
   const statuses = ['DEAD','ON HOLD','ASSIGNED','RE-ASSIGNED','FOLLOW UP','CONVERTED'];
-  const teams = FIXED_TEAMS.slice();
+  const teams = teamsForRows(base, r => r.Team || 'SV');
 
   const out = teams.map(team => {
-    const rows = base.filter(r => r.Team === team);
+    const rows = base.filter(r => (r.Team || 'SV') === team);
     const obj = {Team: team}; let total = 0;
     for(const st of statuses){
-      let pool;
-      if(month==='All'){
-        pool = rows.filter(r => r.LPM!=='N/A' && r.leadStatus===st);
-      } else {
-        pool = rows.filter(r => r.LPM===month && r.leadStatus===st);
-      }
+      const pool = rows.filter(r => dateSetMonthMatch(r.LPM) && r.leadStatus===st);
       obj[st] = pool.length; total += pool.length;
     }
     obj.Total = total;
@@ -850,7 +902,11 @@ function buildB2CEmailIndex(){
   const idx = {};
   for(const r of STATE.raw){
     const email = (r.userId||'').toString().trim().toLowerCase();
-    if(email) idx[email] = r;
+    if(!email) continue;
+    // If the same email appears twice (a Primary and a Secondary applicant
+    // row), the Primary one is the lead — don't let file order decide.
+    const prev = idx[email];
+    if(!prev || !(prev.leadHead === 'Primary' && r.leadHead !== 'Primary')) idx[email] = r;
   }
   return idx;
 }
@@ -1370,22 +1426,15 @@ function bdCallsByMonth(){
 }
 
 function convertedDataset(){
-  const month = STATE.filterMonth;
-  let base = applyRefColdFilter(STATE.raw);
+  const base = applyRefColdFilter(STATE.raw);
   const statuses = ['DEAD','ON HOLD','ASSIGNED','RE-ASSIGNED','FOLLOW UP','IN PROCESS'];
-  const teams = FIXED_TEAMS.slice();
+  const teams = teamsForRows(base, r => r.Team || 'SV');
 
-  const isExcelMonthShape = v => /^.{3}-.{4}$/.test(String(v ?? ''));
   const out = teams.map(team => {
-    const rows = base.filter(r => r.Team === team);
+    const rows = base.filter(r => (r.Team || 'SV') === team);
     const obj = {Team: team}; let total = 0;
     for(const st of statuses){
-      let pool;
-      if(month==='All'){
-        pool = rows.filter(r => isExcelMonthShape(r.CM) && r.leadStatus===st);
-      } else {
-        pool = rows.filter(r => r.CM===month && r.leadStatus===st);
-      }
+      const pool = rows.filter(r => dateSetMonthMatch(r.CM) && r.leadStatus===st);
       obj[st] = pool.length; total += pool.length;
     }
     obj.Total = total;
@@ -1394,4 +1443,3 @@ function convertedDataset(){
   out.push(buildGrandTotalRow('Team', 'Grand Total', statuses, out, 'Total'));
   return {statuses, data: out};
 }
-

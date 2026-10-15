@@ -10,6 +10,7 @@
 # in snapshot.js / the in-app editors, untouched by this flow.
 import json, os, time
 from datetime import datetime
+import datetime as _dt
 import openpyxl
 
 t0 = time.time()
@@ -48,6 +49,14 @@ def cell_value(v):
         return ''
     if isinstance(v, datetime):
         return v.strftime('%Y-%m-%d %H:%M:%S')
+    # A date-only / time-only / duration cell is not JSON-serialisable and
+    # would fail the whole upload with an opaque error; render it as text.
+    if isinstance(v, _dt.date):
+        return v.strftime('%Y-%m-%d')
+    if isinstance(v, _dt.time):
+        return v.strftime('%H:%M:%S')
+    if isinstance(v, _dt.timedelta):
+        return str(v)
     return v
 
 def header_text(h):

@@ -10,13 +10,52 @@ async function readWb(file){
   return XLSX.read(buf, {type:'array', sheets:[0]});
 }
 
+// Free-text names (RM, client, campaign…) arrive with stray leading/trailing
+// spaces and doubled inner spaces from the CRM export. Left alone they split
+// one person across several rows and miss every name-keyed lookup, so they're
+// squished once here and every downstream comparison can be exact.
+const cleanName = v => (v == null ? '' : String(v)).replace(/\s+/g, ' ').trim();
+
+// leadStatus values the dashboard understands, plus the spellings seen (or
+// plausibly seen) for them. Anything else is passed through upper-cased and
+// then reported by the data-health panel — it would otherwise fall in no
+// status column and silently vanish from every table.
+const LEAD_STATUS_ALIASES = {
+  'REASSIGNED':'RE-ASSIGNED', 'RE ASSIGNED':'RE-ASSIGNED', 'RE_ASSIGNED':'RE-ASSIGNED',
+  'FOLLOWUP':'FOLLOW UP', 'FOLLOW-UP':'FOLLOW UP', 'FOLLOW_UP':'FOLLOW UP',
+  'ONHOLD':'ON HOLD', 'ON-HOLD':'ON HOLD', 'ON_HOLD':'ON HOLD',
+  'INPROCESS':'IN PROCESS', 'IN-PROCESS':'IN PROCESS', 'IN_PROCESS':'IN PROCESS',
+};
+function normalizeLeadStatus(v){
+  const s = cleanName(v).toUpperCase();
+  return LEAD_STATUS_ALIASES[s] || s;
+}
+
 function buildRawData(finRows){
   return finRows.map(r => {
-    const rm = (pickField(r,'currentRmName','Current RM Name','RM','Curren RM')||'').toString().trim();
+    const rm = cleanName(pickField(r,'currentRmName','Current RM Name','RM','Curren RM'));
     const cd = pickField(r,'createdDate','Created Date','created date');
     const lsd = pickField(r,'lastStatusDate','Last Status Date','last status date');
-    const lpd = pickField(r,'leadInProcessDate','LeadProcessDate','Lead In Process Date','lead in process date');
-    const cvd = pickField(r,'convertedDate','Converted Date','converted date');
+    let lpd = pickField(r,'leadInProcessDate','LeadProcessDate','Lead In Process Date','lead in process date');
+    let cvd = pickField(r,'convertedDate','Converted Date','converted date');
+    const leadStatus = normalizeLeadStatus(pickField(r,'leadStatus','Lead Status'));
+
+    // A lead the CRM calls IN PROCESS / CONVERTED but gives no in-process /
+    // converted date for has no month to be counted in, so it fell out of
+    // every status column (and every total) without a trace. Fall back to the
+    // month it last changed status — the best available evidence of when it
+    // got there — and mark the row so the data-health panel can say how many.
+    const fallbackDate = !isBlankDate(lsd) ? lsd : cd;
+    let ipInferred = false, cvInferred = false;
+    if(leadStatus === 'IN PROCESS' && isBlankDate(lpd)
+       && !normalizeMonthLabel(pickField(r,'LPM','LeadProcessMonth')) && !isBlankDate(fallbackDate)){
+      lpd = fallbackDate; ipInferred = true;
+    }
+    if(leadStatus === 'CONVERTED' && isBlankDate(cvd)
+       && !normalizeMonthLabel(pickField(r,'CM','Converted Month','ConvertedMonth')) && !isBlankDate(fallbackDate)){
+      cvd = fallbackDate; cvInferred = true;
+    }
+
     const createdMmm = normalizeMonthLabel(pickField(r,'CTM','Created Month')) || toMmmYyyy(cd);
     const lpm = normalizeMonthLabel(pickField(r,'LPM','LeadProcessMonth')) || toMmmYyyy(lpd);
     const convertedMmm = normalizeMonthLabel(pickField(r,'CM','Converted Month','ConvertedMonth')) ||
@@ -28,23 +67,25 @@ function buildRawData(finRows){
       currentRmName: rm,
       Team: sourceTeam||'SV',
       _hasSourceTeam: sourceTeam !== '',
-      clientName: pickField(r,'clientName','Client Name')||'',
-      landingPage: pickField(r,'landingPage','Landing Page')||'',
-      platformName: pickField(r,'platformName','Platform Name')||'',
-      'Campaign Name': pickField(r,'Campaign Name','categoryName','campaignName','Category Name')||'',
-      userId: pickField(r,'userId','User ID')||'',
+      _ipInferred: ipInferred,
+      _cvInferred: cvInferred,
+      clientName: cleanName(pickField(r,'clientName','Client Name')),
+      landingPage: cleanName(pickField(r,'landingPage','Landing Page')),
+      platformName: cleanName(pickField(r,'platformName','Platform Name')),
+      'Campaign Name': cleanName(pickField(r,'Campaign Name','categoryName','campaignName','Category Name')),
+      userId: cleanName(pickField(r,'userId','User ID')),
       createdDate: toIsoDate(cd) || (cd||''),
       CTM: createdMmm,
       lastStatusDate: toIsoDate(lsd) || (lsd||''),
       LSM: toMmmYyyy(lsd),
       leadInProcessDate: (lpd==='N/A'||!lpd) ? 'N/A' : (toIsoDate(lpd) || lpd),
       LPM: lpm,
-      leadHead: pickField(r,'leadHead','Lead Head')||'',
-      leadStatus: (pickField(r,'leadStatus','Lead Status')||'').toString().trim().toUpperCase(),
+      leadHead: cleanName(pickField(r,'leadHead','Lead Head')),
+      leadStatus,
       convertedDate: (cvd==='N/A'||!cvd) ? '' : (toIsoDate(cvd) || cvd),
       CM: convertedMmm || 'N/A',
-      firstRmName: pickField(r,'firstRmName','First RM Name')||'',
-      convertedByName: pickField(r,'convertedByName','Converted By Name')||'',
+      firstRmName: cleanName(pickField(r,'firstRmName','First RM Name')),
+      convertedByName: cleanName(pickField(r,'convertedByName','Converted By Name')),
       annualIncome: pickField(r,'annualIncome','Annual Income')||'',
       clientCategory: pickField(r,'clientCategory','Client Category')||'',
       FMONTH: fmonth,
@@ -92,7 +133,7 @@ function buildB2BRaw(rows){
       CreateMonth:  cm,
       brokerName:   (r.brokerName||'').toString().trim(),
       brokerEmail:  (r.brokerEmail||'').toString().trim(),
-      leadStatus:   (r.lea||r.leadStatus||r.status||r.Status||'').toString().trim().toUpperCase(),
+      leadStatus:   (r.leadStatus||r.status||r.Status||'').toString().trim().toUpperCase(),
       platformName: (r.platformName||'').toString().trim(),
       categoryName: (r.categoryName||'').toString().trim(),
       landingPage:  (r.landingPage||'').toString().trim(),
@@ -229,13 +270,19 @@ async function loadAllFromRepo(){
   await yieldToPaint();
 
   let d = {};
+  // Remembered so the data-health panel can say where the numbers came from —
+  // the bundled data.js fallback is months older than the live API, and
+  // nothing on the page used to say which one you were looking at.
+  STATE.dataSource = { fallback: false, error: null, generated: null };
   try {
     const res = await fetch(DATA_API_URL, { cache: 'no-store' });
     if(!res.ok) throw new Error(`API returned ${res.status}`);
     d = await res.json();
+    STATE.dataSource.generated = (d.meta && d.meta.generated) || null;
   } catch(e) {
     console.warn('[MIS] Failed to fetch data from API, falling back to data.js', e);
     d = window.MARKETING_DATA || {};
+    STATE.dataSource = { fallback: true, error: e.message || String(e), generated: (d.meta && d.meta.generated) || null };
   }
 
   if(d.fin23 && d.fin23.length){

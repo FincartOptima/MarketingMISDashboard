@@ -51,12 +51,21 @@ function rmPerformance(){
   const lpOK = lp => !refExclude || (lp!=='Referral' && lp!=='ReferralProgram');
 
   // ---- per-RM (currentRmName / mapped) ----
-  const leadsForRM = rm => STATE.raw.filter(r => r.currentRmName===rm && monthMatch(r.CTM) && campOK(r)).length;
+  // RMs are compared by canonical key (RM Master Mapping, then case/space
+  // folded), never by the raw string — see normalizeNameKey. Cached per
+  // distinct name: ~100 names vs. tens of thousands of lead rows.
+  const rmKeyCache = new Map();
+  const rmKeyOf = name => {
+    let k = rmKeyCache.get(name);
+    if(k === undefined){ k = normalizeNameKey(mapRM(name)); rmKeyCache.set(name, k); }
+    return k;
+  };
+  const leadsForRM = rm => { const k = rmKeyOf(rm); return STATE.raw.filter(r => rmKeyOf(r.currentRmName)===k && monthMatch(r.CTM) && campOK(r)).length; };
   // Quality = CONVERTED (by CM) + IN PROCESS (by LPM) — same column logic as KPI cards
-  const qualityForRM = rm => STATE.raw.filter(r => r.currentRmName===rm && campOK(r) && (
+  const qualityForRM = rm => { const k = rmKeyOf(rm); return STATE.raw.filter(r => rmKeyOf(r.currentRmName)===k && campOK(r) && (
     isConvertedLead(r, monthMatch) ||
     (r.leadStatus==='IN PROCESS' && !isConvertedLead(r) && monthMatch(r.LPM))
-  )).length;
+  )).length; };
   const rmEq = (a, b) => normalizeNameKey(a) === normalizeNameKey(b);
   const fpForRM = rm => {
     const fy = STATE.fy.filter(r => rmEq(r.mappedRM, rm) && monthMatch(r.Month) && lsOK(r.leadSource)).length;
@@ -134,7 +143,17 @@ function rmPerformance(){
     revenue: rows.reduce((s,r)=> s + revAmount(r), 0),
   });
 
-  const teams = FIXED_TEAMS.slice();
+  const teams = teamsForRows(STATE.raw, r => r.Team || 'SV');
+  // team -> distinct canonical names of the RMs currently holding its leads
+  const leadRMsByTeam = new Map();
+  for(const r of STATE.raw){
+    const nm = mapRM(r.currentRmName);
+    if(!nm) continue;
+    const t = r.Team || 'SV';
+    if(!leadRMsByTeam.has(t)) leadRMsByTeam.set(t, new Map());
+    leadRMsByTeam.get(t).set(normalizeNameKey(nm), nm);
+  }
+  for(const [t, m] of leadRMsByTeam) leadRMsByTeam.set(t, [...m.values()]);
   const detail = [];
   const summary = [];
   for(const team of teams){
@@ -144,13 +163,19 @@ function rmPerformance(){
       const er = STATE.empref[i]; if(!er) continue;
       if((er[1]||'').toString().trim()===team){
         const nm = (er[2]||'').toString().trim();
-        if(nm && !seenRM.has(nm.toLowerCase())){ rms.push(nm); seenRM.add(nm.toLowerCase()); }
+        if(nm && !seenRM.has(rmKeyOf(nm))){ rms.push(nm); seenRM.add(rmKeyOf(nm)); }
       }
+    }
+    // Add RMs that hold leads for this team but aren't in EMPLOYEE_REF — their
+    // leads are in the team row, so they must be in the detail rows too or the
+    // two stop adding up.
+    for(const nm of (leadRMsByTeam.get(team) || [])){
+      if(!seenRM.has(rmKeyOf(nm))){ rms.push(nm); seenRM.add(rmKeyOf(nm)); }
     }
     // Add RMs that have revenue rows attributed to this team but aren't in EMPLOYEE_REF
     const teamRevRMs = revByTeamRM[team] || {};
     for(const rm of Object.keys(teamRevRMs)){
-      if(!seenRM.has(rm.toLowerCase())){ rms.push(rm); seenRM.add(rm.toLowerCase()); }
+      if(!seenRM.has(rmKeyOf(rm))){ rms.push(rm); seenRM.add(rmKeyOf(rm)); }
     }
 
     let tFp=0;
@@ -219,6 +244,13 @@ function rmPerformance(){
     converted: statusCount('CONVERTED'), inProcess: statusCount('IN PROCESS'),
     followUp: statusCount('FOLLOW UP'), onHold: statusCount('ON HOLD'), dead: statusCount('DEAD'),
   };
+
+  // Team rows are the sum of per-team counts while the KPI strip counts the
+  // whole file — if they differ, a lead sits in no team row.
+  const teamLeadSum = summary.reduce((a, t) => a + t.leads, 0);
+  if(teamLeadSum !== kpi.totalLeads){
+    console.warn(`[MIS] RM Performance: team rows add up to ${teamLeadSum} leads but the KPI strip shows ${kpi.totalLeads} — ${Math.abs(kpi.totalLeads - teamLeadSum)} lead(s) belong to no team row.`);
+  }
 
   return { kpi, summary, detail, grand };
 }
@@ -790,8 +822,8 @@ function mtdPerformance(){
                 : refMode === 'Exclude'        ? allCampaigns.filter(c => c !== 'Referral' && c !== 'Cold Data')
                 : allCampaigns;
   const mtdMonths = STATE.months.filter(m => monthKey(m) >= monthKey('Apr-2026'));
-  const sd = STATE.mtdStart, ed = STATE.mtdEnd;
-  const days = (ed-sd+1) || 1;
+  const sd = Math.min(STATE.mtdStart, STATE.mtdEnd), ed = Math.max(STATE.mtdStart, STATE.mtdEnd);
+  const days = Math.max(1, ed-sd+1);
   const proj = v => v/days*30;
   const out = [];
 
@@ -903,8 +935,9 @@ function revenueRowsInScope(){
 function aggregateRevenueBy(keyOf, seed){
   const groups = {};
   for(const r of revenueRowsInScope()){
-    const rm = revRmNameOf(r);
-    if(!rm) continue; // a row with no RM can't be attributed to anyone
+    // A row with no RM used to be skipped, so this tab's total fell short of
+    // the Revenue Input file by exactly those rows. They get their own line.
+    const rm = revRmNameOf(r) || '(blank RM)';
     const key = keyOf(r, rm);
     if(!groups[key]) groups[key] = seed(r, rm, key);
     const clientType = revClientTypeOf(r);
@@ -915,17 +948,26 @@ function aggregateRevenueBy(keyOf, seed){
   return Object.values(groups).sort((a, b) => b.Total - a.Total);
 }
 
+// Same cascade RM Performance uses (RM Master Mapping team, then
+// EMPLOYEE_REF), applied to the canonical RM name — so a revenue row filed
+// under "Vivek" lands with "Vivek Sharma"'s team here as it does there,
+// instead of showing as "(unassigned)" and splitting the RM across two rows.
+function revenueTeamOf(rm){
+  const k = normalizeNameKey(mapRM(rm) || rm);
+  return STATE.rmMasterTeam[k] || STATE.teamMap[k] || '';
+}
+
 function revenueAggregatedByTeam(){
   return aggregateRevenueBy(
-    (r, rm) => STATE.teamMap[rm.toLowerCase()] || '',
+    (r, rm) => revenueTeamOf(rm),
     (r, rm, team) => ({ Team: team || '(unassigned)', RevBased: 0, NotEligible: 0, Total: 0 })
   );
 }
 
 function revenueAggregated(){
   const rows = aggregateRevenueBy(
-    (r, rm) => rm.toLowerCase(),
-    (r, rm, key) => ({ RM: rm, Team: STATE.teamMap[key] || '', RevBased: 0, NotEligible: 0, Total: 0 })
+    (r, rm) => normalizeNameKey(mapRM(rm) || rm),
+    (r, rm, key) => ({ RM: mapRM(rm) || rm, Team: revenueTeamOf(rm), RevBased: 0, NotEligible: 0, Total: 0 })
   );
   return isAllRevTeams() ? rows : rows.filter(o => revTeamMatch(o.Team));
 }
@@ -977,7 +1019,10 @@ function missingLeads(){
     if(!r['Campaign Name']) reasons.push('No Campaign');
     if(!r.leadStatus) reasons.push('No Status');
     if(!r.createdDate) reasons.push('No Created');
-    if(!r.Team || r.Team==='SV') {} // SV is default, not missing
+    if(r.createdDate && r.CTM === 'N/A') reasons.push('Unreadable Created date');
+    if(r.leadStatus && !STATUSES.includes(r.leadStatus)) reasons.push('Unknown status "' + r.leadStatus + '"');
+    if(r._ipInferred) reasons.push('IN PROCESS without in-process date (month inferred)');
+    if(r._cvInferred) reasons.push('CONVERTED without converted date (month inferred)');
     if(reasons.length){ out.push({...r, Reason: reasons.join(', ')}); }
   }
   return out;

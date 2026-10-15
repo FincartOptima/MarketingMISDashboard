@@ -185,6 +185,21 @@ header.app .spacer{flex:1}
   color:var(--orange-hover);font-weight:700;font-size:13px;
   padding:10px 16px;margin-bottom:16px;
 }
+.health-panel{border:1px solid var(--line);border-left:4px solid #16a34a;background:#f0fdf4;margin-bottom:16px}
+.health-panel.health-warn{border-left-color:#d97706;background:#fffbeb}
+.health-panel.health-error{border-left-color:#dc2626;background:#fef2f2}
+.health-toggle{display:flex;align-items:center;justify-content:space-between;width:100%;gap:12px;
+  background:transparent;border:0;padding:10px 16px;font-size:13px;font-weight:700;color:var(--text);
+  text-align:left;cursor:pointer}
+.health-caret{font-size:10px;color:var(--muted)}
+.health-list{list-style:none;margin:0;padding:0 16px 10px;display:grid;gap:8px}
+.health-item{background:#fff;border:1px solid var(--line);border-left:3px solid var(--muted);padding:8px 12px;font-size:12px;line-height:1.5}
+.health-item.health-error{border-left-color:#dc2626}
+.health-item.health-warn{border-left-color:#d97706}
+.health-item.health-info{border-left-color:#0284c7}
+.health-title{font-weight:700;margin-bottom:2px}
+.health-detail{color:var(--text)}
+.health-fix{color:var(--muted);margin-top:2px}
 .info-btn{
   display:inline-flex;align-items:center;justify-content:center;
   width:20px;height:20px;border-radius:0;border:1.5px solid var(--muted);
@@ -910,6 +925,10 @@ table.data.editable td input:focus{outline:2px solid var(--orange);background:va
     <!-- Filled in by renderLeadHeadBanner() (app-filters.js) — reflects the
          Lead Head filter in the header above, defaults to "Primary". -->
     <div id="leadhead-banner" class="leadhead-banner"></div>
+
+    <!-- Filled in by renderDataHealth() (app-health.js): one place that says
+         whether the numbers below can be trusted right now. -->
+    <div id="data-health"></div>
 
     <div class="dash-layout">
       <nav class="dash-subnav" aria-label="Dashboard subsections">
@@ -1644,7 +1663,7 @@ table.data.editable td input:focus{outline:2px solid var(--orange);background:va
   (function(){
     var t = Date.now();
     var parent = document.currentScript.parentNode;
-    ['data.js','snapshot.js','categorized_leads_data.js','app-config.js','app-dateutils.js','app-state.js','app-dataload.js','app-filters.js','app-aggregators.js','app-rmperf.js','app-categorized.js','app-tables.js','app-renderers.js','app-ui.js','app-bootstrap.js'].forEach(function(src){
+    ['data.js','snapshot.js','categorized_leads_data.js','app-config.js','app-dateutils.js','app-state.js','app-dataload.js','app-filters.js','app-aggregators.js','app-rmperf.js','app-categorized.js','app-tables.js','app-renderers.js','app-ui.js','app-health.js','app-bootstrap.js'].forEach(function(src){
       var s = document.createElement('script');
       s.src = src + '?t=' + t;
       s.async = false;

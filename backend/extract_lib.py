@@ -3,6 +3,7 @@
 # Fly.io upload endpoint (app.py). Kept dependency-free (just openpyxl) so it
 # can run in either place unchanged.
 from datetime import datetime
+import datetime as _dt
 import re
 import openpyxl
 
@@ -41,6 +42,14 @@ def cell_value(v):
         return ''
     if isinstance(v, datetime):
         return v.strftime('%Y-%m-%d %H:%M:%S')
+    # A date-only / time-only / duration cell is not JSON-serialisable and
+    # would fail the whole upload with an opaque error; render it as text.
+    if isinstance(v, _dt.date):
+        return v.strftime('%Y-%m-%d')
+    if isinstance(v, _dt.time):
+        return v.strftime('%H:%M:%S')
+    if isinstance(v, _dt.timedelta):
+        return str(v)
     return v
 
 
@@ -69,6 +78,13 @@ def rows_from_header_row(all_rows, header_idx, column_allowlist=None):
     return out
 
 
+def read_all_rows(ws):
+    """Every row of a read-only worksheet, ignoring its declared dimension."""
+    if hasattr(ws, 'reset_dimensions'):
+        ws.reset_dimensions()
+    return list(ws.iter_rows(values_only=True))
+
+
 def find_sheet(wb, *names):
     lower_targets = [n.lower() for n in names]
     for name in wb.sheetnames:
@@ -82,7 +98,7 @@ def load_sheet_rows(file_like, sheet_names=None, column_allowlist=None):
     wb = openpyxl.load_workbook(file_like, read_only=True, data_only=True)
     sheet_name = find_sheet(wb, *sheet_names) if sheet_names else wb.sheetnames[0]
     ws = wb[sheet_name]
-    all_rows = list(ws.iter_rows(values_only=True))
+    all_rows = read_all_rows(ws)
     wb.close()
     if not all_rows:
         return []
@@ -95,7 +111,7 @@ def load_revenue_input_rows(file_like):
     parseRevenueInput() used."""
     wb = openpyxl.load_workbook(file_like, read_only=True, data_only=True)
     ws = wb[wb.sheetnames[0]]
-    all_rows = list(ws.iter_rows(values_only=True))
+    all_rows = read_all_rows(ws)
     wb.close()
     if not all_rows:
         return []
@@ -106,6 +122,82 @@ def load_revenue_input_rows(file_like):
             header_idx = i
             break
     return rows_from_header_row(all_rows, header_idx)
+
+
+# ---------- FIN23 integrity checks ----------
+# Columns the dashboard cannot work without, with the header spellings the
+# FIN23 export is known to use. A file missing one of these would load "fine"
+# and then silently blank or zero an entire dashboard section, so it is
+# rejected up front instead of replacing the last good dataset.
+FIN23_REQUIRED = {
+    'Current RM':          ('currentrmname', 'current rm name', 'rm', 'curren rm'),
+    'First RM':            ('firstrmname', 'first rm name'),
+    'Created Date':        ('createddate', 'created date'),
+    'Lead Status':         ('leadstatus', 'lead status'),
+    'Converted Date':      ('converteddate', 'converted date'),
+    'Lead In Process Date': ('leadinprocessdate', 'leadprocessdate', 'lead in process date'),
+    'Lead Head':           ('leadhead', 'lead head'),
+    'User ID':             ('userid', 'user id'),
+    'Category / Campaign': ('campaign name', 'categoryname', 'campaignname', 'category name'),
+}
+FIN23_KNOWN_STATUSES = {'CONVERTED', 'IN PROCESS', 'ASSIGNED', 'RE-ASSIGNED', 'FOLLOW UP', 'ON HOLD', 'DEAD'}
+
+
+def _field(row, aliases):
+    lowered = {str(k).strip().lower(): v for k, v in row.items()}
+    for a in aliases:
+        v = lowered.get(a)
+        if v not in (None, ''):
+            return v
+    return ''
+
+
+def fin23_missing_columns(rows):
+    """Labels of required FIN23 columns that no row carries a header for."""
+    if not rows:
+        return list(FIN23_REQUIRED)
+    present = {str(k).strip().lower() for k in rows[0].keys()}
+    return [label for label, aliases in FIN23_REQUIRED.items() if not present.intersection(aliases)]
+
+
+def fin23_quality_warnings(rows):
+    """Non-blocking data-quality findings, as human-readable sentences."""
+    out = []
+    if not rows:
+        return out
+    unknown = {}
+    ip_no_date = cv_no_date = no_created = dup = 0
+    seen = set()
+    for r in rows:
+        status = ' '.join(str(_field(r, FIN23_REQUIRED['Lead Status'])).upper().split())
+        if status not in FIN23_KNOWN_STATUSES:
+            unknown[status or '(blank)'] = unknown.get(status or '(blank)', 0) + 1
+        ip = str(_field(r, FIN23_REQUIRED['Lead In Process Date'])).strip().upper()
+        cv = str(_field(r, FIN23_REQUIRED['Converted Date'])).strip().upper()
+        if status == 'IN PROCESS' and ip in ('', 'N/A'):
+            ip_no_date += 1
+        if status == 'CONVERTED' and cv in ('', 'N/A'):
+            cv_no_date += 1
+        if not _field(r, FIN23_REQUIRED['Created Date']):
+            no_created += 1
+        uid = str(_field(r, FIN23_REQUIRED['User ID'])).strip().lower()
+        key = (uid, str(_field(r, FIN23_REQUIRED['Lead Head'])).strip().lower())
+        if uid:
+            if key in seen:
+                dup += 1
+            seen.add(key)
+    if unknown:
+        top = ', '.join(f'"{k}" ({v})' for k, v in sorted(unknown.items(), key=lambda kv: -kv[1])[:5])
+        out.append(f'{sum(unknown.values())} lead(s) have a status the dashboard does not recognise: {top}.')
+    if ip_no_date:
+        out.append(f'{ip_no_date} IN PROCESS lead(s) have no in-process date.')
+    if cv_no_date:
+        out.append(f'{cv_no_date} CONVERTED lead(s) have no converted date.')
+    if no_created:
+        out.append(f'{no_created} lead(s) have no created date.')
+    if dup:
+        out.append(f'{dup} row(s) repeat a client (same email and Lead Head) already in the file.')
+    return out
 
 
 # ---------- BD Accountability Tracker ----------
@@ -174,7 +266,7 @@ def load_bd_tracker_rows(file_like):
             continue
         person, quarter_num = m.group(1).strip(), m.group(2)
         ws = wb[sheet_name]
-        all_rows = list(ws.iter_rows(values_only=True))
+        all_rows = read_all_rows(ws)
         if not all_rows:
             continue
         headers = [header_text(h) for h in all_rows[0]]
@@ -242,7 +334,7 @@ def load_bd_daily_log_rows(file_like):
         wb.close()
         return []
     ws = wb['BD Daily Log']
-    all_rows = list(ws.iter_rows(values_only=True))
+    all_rows = read_all_rows(ws)
     wb.close()
     if not all_rows:
         return []

@@ -71,10 +71,10 @@ const TABLE_INFO = {
   },
   'team-perf': {
     title: 'Team Performance Matrix',
-    desc: 'Lead and status counts per team. Use the <strong>CurrentRM / FirstRM toggle</strong> to switch how team assignment works:<br>• <strong>CurrentRM</strong> (default): team is determined by the current RM holding the lead (currentRmName → EMPLOYEE_REF).<br>• <strong>FirstRM</strong>: team is determined by the first RM originally assigned (firstRmName → EMPLOYEE_REF).<br>Total Leads uses CTM. Each status uses its own event-date column.<br><br>Use the <strong>Team filter</strong> to drill into a single team: the table switches to one row per RM in that team, with the same status columns.',
-    cols: 'currentRmName or firstRmName (→ team, toggled) · leadStatus (CONVERTED / IN PROCESS / ASSIGNED / RE-ASSIGNED / FOLLOW UP / ON HOLD / DEAD) · CTM (selected months, for Total Leads / ASSIGNED / RE-ASSIGNED / FOLLOW UP / ON HOLD / DEAD) · LPM (selected months, for IN PROCESS) · CM (selected months, for CONVERTED)',
+    desc: 'Lead and status counts per team. Use the <strong>CurrentRM / FirstRM toggle</strong> to switch how team assignment works:<br>• <strong>CurrentRM</strong> (default): team is determined by the current RM holding the lead (currentRmName → EMPLOYEE_REF).<br>• <strong>FirstRM</strong>: team is determined by the first RM originally assigned (firstRmName → EMPLOYEE_REF).<br><strong>Total Leads</strong> is the sum of the status columns — every lead with a status event in the selected period (CONVERTED by CM, IN PROCESS by LPM, the rest by CTM). Each status uses its own event-date column, so every row adds up and Conv. Rate (CONVERTED ÷ Total Leads) can never exceed 100%. A <strong>Grand Total</strong> row ties the table to the source file.<br><br>Use the <strong>Team filter</strong> to drill into a single team: the table switches to one row per RM in that team, with the same status columns.',
+    cols: 'currentRmName or firstRmName (→ team, toggled; RM Master Mapping aliases resolved, names trimmed) · leadStatus (CONVERTED / IN PROCESS / ASSIGNED / RE-ASSIGNED / FOLLOW UP / ON HOLD / DEAD) · CTM (selected months, for ASSIGNED / RE-ASSIGNED / FOLLOW UP / ON HOLD / DEAD) · LPM (selected months, for IN PROCESS) · CM (selected months, for CONVERTED)',
     source: 'RAW_DATA sheet, EMPLOYEE_REF sheet',
-    note: 'IN PROCESS uses LPM; Total Leads uses CTM — so status columns may not sum to Total Leads. Switching to FirstRM mode shows the original team assignment before any transfers.'
+    note: 'Total Leads can exceed the Generated Leads KPI and the Campaign × Team table: those count leads CREATED in the period, whereas this counts every lead with a status event in it (an older lead converted this month is in CONVERTED, so it is in Total Leads too). The footnote under the table shows the exact difference. FirstRM mode shows the original team assignment before any transfers; RMs missing from EMPLOYEE_REF land on SV and are listed in the Data Health panel.'
   },
   'workshop-status': {
     title: 'Workshop Status Distribution',
@@ -154,7 +154,7 @@ const TABLE_INFO = {
   },
   'rmperf-summary': {
     title: 'RM Performance Summary — by Team',
-    desc: 'Team-level aggregation across the full pipeline: Leads, Quality, Plans, Revenue >15K, Transactional, Revenue.',
+    desc: 'Team-level aggregation across the full pipeline: Leads, Quality, Plans, Revenue >15K, Transactional, Revenue. <strong>Total Leads here means leads CREATED in the selected period</strong> (the top of the funnel), whereas the Dashboard Team Performance Matrix counts every lead with a status event in the period — so the two totals differ by the older leads converted / taken in-process in the period.',
     cols: 'RAW_DATA — currentRmName (→ team, via Team column) / CTM (selected months) / leadStatus (CONVERTED) with CM / leadStatus (IN PROCESS) with LPM | FY Sheet — Month (selected months) / mappedRM (all RMs) | Plan Approval — Month (selected months) / mappedRM (all RMs) / clientType (NEW) | Revenue Input — RM (all RMs) / OLD CHECK (selected months) / CLIENT TYPE (REVENUE BASED / NOT ELIGIBLE) / Total | EMPLOYEE_REF — currentRmName (→ team name)',
     source: 'RAW_DATA, FY 2026-2027, Plan Approval, Revenue Input, EMPLOYEE_REF sheets'
   },

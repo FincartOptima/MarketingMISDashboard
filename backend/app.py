@@ -5,6 +5,7 @@
 # and stores the result in SQLite on disk. The dashboard (hosted separately on
 # GitHub Pages) reads GET /api/data instead of a static data.js file — same
 # JSON shape, so app.js's calculation logic is untouched.
+import hmac
 import io
 import json
 import os
@@ -101,6 +102,18 @@ FILE_SIZE_CHECKS = {
     'fin23': {'min_mb': 2, 'max_mb': None},
     'b2b':   {'min_mb': None, 'max_mb': 2},
 }
+
+
+def _password_ok(password):
+    # compare_digest: no early exit on the first differing character.
+    return bool(UPLOAD_PASSWORD) and hmac.compare_digest(
+        str(password).encode('utf-8'), UPLOAD_PASSWORD.encode('utf-8'))
+
+
+# A fresh upload replaces the stored dataset wholesale. One that is much
+# smaller than what it replaces is almost always a truncated or filtered
+# export, so it is flagged (not blocked — a genuine reset is legitimate).
+SHRINK_WARN_RATIO = 0.5
 
 
 def get_db():
@@ -314,7 +327,7 @@ def _bytes(file_storage):
 @app.route('/upload', methods=['POST'])
 def upload_submit():
     password = request.form.get('password', '')
-    if not UPLOAD_PASSWORD or password != UPLOAD_PASSWORD:
+    if not _password_ok(password):
         return render_template('upload.html', error='Incorrect password.',
                                 status={}, sources=SOURCES, bd_sync=_bd_sync_state), 403
 
@@ -344,7 +357,22 @@ def upload_submit():
                         f"{cfg['human_label']} file is {size_mb:.1f}MB — larger than the usual "
                         f"{check['max_mb']}MB, please double-check it's the right file."
                     )
-            results[cfg['key']] = cfg['loader'](buf, **cfg['loader_kwargs'])
+            rows = cfg['loader'](buf, **cfg['loader_kwargs'])
+            if cfg['key'] == 'fin23':
+                missing = extract_lib.fin23_missing_columns(rows)
+                if missing:
+                    # Rejected, not stored: replacing good data with a file the
+                    # dashboard can't read would blank whole sections silently.
+                    raise ValueError('required column(s) missing: ' + ', '.join(missing)
+                                     + f' (read {len(rows)} rows from the first sheet)')
+                warnings.extend(extract_lib.fin23_quality_warnings(rows))
+            previous = _status().get(cfg['key'])
+            if previous and previous['rows'] and len(rows) < previous['rows'] * SHRINK_WARN_RATIO:
+                warnings.append(
+                    f"{cfg['human_label']} now has {len(rows)} rows, down from {previous['rows']} — "
+                    f"please double-check it's the complete export."
+                )
+            results[cfg['key']] = rows
         except Exception as e:
             errors.append(f"{cfg['human_label']}: {e}")
 
@@ -385,7 +413,7 @@ def sync_bd_now():
     # bypasses the throttle (force=True) so an admin gets an immediate result
     # after e.g. fixing the service account credentials.
     password = request.form.get('password', '')
-    if not UPLOAD_PASSWORD or password != UPLOAD_PASSWORD:
+    if not _password_ok(password):
         return render_template('upload.html', error='Incorrect password.',
                                 status=_status(), sources=SOURCES, bd_sync=_bd_sync_state), 403
 
