@@ -51,9 +51,7 @@ function rmPerformance(){
   const lpOK = lp => !refExclude || (lp!=='Referral' && lp!=='ReferralProgram');
 
   // ---- per-RM (currentRmName / mapped) ----
-  // RMs are compared by canonical key (RM Master Mapping, then case/space
-  // folded), never by the raw string — see normalizeNameKey. Cached per
-  // distinct name: ~100 names vs. tens of thousands of lead rows.
+  // RMs are compared by canonical key, cached per distinct name.
   const rmKeyCache = new Map();
   const rmKeyOf = name => {
     let k = rmKeyCache.get(name);
@@ -144,7 +142,7 @@ function rmPerformance(){
   });
 
   const teams = teamsForRows(STATE.raw, r => r.Team || 'SV');
-  // team -> distinct canonical names of the RMs currently holding its leads
+  // team -> canonical names of the RMs holding its leads
   const leadRMsByTeam = new Map();
   for(const r of STATE.raw){
     const nm = mapRM(r.currentRmName);
@@ -166,9 +164,7 @@ function rmPerformance(){
         if(nm && !seenRM.has(rmKeyOf(nm))){ rms.push(nm); seenRM.add(rmKeyOf(nm)); }
       }
     }
-    // Add RMs that hold leads for this team but aren't in EMPLOYEE_REF — their
-    // leads are in the team row, so they must be in the detail rows too or the
-    // two stop adding up.
+    // RMs holding leads for this team but missing from EMPLOYEE_REF
     for(const nm of (leadRMsByTeam.get(team) || [])){
       if(!seenRM.has(rmKeyOf(nm))){ rms.push(nm); seenRM.add(rmKeyOf(nm)); }
     }
@@ -245,8 +241,7 @@ function rmPerformance(){
     followUp: statusCount('FOLLOW UP'), onHold: statusCount('ON HOLD'), dead: statusCount('DEAD'),
   };
 
-  // Team rows are the sum of per-team counts while the KPI strip counts the
-  // whole file — if they differ, a lead sits in no team row.
+  // The KPI strip counts the whole file; if the team rows fall short, a lead sits in no team.
   const teamLeadSum = summary.reduce((a, t) => a + t.leads, 0);
   if(teamLeadSum !== kpi.totalLeads){
     console.warn(`[MIS] RM Performance: team rows add up to ${teamLeadSum} leads but the KPI strip shows ${kpi.totalLeads} — ${Math.abs(kpi.totalLeads - teamLeadSum)} lead(s) belong to no team row.`);
@@ -935,8 +930,7 @@ function revenueRowsInScope(){
 function aggregateRevenueBy(keyOf, seed){
   const groups = {};
   for(const r of revenueRowsInScope()){
-    // A row with no RM used to be skipped, so this tab's total fell short of
-    // the Revenue Input file by exactly those rows. They get their own line.
+    // Rows with no RM keep their own line so the total ties to the Revenue Input file.
     const rm = revRmNameOf(r) || '(blank RM)';
     const key = keyOf(r, rm);
     if(!groups[key]) groups[key] = seed(r, rm, key);
@@ -948,10 +942,7 @@ function aggregateRevenueBy(keyOf, seed){
   return Object.values(groups).sort((a, b) => b.Total - a.Total);
 }
 
-// Same cascade RM Performance uses (RM Master Mapping team, then
-// EMPLOYEE_REF), applied to the canonical RM name — so a revenue row filed
-// under "Vivek" lands with "Vivek Sharma"'s team here as it does there,
-// instead of showing as "(unassigned)" and splitting the RM across two rows.
+// Same team cascade as RM Performance, applied to the canonical RM name.
 function revenueTeamOf(rm){
   const k = normalizeNameKey(mapRM(rm) || rm);
   return STATE.rmMasterTeam[k] || STATE.teamMap[k] || '';

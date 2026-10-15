@@ -288,10 +288,7 @@ function renderCostSyncWarning(){
  * (app-state.js). The fallback is silent, so a newly hired or renamed RM
  * quietly parks their whole book on SV — which is how "Kajal Kumari" and
  * "Kunal Kar" stayed invisible until the BD Team split. This surfaces it.
- *
- * `field` picks which RM is being checked: the CURRENT holder (drives every
- * CurrentRM view) or the FIRST one (drives every FirstRM view, which used to
- * have no guard at all — 70 leads sat on SV that way).
+ * `field` is 'currentRmName' (CurrentRM views) or 'firstRmName' (FirstRM views).
  * @returns {{names:{name:string,leads:number}[], leads:number, blankRm:number}}
  */
 function unmappedRmLeadCounts(field){
@@ -351,7 +348,7 @@ function renderUnmappedRmWarning(){
   }
   const html = `<div class="file-not-uploaded" id="emp-unmapped-warning">` +
     `<span class="fnu-icon">&#9888;</span><div>` +
-    reports.map(r => `<strong>${escHtml(r.headline)}</strong><br>${escHtml(r.detail)}<br><em>${escHtml(r.fix)}</em>`).join('<hr style="border:0;border-top:1px solid #fed7aa;margin:8px 0">') +
+    reports.map(r => `<strong>${escHtml(r.headline)}</strong><br>${escHtml(r.detail)}<br><em>${escHtml(r.fix)}</em>`).join('<br><br>') +
     `</div></div>`;
   if(existing) existing.outerHTML = html;
   else editor.insertAdjacentHTML('beforebegin', html);
@@ -372,9 +369,7 @@ async function syncCostFromSheets(silent){
     if(!rows.length || !rows[0].length) throw new Error('Sheet is empty');
 
     COST_SYNC.shapeWarning = validateCostSheet(rows);
-    // A sheet that came back but isn't a usable cost table (header only, one
-    // column…) used to replace the working snapshot anyway — every CPL/CAC on
-    // the page then read ₹0 until someone noticed. Keep what we had instead.
+    // A malformed sheet must not replace the working cost data.
     if(!COST_SYNC.shapeWarning){
       STATE.cost = rows;
       persistOverride(CONFIG.STORAGE_KEYS.COST, 'Cost Per Campaign', STATE.cost);
@@ -589,7 +584,7 @@ function setStatus(sel, msg, kind = 'ok'){
 
 /** Full recalculation after a reference-table edit — every tab reflects the change. */
 function recalcAll(){
-  buildRMMasterLookup();      // first: rebuildTeamMap resolves aliases through it
+  buildRMMasterLookup();      // before rebuildTeamMap, which resolves aliases through it
   rebuildTeamMap();
   remapAdvisorNames();
   detectMonths();

@@ -83,13 +83,14 @@ function tabNotUploaded(contentSelector, key){
 
 // Case/whitespace-insensitive lookup key for RM/team names, used wherever a
 // raw name needs to match a lookup table key (RM Master Mapping, team maps).
-// Collapses runs of inner whitespace as well as trimming the ends: the
-// EMPLOYEE_REF sheet carries names like "Swaraj  Singh Thakur" (two spaces)
-// and "Ravi Sharma " (trailing space) which would otherwise never match the
-// single-spaced spelling the CRM exports.
+// Inner whitespace is collapsed too: EMPLOYEE_REF has "Swaraj  Singh Thakur"
+// and "Ravi Sharma " which would never match the CRM's spelling otherwise.
 function normalizeNameKey(name){
-  return (name == null ? '' : String(name)).replace(/\s+/g, ' ').trim().toLowerCase();
+  return cleanName(name).toLowerCase();
 }
+
+// Trim and collapse whitespace in a free-text name.
+const cleanName = v => (v == null ? '' : String(v)).replace(/\s+/g, ' ').trim();
 
 // ---- local-edit overrides (EMPLOYEE_REF / RM Master Mapping / Cost Per
 // Campaign) — saved to localStorage so an in-tab edit survives a refresh,
@@ -150,21 +151,13 @@ function rebuildTeamMap(){
     } else {
       row.Team = teamForRmName(row.currentRmName) || existingTeam || 'SV';
     }
-    // The team of the RM who FIRST received the lead. Resolved once here, with
-    // exactly the same rules as the current-RM team above, so FirstRM-mode
-    // tables can't drift from CurrentRM-mode ones (they used to look the name
-    // up un-trimmed in six separate places, which silently parked every
-    // "Ravi Sharma " lead on SV).
     row.FirstTeam = teamForRmName(row.firstRmName) || 'SV';
   }
 }
 
-// Team for one RM name, or '' when the name can't be resolved. Cascade:
-//   1. EMPLOYEE_REF, by the name exactly as written (case/space-insensitive)
-//   2. RM Master Mapping: the alias's canonical name, then that name's
-//      EMPLOYEE_REF team, then the mapping's own Team column
-// An alias that points at two different people ("Ankit", "Ayush", "Sahil")
-// is never guessed at — it stays unresolved so it is flagged, not misfiled.
+// Team for one RM name, or '' when it can't be resolved: EMPLOYEE_REF first,
+// then the RM Master alias's canonical name (EMPLOYEE_REF, then the mapping's
+// own Team). An alias that points at two different people stays unresolved.
 function teamForRmName(name){
   const k = normalizeNameKey(name);
   if(!k) return '';
@@ -177,7 +170,7 @@ function teamForRmName(name){
   return '';
 }
 
-// Team of a lead's FIRST RM — the single accessor every FirstRM view uses.
+// Team of a lead's first RM; every FirstRM view goes through this.
 function firstRmTeam(row){
   return row.FirstTeam || teamForRmName(row.firstRmName) || 'SV';
 }
@@ -196,9 +189,8 @@ function buildRMMasterLookup(){
     const correct = (r[1]||'').toString().replace(/\s+/g,' ').trim();
     const team = (r[2]||'').toString().trim();
     if(src && correct){
-      // Same source name pointing at two different canonical RMs: the later
-      // row still wins in mapRM() (long-standing behaviour), but the alias is
-      // recorded so team resolution refuses to guess between them.
+      // The later row still wins in mapRM(); the alias is only recorded so
+      // teamForRmName() won't guess between the two people.
       const prev = STATE.rmMasterLookup[src];
       if(prev && normalizeNameKey(prev) !== normalizeNameKey(correct)) STATE.rmMasterAmbiguous[src] = true;
       STATE.rmMasterLookup[src] = correct;

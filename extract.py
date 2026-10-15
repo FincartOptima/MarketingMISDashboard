@@ -49,8 +49,7 @@ def cell_value(v):
         return ''
     if isinstance(v, datetime):
         return v.strftime('%Y-%m-%d %H:%M:%S')
-    # A date-only / time-only / duration cell is not JSON-serialisable and
-    # would fail the whole upload with an opaque error; render it as text.
+    # Not JSON-serialisable as-is.
     if isinstance(v, _dt.date):
         return v.strftime('%Y-%m-%d')
     if isinstance(v, _dt.time):

@@ -42,8 +42,7 @@ def cell_value(v):
         return ''
     if isinstance(v, datetime):
         return v.strftime('%Y-%m-%d %H:%M:%S')
-    # A date-only / time-only / duration cell is not JSON-serialisable and
-    # would fail the whole upload with an opaque error; render it as text.
+    # Not JSON-serialisable as-is.
     if isinstance(v, _dt.date):
         return v.strftime('%Y-%m-%d')
     if isinstance(v, _dt.time):
@@ -79,7 +78,7 @@ def rows_from_header_row(all_rows, header_idx, column_allowlist=None):
 
 
 def read_all_rows(ws):
-    """Every row of a read-only worksheet, ignoring its declared dimension."""
+    """Every row of a read-only worksheet (its declared <dimension> can be stale and truncate the read)."""
     if hasattr(ws, 'reset_dimensions'):
         ws.reset_dimensions()
     return list(ws.iter_rows(values_only=True))

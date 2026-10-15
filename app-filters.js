@@ -3,10 +3,8 @@
 
 // ---- filters / tabs ----
 const FY_CUTOFF = monthKey(CONFIG.FY_CUTOFF_MONTH);
-// Memoised: this sits inside per-row filters over ~15k leads, and rebuilding
-// the array (plus an O(months) includes) on every call made each table take
-// hundreds of milliseconds. detectMonths() assigns a fresh STATE.months array,
-// so identity is a safe cache key.
+// Memoised — it runs per row inside the filters. detectMonths() assigns a
+// fresh STATE.months array, so its identity is a safe cache key.
 let _fyMonths = { src: null, len: -1, list: [], set: new Set() };
 function filteredMonths(){
   if(_fyMonths.src !== STATE.months || _fyMonths.len !== STATE.months.length){

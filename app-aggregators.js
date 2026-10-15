@@ -150,8 +150,6 @@ function platformStatusBreakdown(){
   // interchangeably) rather than platformName.
   const categoryNames = [...new Set(rows.map(r => r['Campaign Name']).filter(Boolean))].sort();
   const groups = categoryNames.map(c => ({label: c, match: r => r['Campaign Name'] === c}));
-  // A lead with no Category Name must still land on a row, or this table's
-  // Grand Total quietly sits below the Team Performance Matrix's.
   if(rows.some(r => !r['Campaign Name'])) groups.push({label: '(Blank)', match: r => !r['Campaign Name']});
   const out = [];
   for(const g of groups){
@@ -233,11 +231,8 @@ function landingPageStatusBreakdown(){
   return out;
 }
 
-// Every team that has a lead in `rows`: FIXED_TEAMS first (stable order, shown
-// even when empty), then any other team name found in the data. Aggregators
-// that only walked FIXED_TEAMS silently dropped a lead the moment its team
-// wasn't on that list — a renamed team or a typo in EMPLOYEE_REF made leads
-// disappear from the table without trace. This keeps every lead on a row.
+// FIXED_TEAMS in order, then any other team found in `rows`, so a team missing
+// from FIXED_TEAMS still gets a row instead of its leads disappearing.
 function teamsForRows(rows, teamOf){
   const teams = FIXED_TEAMS.slice();
   const seen = new Set(teams);
@@ -248,31 +243,19 @@ function teamsForRows(rows, teamOf){
   return teams;
 }
 
-// Which status column a lead is counted under, and in which month. This is
-// THE definition shared by every status table: a lead with a Converted Month
-// is CONVERTED whatever leadStatus says (2026-07-29 rule), IN PROCESS is
-// anchored on its in-process month, every other status on its created month.
-// Returns null when the lead's status isn't one the dashboard knows.
+// The status column a lead is counted under and the month that anchors it
+// (CM for CONVERTED, LPM for IN PROCESS, CTM otherwise), or null for a status
+// the dashboard doesn't know.
 function statusBucketOf(r){
   const st = isConvertedLead(r) ? 'CONVERTED' : r.leadStatus;
   if(!STATUSES.includes(st)) return null;
   return { status: st, month: r[st === 'CONVERTED' ? 'CM' : statusMonthCol(st)] };
 }
 
-// Status columns for one group of leads. Total Leads is the SUM of the status
-// columns — i.e. every lead in the group with a status event in the selected
-// month(s) — so a row always adds up and its Conv. Rate can never exceed 100%.
-//
-// It used to be "leads created in the selected months", which is a different
-// population from the status columns: a lead created before the period but
-// converted or taken in-process inside it was counted under CONVERTED / IN
-// PROCESS yet missing from Total Leads. Ambika read 111 against 113 rows in
-// the source file for exactly that reason (two leads from Feb-2026 / Mar-2024
-// converted in FY), and teams with many such leads showed a Conv. Rate above
-// 100% (SV: 60 converted of "24" leads).
-//
-// `Created` keeps the old created-in-period figure for the footnote, so the
-// two numbers can be reconciled on screen rather than guessed at.
+// Status columns for one group of leads. Total Leads is the sum of the status
+// columns (every lead with a status event in the selected months), so a row
+// always adds up and Conv. Rate stays <= 100%. `Created` is the created-in-
+// period count, kept for the footnote under the matrix.
 function statusColumnsFor(rows){
   const o = {};
   let total = 0, created = 0;
@@ -308,14 +291,8 @@ function teamPerformance(){
 }
 
 // Per-RM drill-down for the Team Performance Matrix's Team filter: same
-// status columns as teamPerformance(), one row per RM in the selected team
-// instead of one row per team.
-//
-// RMs are grouped by canonical name (RM Master Mapping, then
-// case/space-folded) so "Akanksha" and "Akanksha Agarwal" are one row. The
-// roster below used to be matched on the exact string, which meant a lead
-// whose RM differed from the EMPLOYEE_REF spelling by case or a stray space
-// was dropped from every RM row — and from the team total built from them.
+// status columns as teamPerformance(), one row per RM in the selected team.
+// RMs are grouped by canonical name so spelling variants share one row.
 function teamPerformanceByRM(team){
   const base = applyRefColdFilter(STATE.raw);
   const useFirst = STATE.teamPerfMode === 'first';
@@ -326,7 +303,7 @@ function teamPerformanceByRM(team){
 
   // RM roster: everyone in EMPLOYEE_REF for this team, plus any RM appearing
   // in teamRows but missing from EMPLOYEE_REF, so no lead is silently dropped.
-  const groups = new Map();                       // key -> { name, rows }
+  const groups = new Map();   // key -> { name, rows }
   const ensure = (key, name) => {
     if(!groups.has(key)) groups.set(key, { name, rows: [] });
     return groups.get(key);
@@ -361,7 +338,6 @@ function rmTransferData(){
     const firstRm = (r.firstRmName || '').trim();
     const currentRm = (r.currentRmName || '').trim();
     if(!firstRm && !currentRm) continue;
-    // Same person under two spellings ("Ankit" / "Ankit Sadwal") is not a transfer.
     if(normalizeNameKey(mapRM(firstRm)) === normalizeNameKey(mapRM(currentRm))) continue;
     const firstTeam = firstRmTeam(r);
     const currentTeam = r.Team || 'SV';
@@ -669,10 +645,7 @@ function costPerLeadPerRMWithTotals(){
   return rows;
 }
 
-// "All months" for the two Date-Set tables below means every dated lead (no FY
-// window), exactly as before; an explicit selection — one month or several —
-// is honoured via monthFilter. They compared against `STATE.filterMonth`
-// directly, so a multi-month selection (an array) matched nothing at all.
+// "All" means every dated lead (no FY window); a selection goes through monthFilter.
 function dateSetMonthMatch(m){
   return isAllMonths() ? isValidMonth(m) : monthFilter(m);
 }
@@ -903,8 +876,7 @@ function buildB2CEmailIndex(){
   for(const r of STATE.raw){
     const email = (r.userId||'').toString().trim().toLowerCase();
     if(!email) continue;
-    // If the same email appears twice (a Primary and a Secondary applicant
-    // row), the Primary one is the lead — don't let file order decide.
+    // Same email on a Primary and a Secondary row: the Primary row wins.
     const prev = idx[email];
     if(!prev || !(prev.leadHead === 'Primary' && r.leadHead !== 'Primary')) idx[email] = r;
   }

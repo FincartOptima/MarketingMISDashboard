@@ -105,14 +105,12 @@ FILE_SIZE_CHECKS = {
 
 
 def _password_ok(password):
-    # compare_digest: no early exit on the first differing character.
     return bool(UPLOAD_PASSWORD) and hmac.compare_digest(
         str(password).encode('utf-8'), UPLOAD_PASSWORD.encode('utf-8'))
 
 
-# A fresh upload replaces the stored dataset wholesale. One that is much
-# smaller than what it replaces is almost always a truncated or filtered
-# export, so it is flagged (not blocked — a genuine reset is legitimate).
+# An upload replaces the stored dataset wholesale; one this much smaller than
+# the one it replaces is usually a truncated export, so it's flagged.
 SHRINK_WARN_RATIO = 0.5
 
 
@@ -361,8 +359,6 @@ def upload_submit():
             if cfg['key'] == 'fin23':
                 missing = extract_lib.fin23_missing_columns(rows)
                 if missing:
-                    # Rejected, not stored: replacing good data with a file the
-                    # dashboard can't read would blank whole sections silently.
                     raise ValueError('required column(s) missing: ' + ', '.join(missing)
                                      + f' (read {len(rows)} rows from the first sheet)')
                 warnings.extend(extract_lib.fin23_quality_warnings(rows))

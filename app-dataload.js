@@ -10,27 +10,6 @@ async function readWb(file){
   return XLSX.read(buf, {type:'array', sheets:[0]});
 }
 
-// Free-text names (RM, client, campaign…) arrive with stray leading/trailing
-// spaces and doubled inner spaces from the CRM export. Left alone they split
-// one person across several rows and miss every name-keyed lookup, so they're
-// squished once here and every downstream comparison can be exact.
-const cleanName = v => (v == null ? '' : String(v)).replace(/\s+/g, ' ').trim();
-
-// leadStatus values the dashboard understands, plus the spellings seen (or
-// plausibly seen) for them. Anything else is passed through upper-cased and
-// then reported by the data-health panel — it would otherwise fall in no
-// status column and silently vanish from every table.
-const LEAD_STATUS_ALIASES = {
-  'REASSIGNED':'RE-ASSIGNED', 'RE ASSIGNED':'RE-ASSIGNED', 'RE_ASSIGNED':'RE-ASSIGNED',
-  'FOLLOWUP':'FOLLOW UP', 'FOLLOW-UP':'FOLLOW UP', 'FOLLOW_UP':'FOLLOW UP',
-  'ONHOLD':'ON HOLD', 'ON-HOLD':'ON HOLD', 'ON_HOLD':'ON HOLD',
-  'INPROCESS':'IN PROCESS', 'IN-PROCESS':'IN PROCESS', 'IN_PROCESS':'IN PROCESS',
-};
-function normalizeLeadStatus(v){
-  const s = cleanName(v).toUpperCase();
-  return LEAD_STATUS_ALIASES[s] || s;
-}
-
 function buildRawData(finRows){
   return finRows.map(r => {
     const rm = cleanName(pickField(r,'currentRmName','Current RM Name','RM','Curren RM'));
@@ -38,13 +17,10 @@ function buildRawData(finRows){
     const lsd = pickField(r,'lastStatusDate','Last Status Date','last status date');
     let lpd = pickField(r,'leadInProcessDate','LeadProcessDate','Lead In Process Date','lead in process date');
     let cvd = pickField(r,'convertedDate','Converted Date','converted date');
-    const leadStatus = normalizeLeadStatus(pickField(r,'leadStatus','Lead Status'));
+    const leadStatus = cleanName(pickField(r,'leadStatus','Lead Status')).toUpperCase();
 
-    // A lead the CRM calls IN PROCESS / CONVERTED but gives no in-process /
-    // converted date for has no month to be counted in, so it fell out of
-    // every status column (and every total) without a trace. Fall back to the
-    // month it last changed status — the best available evidence of when it
-    // got there — and mark the row so the data-health panel can say how many.
+    // IN PROCESS / CONVERTED with no date has no month and would drop out of
+    // every table; use the last-status month instead and flag the row.
     const fallbackDate = !isBlankDate(lsd) ? lsd : cd;
     let ipInferred = false, cvInferred = false;
     if(leadStatus === 'IN PROCESS' && isBlankDate(lpd)
@@ -270,9 +246,7 @@ async function loadAllFromRepo(){
   await yieldToPaint();
 
   let d = {};
-  // Remembered so the data-health panel can say where the numbers came from —
-  // the bundled data.js fallback is months older than the live API, and
-  // nothing on the page used to say which one you were looking at.
+  // Recorded so the data-health panel can say when the stale data.js fallback is in use.
   STATE.dataSource = { fallback: false, error: null, generated: null };
   try {
     const res = await fetch(DATA_API_URL, { cache: 'no-store' });

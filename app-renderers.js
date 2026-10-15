@@ -444,9 +444,8 @@ function teamPerfCells(labelField, r){
   };
 }
 
-// Under-table footnote: says what "Total Leads" counts and, when it differs
-// from the created-in-period figure other tables show, by exactly how much —
-// so the 111-vs-113 style question answers itself on the page.
+// Footnote under the matrix: what Total Leads counts, and how far it is from
+// the created-in-period figure other tables show.
 function renderTeamPerfNote(data){
   const host = $('#tbl-team');
   if(!host || !host.parentNode) return;
@@ -817,7 +816,7 @@ function renderProcessed(){
   }));
   const data = teamPerformance();
   const headers = ['Team', 'Total Leads', 'CONVERTED', 'Conv. Rate', 'IN PROCESS', 'FOLLOW UP', 'ASSIGNED', 'RE-ASSIGNED', 'ON HOLD', 'DEAD'];
-  renderTable('#proc-team', headers, data.map(r => ({...teamPerfCells('Team', r), _heat: undefined})));
+  renderTable('#proc-team', headers, data.map(r => teamPerfCells('Team', r)));
 }
 
 function rawCellValue(row, col){

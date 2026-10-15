@@ -15,11 +15,7 @@ const FULL_MONTHS = ['January','February','March','April','May','June',
 const BLANK_DATE_VALUES = new Set(['', 'N/A']);
 const isBlankDate = v => v == null || BLANK_DATE_VALUES.has(String(v).trim().toUpperCase());
 
-/**
- * Local-midnight Date for a y/m/d triple, or null when the day doesn't exist.
- * `new Date(2026, 1, 31)` silently becomes 3 March, which would file a lead
- * under the wrong month with no trace — so the parts are checked back.
- */
+/** Local-midnight Date for y/m/d, or null if the day doesn't exist (new Date(2026,1,31) rolls to March). */
 function strictYmd(y, m, d){
   const dt = new Date(y, m - 1, d);
   return (dt.getFullYear() === y && dt.getMonth() === m - 1 && dt.getDate() === d) ? dt : null;
@@ -122,9 +118,7 @@ function parseDateAny(v){
 
   // Excel serial date — days since the 1900 epoch (with Excel's leap-year bug
   // baked into the 1899-12-30 offset).
-  // The calendar day is read back with the UTC getters and rebuilt as local
-  // midnight: reading a UTC-midnight instant with local getters lands on the
-  // previous day anywhere west of Greenwich.
+  // Read the day with UTC getters: local getters land on the previous day west of Greenwich.
   if(typeof v === 'number'){
     if(!isFinite(v)) return null;
     const u = new Date(Date.UTC(1899, 11, 30) + Math.floor(v) * 86400000);
