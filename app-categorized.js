@@ -3,7 +3,7 @@
 // not part of the live site), loaded from categorized_leads_data.js.
 // Part of the app.js split (classic script, shares global scope with the other app-*.js files).
 
-const CATEGORIZED_HEADERS = ['Client Name', 'Current RM', 'Email', 'Mobile', 'Category', 'Remark'];
+const CATEGORIZED_HEADERS = ['Client Name', 'Current RM', 'Email', 'Mobile', 'Created Date', 'Campaign', 'Platform', 'Category', 'Remark'];
 const CATEGORIZED_PER_PAGE = 25;
 
 // The classification is a point-in-time snapshot re-run by hand against a
@@ -11,7 +11,34 @@ const CATEGORIZED_PER_PAGE = 25;
 // surfacing; short enough to catch a forgotten refresh, long enough not to nag.
 const CATEGORIZED_STALE_DAYS = 30;
 
-// Counts are derived once per data load — the dataset is a static embedded
+const MONTH_ABBR = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+/** 'YYYY-MM' → 'Oct 2026'. */
+const categorizedMonthLabel = ym => `${MONTH_ABBR[+ym.slice(5, 7) - 1]} ${ym.slice(0, 4)}`;
+
+/** Distinct created months present in the snapshot, oldest first ('YYYY-MM'). */
+function categorizedMonths(){
+  return [...new Set(STATE.categorizedLeads.map(r => (r.createdDate || '').slice(0, 7)).filter(Boolean))].sort();
+}
+
+// Leads created inside the selected month range (bounds inclusive, '' = open).
+// Memoised on the bounds — the snapshot is static, so only a range change
+// invalidates it.
+let _categorizedRange = { key: null, rows: [] };
+function categorizedRangeRows(){
+  const from = STATE.categorizedFromMonth, to = STATE.categorizedToMonth;
+  const key = `${from}|${to}`;
+  if(_categorizedRange.key === key) return _categorizedRange.rows;
+  const rows = (!from && !to) ? STATE.categorizedLeads : STATE.categorizedLeads.filter(r => {
+    const m = (r.createdDate || '').slice(0, 7);
+    return m && (!from || m >= from) && (!to || m <= to);
+  });
+  _categorizedRange = { key, rows };
+  _categorizedStats = null;
+  return rows;
+}
+
+// Counts are derived once per range — the dataset is a static embedded
 // snapshot (tens of thousands of rows), so recomputing per render wasted a
 // full pass per table.
 let _categorizedStats = null;
@@ -22,26 +49,28 @@ let _categorizedStats = null;
  * @returns {{counts:Object<string,number>, order:string[], total:number}}
  */
 function categorizedStats(){
+  const rangeRows = categorizedRangeRows();
   if(_categorizedStats) return _categorizedStats;
   const counts = {};
-  for(const row of STATE.categorizedLeads){
+  for(const row of rangeRows){
     counts[row.category] = (counts[row.category] || 0) + 1;
   }
   _categorizedStats = {
     counts,
     order: Object.keys(counts).sort((a, b) => counts[b] - counts[a]),
-    total: STATE.categorizedLeads.length,
+    total: rangeRows.length,
   };
   return _categorizedStats;
 }
 
 const categorizedCategoryOrder = () => categorizedStats().order;
 
-/** Rows matching the active category dropdown; all rows when 'All'. */
+/** Rows in the created-month range matching the category dropdown; all of them when 'All'. */
 function categorizedFilteredRows(){
   const filter = STATE.categorizedCategoryFilter;
-  if(!filter || filter === 'All') return STATE.categorizedLeads;
-  return STATE.categorizedLeads.filter(r => r.category === filter);
+  const rows = categorizedRangeRows();
+  if(!filter || filter === 'All') return rows;
+  return rows.filter(r => r.category === filter);
 }
 
 // ---- guards: is this snapshot trustworthy? ----
@@ -127,14 +156,45 @@ function renderCategorizedSummary(){
 
 const categorizedToRow = r => ({
   'Client Name': r.clientName, 'Current RM': r.currentRm, Email: r.email,
-  Mobile: r.mobile, Category: r.category, Remark: r.remark,
+  Mobile: r.mobile, 'Created Date': r.createdDate, Campaign: r.campaign, Platform: r.platform,
+  Category: r.category, Remark: r.remark,
 });
 
-/** Filename-safe version of the active filter, for the Excel download. */
+/** Filename-safe version of the active filters, for the Excel download. */
 const categorizedDownloadLabel = () => {
   const filter = STATE.categorizedCategoryFilter;
-  return (filter && filter !== 'All') ? filter.replace(/[^\w]+/g, '_').slice(0, 40) : 'All';
+  const category = (filter && filter !== 'All') ? filter.replace(/[^\w]+/g, '_').slice(0, 40) : 'All';
+  const { categorizedFromMonth: from, categorizedToMonth: to } = STATE;
+  return (from || to) ? `${category}_${from || 'start'}_to_${to || 'latest'}` : category;
 };
+
+/** Fill the From/To month dropdowns once (options come from the data) and wire them up. */
+function setupCategorizedMonthFilters(){
+  const fromSel = $('#categorized-from-month'), toSel = $('#categorized-to-month');
+  if(!fromSel || !toSel) return;
+  if(!fromSel.options.length){
+    const months = categorizedMonths();
+    const options = first => `<option value="">${first}</option>` +
+      months.map(m => `<option value="${m}">${categorizedMonthLabel(m)}</option>`).join('');
+    fromSel.innerHTML = options('Earliest');
+    toSel.innerHTML = options('Latest');
+  }
+  fromSel.value = STATE.categorizedFromMonth;
+  toSel.value = STATE.categorizedToMonth;
+  const apply = e => {
+    let from = fromSel.value, to = toSel.value;
+    // Keep the range valid: moving one end past the other drags the other along.
+    if(from && to && from > to){
+      if(e.target === fromSel) to = from; else from = to;
+    }
+    STATE.categorizedFromMonth = from;
+    STATE.categorizedToMonth = to;
+    STATE.categorizedPage = 1;
+    renderCategorizedLeads();
+  };
+  fromSel.onchange = apply;
+  toSel.onchange = apply;
+}
 
 function renderCategorizedDetail(){
   const rows = categorizedFilteredRows();
@@ -175,6 +235,10 @@ function renderCategorizedLeads(){
     return;
   }
 
+  setupCategorizedMonthFilters();
+  // A category with no leads in the chosen range drops out of the dropdown,
+  // so fall back to All rather than leave an unlisted selection filtering to nothing.
+  if(!categorizedCategoryOrder().includes(STATE.categorizedCategoryFilter)) STATE.categorizedCategoryFilter = 'All';
   buildMultiSelect('#categorized-category-filter-wrap', ['All', ...categorizedCategoryOrder()],
     STATE.categorizedCategoryFilter,
     val => { STATE.categorizedCategoryFilter = val; STATE.categorizedPage = 1; renderCategorizedLeads(); },

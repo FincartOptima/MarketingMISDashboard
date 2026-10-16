@@ -1431,11 +1431,15 @@ table.data.editable td input:focus{outline:2px solid var(--orange);background:va
     <div class="section bar-pink">
       <h2>Categorized Leads — On-Hold Remark Buckets
         <span style="float:right;font-weight:400;text-transform:none;display:flex;align-items:center;gap:10px">
+          <label style="font-size:11px;color:var(--muted)">Created from</label>
+          <select id="categorized-from-month"></select>
+          <label style="font-size:11px;color:var(--muted)">to</label>
+          <select id="categorized-to-month"></select>
           <label style="font-size:11px;color:var(--muted)">Category</label>
           <div id="categorized-category-filter-wrap" style="display:inline-block;vertical-align:middle"></div>
         </span>
       </h2>
-      <div class="meta">Every On-Hold lead's most recent remark, bucketed into a category by a calibrated rule-based matcher (not an exact science — see the note below the detail table).</div>
+      <div class="meta">Every On-Hold lead's most recent remark, bucketed into a category by a calibrated rule-based matcher (not an exact science — see the note below the detail table). The month range filters on the lead's created month and applies to the summary, the detail table and the Excel download.</div>
       <div id="categorized-generated-note" style="font-size:12px;color:var(--muted);margin-top:2px"></div>
     </div>
 
@@ -1445,7 +1449,7 @@ table.data.editable td input:focus{outline:2px solid var(--orange);background:va
     </div>
 
     <div class="section bar-blue">
-      <h2>Detail
+      <h2>Client Details
         <span style="float:right;font-weight:400;text-transform:none;display:flex;align-items:center;gap:10px">
           <span id="categorized-page-info" style="font-size:12px;color:var(--muted)"></span>
           <button class="secondary" id="categorized-prev">&larr; Prev</button>
@@ -1454,7 +1458,7 @@ table.data.editable td input:focus{outline:2px solid var(--orange);background:va
         </span>
       </h2>
       <div class="table-wrap" id="tbl-categorized-detail"></div>
-      <div class="hint">Pick a category above to narrow the table (and the Excel download) to just that bucket — "All" shows every On-Hold lead. Categories were derived from a prior manually-reviewed batch of 7,599 leads and matched here with a keyword-based classifier (~87% agreement against that batch) — treat individual category assignments as a strong starting point, not a guarantee, especially for less common buckets.</div>
+      <div class="hint">Pick a category and/or a created-month range above to narrow the table (and the Excel download) — "All" shows every On-Hold lead in the range. Categories were derived from a prior manually-reviewed batch of 7,599 leads and matched here with a keyword-based classifier (~87% agreement against that batch) — treat individual category assignments as a strong starting point, not a guarantee, especially for less common buckets.</div>
     </div>
   </div>
 

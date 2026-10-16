@@ -64,6 +64,8 @@ const STATE = {
   campaignTeamMode: 'first',
   categorizedLeads: [],
   categorizedCategoryFilter: 'All',
+  categorizedFromMonth: '',
+  categorizedToMonth: '',
   categorizedPage: 1,
 };
 
