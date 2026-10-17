@@ -66,7 +66,6 @@ const STATE = {
   categorizedCategoryFilter: 'All',
   categorizedFromMonth: '',
   categorizedToMonth: '',
-  categorizedPage: 1,
 };
 
 function notUploadedHTML(key){

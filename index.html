@@ -355,6 +355,14 @@ table.data thead th{
 }
 table.data thead th:first-child{background:var(--text)}
 table.data tbody tr:hover{background:var(--orange-tint)}
+/* Categorized Leads: summary shows every category + Total unclipped; the detail list is a fixed-row-height window over the full lead list */
+#tbl-categorized-summary{max-height:none}
+#tbl-categorized-detail{max-height:75vh;overflow-anchor:none}
+table.data.cat-window{table-layout:fixed;border-collapse:separate;border-spacing:0}
+table.data.cat-window th,table.data.cat-window td{text-align:left;overflow:hidden;text-overflow:ellipsis}
+table.data.cat-window td{height:34px;box-sizing:border-box}
+table.data.cat-window thead th:first-child{z-index:3}
+table.data tr.cat-spacer td{padding:0;border:0;position:static;background:transparent}
 table.data tbody tr.grand td{
   font-weight:800;background:var(--orange-tint);color:var(--orange);
   border-top:2px solid var(--orange);border-bottom:2px solid var(--orange);
@@ -1452,13 +1460,11 @@ table.data.editable td input:focus{outline:2px solid var(--orange);background:va
       <h2>Client Details
         <span style="float:right;font-weight:400;text-transform:none;display:flex;align-items:center;gap:10px">
           <span id="categorized-page-info" style="font-size:12px;color:var(--muted)"></span>
-          <button class="secondary" id="categorized-prev">&larr; Prev</button>
-          <button class="secondary" id="categorized-next">Next &rarr;</button>
           <button class="secondary" id="categorized-download">Download as Excel</button>
         </span>
       </h2>
       <div class="table-wrap" id="tbl-categorized-detail"></div>
-      <div class="hint">Pick a category and/or a created-month range above to narrow the table (and the Excel download) — "All" shows every On-Hold lead in the range. Categories were derived from a prior manually-reviewed batch of 7,599 leads and matched here with a keyword-based classifier (~87% agreement against that batch) — treat individual category assignments as a strong starting point, not a guarantee, especially for less common buckets.</div>
+      <div class="hint">This list holds every On-Hold lead in the range — scroll to browse it all (the position shows above the table). Pick a category and/or a created-month range above to narrow it; the Excel download carries the same rows, with full remarks. Categories were derived from a prior manually-reviewed batch of 7,599 leads and matched here with a keyword-based classifier (~87% agreement against that batch) — treat individual category assignments as a strong starting point, not a guarantee, especially for less common buckets.</div>
     </div>
   </div>
 

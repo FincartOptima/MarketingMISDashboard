@@ -4,7 +4,6 @@
 // Part of the app.js split (classic script, shares global scope with the other app-*.js files).
 
 const CATEGORIZED_HEADERS = ['Client Name', 'Current RM', 'Email', 'Mobile', 'Created Date', 'Campaign', 'Platform', 'Category', 'Remark'];
-const CATEGORIZED_PER_PAGE = 25;
 
 // The classification is a point-in-time snapshot re-run by hand against a
 // fresh export, so it drifts out of date silently. Past this age it's worth
@@ -189,36 +188,113 @@ function setupCategorizedMonthFilters(){
     }
     STATE.categorizedFromMonth = from;
     STATE.categorizedToMonth = to;
-    STATE.categorizedPage = 1;
     renderCategorizedLeads();
   };
   fromSel.onchange = apply;
   toSel.onchange = apply;
 }
 
+// ---- windowed detail list ----
+// The detail list is the whole filtered set (tens of thousands of rows).
+// Drawing every row freezes the page for several seconds, so only the rows in
+// view (plus a small buffer) are in the DOM; spacer rows stand in for the rest
+// so the scrollbar still spans the full list.
+const CATEGORIZED_ROW_BUFFER = 15;
+const CATEGORIZED_ROW_PX = 34; // measured from the first painted row; this is the fallback
+// Fixed column widths (px) keep columns steady while rows swap in and out of
+// the window. Long text is ellipsised and shown in full on hover.
+const CATEGORIZED_COL_PX = {
+  'Client Name': 170, 'Current RM': 170, Email: 230, Mobile: 100, 'Created Date': 120,
+  Campaign: 110, Platform: 150, Category: 270, Remark: 480,
+};
+
+let _categorizedWin = null; // { host, rows, tbody, rowPx, headPx, first, last }
+
+const categorizedSpacerHtml = px => px > 0
+  ? `<tr class="cat-spacer" style="height:${px}px"><td colspan="${CATEGORIZED_HEADERS.length}" style="height:${px}px"></td></tr>`
+  : '';
+
+function categorizedRowHtml(lead){
+  const row = categorizedToRow(lead);
+  return '<tr class="cat-row">' + CATEGORIZED_HEADERS.map(h => {
+    const text = escHtml(row[h]);
+    return `<td title="${text}">${text}</td>`;
+  }).join('') + '</tr>';
+}
+
+/** Draw the slice of rows that is on screen (plus buffer) and update the position read-out. */
+function paintCategorizedWindow(){
+  const w = _categorizedWin;
+  if(!w) return;
+  const { host, rows } = w;
+  const view = host.clientHeight || 600;
+  const first = Math.max(0, Math.floor((host.scrollTop - w.headPx) / w.rowPx) - CATEGORIZED_ROW_BUFFER);
+  const last = Math.min(rows.length, Math.ceil((host.scrollTop + view - w.headPx) / w.rowPx) + CATEGORIZED_ROW_BUFFER);
+  if(first !== w.first || last !== w.last){
+    w.tbody.innerHTML = categorizedSpacerHtml(first * w.rowPx) +
+      rows.slice(first, last).map(categorizedRowHtml).join('') +
+      categorizedSpacerHtml((rows.length - last) * w.rowPx);
+    w.first = first;
+    w.last = last;
+  }
+  const info = $('#categorized-page-info');
+  if(info){
+    const top = Math.min(rows.length, Math.max(1, Math.floor(Math.max(0, host.scrollTop) / w.rowPx) + 1));
+    const bottom = Math.min(rows.length, Math.max(top, Math.ceil((host.scrollTop + view - w.headPx) / w.rowPx)));
+    info.textContent = `Rows ${fmtIN(top)}–${fmtIN(bottom)} of ${fmtIN(rows.length)} leads`;
+  }
+}
+
+let _categorizedPaintQueued = false;
+function scheduleCategorizedPaint(){
+  if(_categorizedPaintQueued) return;
+  _categorizedPaintQueued = true;
+  requestAnimationFrame(() => { _categorizedPaintQueued = false; paintCategorizedWindow(); });
+}
+
+function renderCategorizedWindow(host, rows){
+  const info = $('#categorized-page-info');
+  if(!rows.length){
+    _categorizedWin = null;
+    host.innerHTML = '<div class="hint" style="padding:14px">No leads match these filters.</div>';
+    if(info) info.textContent = '0 leads';
+    return;
+  }
+  const widths = CATEGORIZED_HEADERS.map(h => CATEGORIZED_COL_PX[h]);
+  host.innerHTML =
+    `<table class="data cat-window" style="width:${widths.reduce((a, b) => a + b, 0)}px;min-width:100%">` +
+    `<colgroup>${widths.map(px => `<col style="width:${px}px">`).join('')}</colgroup>` +
+    `<thead><tr>${CATEGORIZED_HEADERS.map(h => `<th>${escHtml(h)}</th>`).join('')}</tr></thead><tbody></tbody></table>`;
+  host.scrollTop = 0;
+
+  _categorizedWin = {
+    host, rows, tbody: host.querySelector('tbody'),
+    rowPx: CATEGORIZED_ROW_PX, headPx: host.querySelector('thead').getBoundingClientRect().height, first: -1, last: -1,
+  };
+  paintCategorizedWindow();
+  // Row height comes from the page's own CSS (and zoom), so measure it rather
+  // than trust the constant, then redraw if it differs.
+  const sample = _categorizedWin.tbody.querySelector('tr.cat-row');
+  const measured = sample && sample.getBoundingClientRect().height;
+  if(measured && Math.abs(measured - _categorizedWin.rowPx) > 0.01){
+    _categorizedWin.rowPx = measured;
+    _categorizedWin.first = _categorizedWin.last = -1;
+    paintCategorizedWindow();
+  }
+
+  if(!host.dataset.windowBound){
+    host.dataset.windowBound = '1';
+    host.addEventListener('scroll', scheduleCategorizedPaint, { passive: true });
+    window.addEventListener('resize', scheduleCategorizedPaint);
+  }
+}
+
 function renderCategorizedDetail(){
   const rows = categorizedFilteredRows();
-  const totalPages = Math.max(1, Math.ceil(rows.length / CATEGORIZED_PER_PAGE));
-  STATE.categorizedPage = Math.min(Math.max(1, STATE.categorizedPage || 1), totalPages);
-  const start = (STATE.categorizedPage - 1) * CATEGORIZED_PER_PAGE;
+  checkTableShape('#tbl-categorized-detail', CATEGORIZED_HEADERS, rows.slice(0, 50).map(categorizedToRow));
+  renderCategorizedWindow($('#tbl-categorized-detail'), rows);
 
-  renderTable('#tbl-categorized-detail', CATEGORIZED_HEADERS,
-    rows.slice(start, start + CATEGORIZED_PER_PAGE).map(categorizedToRow));
-
-  const pageInfo = $('#categorized-page-info');
-  if(pageInfo) pageInfo.textContent = `Page ${STATE.categorizedPage} of ${totalPages} (${fmtIN(rows.length)} leads)`;
-
-  const prev = $('#categorized-prev');
-  if(prev){
-    prev.disabled = STATE.categorizedPage <= 1;
-    prev.onclick = () => { STATE.categorizedPage--; renderCategorizedDetail(); };
-  }
-  const next = $('#categorized-next');
-  if(next){
-    next.disabled = STATE.categorizedPage >= totalPages;
-    next.onclick = () => { STATE.categorizedPage++; renderCategorizedDetail(); };
-  }
-  // Downloads the whole filtered set, not just the visible page.
+  // Downloads the whole filtered set, not just the rows on screen.
   const download = $('#categorized-download');
   if(download){
     download.onclick = () => downloadRowsAsXlsx(CATEGORIZED_HEADERS, rows.map(categorizedToRow),
@@ -241,7 +317,7 @@ function renderCategorizedLeads(){
   if(!categorizedCategoryOrder().includes(STATE.categorizedCategoryFilter)) STATE.categorizedCategoryFilter = 'All';
   buildMultiSelect('#categorized-category-filter-wrap', ['All', ...categorizedCategoryOrder()],
     STATE.categorizedCategoryFilter,
-    val => { STATE.categorizedCategoryFilter = val; STATE.categorizedPage = 1; renderCategorizedLeads(); },
+    val => { STATE.categorizedCategoryFilter = val; renderCategorizedLeads(); },
     { multi: false });
 
   renderCategorizedSummary();
