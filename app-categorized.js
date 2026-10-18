@@ -64,6 +64,26 @@ function categorizedStats(){
 
 const categorizedCategoryOrder = () => categorizedStats().order;
 
+/**
+ * One-line statement of which leads this tab covers. The classifier limits the
+ * snapshot to a rolling window of created months, so the page says so rather
+ * than let a short list read as "every On-Hold lead".
+ */
+function categorizedScopeText(){
+  const months = categorizedMonths();
+  if(!months.length) return '';
+  const span = `${categorizedMonthLabel(months[0])} – ${categorizedMonthLabel(months[months.length - 1])}`;
+  const scope = STATE.categorizedScope;
+  const years = scope && scope.months ? scope.months / 12 : 0;
+  const head = years
+    ? `Showing only On-Hold leads created in the last ${years} year${years === 1 ? '' : 's'} (${span}).`
+    : `Showing On-Hold leads created ${span}.`;
+  const older = scope && scope.olderExcluded
+    ? ` ${fmtIN(scope.olderExcluded)} older On-Hold leads are not included.`
+    : '';
+  return head + older;
+}
+
 /** Rows in the created-month range matching the category dropdown; all of them when 'All'. */
 function categorizedFilteredRows(){
   const filter = STATE.categorizedCategoryFilter;
@@ -319,6 +339,9 @@ function renderCategorizedLeads(){
     STATE.categorizedCategoryFilter,
     val => { STATE.categorizedCategoryFilter = val; renderCategorizedLeads(); },
     { multi: false });
+
+  const scopeNote = $('#categorized-scope-note');
+  if(scopeNote) scopeNote.textContent = categorizedScopeText();
 
   renderCategorizedSummary();
   renderCategorizedDetail();

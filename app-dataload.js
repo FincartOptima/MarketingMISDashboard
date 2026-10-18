@@ -328,6 +328,7 @@ async function loadAllFromRepo(){
   // categorized_leads_data.js (window.CATEGORIZED_LEADS_DATA).
   if(window.CATEGORIZED_LEADS_DATA && window.CATEGORIZED_LEADS_DATA.rows && window.CATEGORIZED_LEADS_DATA.rows.length){
     STATE.categorizedLeads = window.CATEGORIZED_LEADS_DATA.rows;
+    STATE.categorizedScope = window.CATEGORIZED_LEADS_DATA.scope || null;
     STATE.categorizedGeneratedAt = window.CATEGORIZED_LEADS_DATA.generatedAt;
     STATE.filesLoaded.categorized = true;
   } else {

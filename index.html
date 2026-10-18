@@ -356,6 +356,8 @@ table.data thead th{
 table.data thead th:first-child{background:var(--text)}
 table.data tbody tr:hover{background:var(--orange-tint)}
 /* Categorized Leads: summary shows every category + Total unclipped; the detail list is a fixed-row-height window over the full lead list */
+.cat-scope{margin-top:8px;padding:7px 12px;border-left:4px solid var(--orange);background:var(--orange-tint);font-size:13px;font-weight:600}
+.cat-scope:empty{display:none}
 #tbl-categorized-summary{max-height:none}
 #tbl-categorized-detail{max-height:75vh;overflow-anchor:none}
 table.data.cat-window{table-layout:fixed;border-collapse:separate;border-spacing:0}
@@ -1447,7 +1449,8 @@ table.data.editable td input:focus{outline:2px solid var(--orange);background:va
           <div id="categorized-category-filter-wrap" style="display:inline-block;vertical-align:middle"></div>
         </span>
       </h2>
-      <div class="meta">Every On-Hold lead's most recent remark, bucketed into a category by a calibrated rule-based matcher (not an exact science — see the note below the detail table). The month range filters on the lead's created month and applies to the summary, the detail table and the Excel download.</div>
+      <div class="meta">Each On-Hold lead's most recent remark, bucketed into a category by a calibrated rule-based matcher (not an exact science — see the note below the detail table). The month range filters on the lead's created month and applies to the summary, the detail table and the Excel download.</div>
+      <div id="categorized-scope-note" class="cat-scope"></div>
       <div id="categorized-generated-note" style="font-size:12px;color:var(--muted);margin-top:2px"></div>
     </div>
 
@@ -1464,7 +1467,7 @@ table.data.editable td input:focus{outline:2px solid var(--orange);background:va
         </span>
       </h2>
       <div class="table-wrap" id="tbl-categorized-detail"></div>
-      <div class="hint">This list holds every On-Hold lead in the range — scroll to browse it all (the position shows above the table). Pick a category and/or a created-month range above to narrow it; the Excel download carries the same rows, with full remarks. Categories were derived from a prior manually-reviewed batch of 7,599 leads and matched here with a keyword-based classifier (~87% agreement against that batch) — treat individual category assignments as a strong starting point, not a guarantee, especially for less common buckets.</div>
+      <div class="hint">This list holds every On-Hold lead in the period stated at the top of this tab — scroll to browse it all (the position shows above the table). Pick a category and/or a created-month range above to narrow it; the Excel download carries the same rows, with full remarks. Categories were derived from a prior manually-reviewed batch of 7,599 leads and matched here with a keyword-based classifier (~87% agreement against that batch) — treat individual category assignments as a strong starting point, not a guarantee, especially for less common buckets.</div>
     </div>
   </div>
 

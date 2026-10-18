@@ -63,6 +63,7 @@ const STATE = {
   teamPerfMode: 'first',
   campaignTeamMode: 'first',
   categorizedLeads: [],
+  categorizedScope: null,
   categorizedCategoryFilter: 'All',
   categorizedFromMonth: '',
   categorizedToMonth: '',
