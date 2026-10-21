@@ -63,6 +63,9 @@ function dashboardRowMatch(row){
   return true;
 }
 
+// Dropdowns are rebuilt often, so closing on an outside click is one shared listener rather than one per widget.
+document.addEventListener('click', () => $$('.ms-wrap.open').forEach(w => w.classList.remove('open')));
+
 // Build a custom multi-select (or single-select) dropdown widget
 // opts.multi=false → radio-style (only one selected at a time)
 function buildMultiSelect(containerId, options, currentVal, onChange, opts={}){
@@ -124,6 +127,7 @@ function buildMultiSelect(containerId, options, currentVal, onChange, opts={}){
           c.checked = c.value === opt;
           c.closest('.ms-opt').classList.toggle('ms-selected', c.checked);
         });
+        wrap.classList.remove('open');
       } else if(opt === 'All'){
         selected.clear();
         selected.add('All');
@@ -151,8 +155,11 @@ function buildMultiSelect(containerId, options, currentVal, onChange, opts={}){
     dropdown.appendChild(item);
   });
 
-  btn.onclick = e => { e.stopPropagation(); wrap.classList.toggle('open'); };
-  document.addEventListener('click', () => wrap.classList.remove('open'));
+  btn.onclick = e => {
+    e.stopPropagation();
+    $$('.ms-wrap.open').forEach(w => { if(w !== wrap) w.classList.remove('open'); });
+    wrap.classList.toggle('open');
+  };
 
   wrap.appendChild(btn);
   wrap.appendChild(dropdown);

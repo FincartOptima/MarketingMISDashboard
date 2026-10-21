@@ -1215,7 +1215,7 @@ function bdPerformanceByRM(team, stageField){
   return out;
 }
 
-// GMeet Joined? vs In Process — one row per GMeet state (Yes/No/Pending), so
+// GMeet Joined? vs In Process — one row per GMeet state (Yes/No/Pending, plus Not Logged), so
 // you can see whether actually joining the meeting predicts progress. Always
 // sourced from the BD tracker's OWN "Current Stage" column (currentStage),
 // per the BD team's self-reported Google Sheet — not the B2C-derived
@@ -1223,14 +1223,22 @@ function bdPerformanceByRM(team, stageField){
 // themselves logged. Uses bdFilteredRowsBase() (Month/Team/Person/Platform
 // only, no GMeet click-filter) since collapsing to one GMeet state would
 // defeat the comparison this table exists to show.
+const BD_GMEET_STATES = ['Yes','No','Pending'];
+
+// One group per GMeet state, plus Not Logged for the clients with no value
+// entered, so the groups always add up to every client in scope.
+function bdGmeetGroups(rows){
+  return [...BD_GMEET_STATES, 'Not Logged'].map(st => ({
+    label: st,
+    rows: rows.filter(r => st === 'Not Logged' ? !BD_GMEET_STATES.includes(r.gmeetJoined) : r.gmeetJoined === st),
+  }));
+}
+
 function bdGmeetCorrelation(){
-  const rows = bdFilteredRowsBase();
-  const states = ['Yes','No','Pending'];
-  const out = states.map(st => {
-    const sub = rows.filter(r => r.gmeetJoined === st);
+  const out = bdGmeetGroups(bdFilteredRowsBase()).map(({label, rows: sub}) => {
     const inProcess = sub.filter(r => r.currentStage === 'IN PROCESS').length;
     return {
-      'GMeet Joined': st,
+      'GMeet Joined': label,
       Total: sub.length,
       'In Process': inProcess,
       'In Process Rate': sub.length>0 ? inProcess/sub.length : 0,
@@ -1244,6 +1252,54 @@ function bdGmeetCorrelation(){
     _tot: true,
   });
   return out;
+}
+
+// GMeet Joined? vs Converted. Converted is read from B2C only: a lead counts
+// when its email matched a B2C record that has a Converted Month (the same
+// CM-presence rule as everywhere else). A lead with no B2C match has no CRM
+// status to read, so it is counted as not converted and reported in Not Matched.
+// Same scope as the In Process table: Month/Team/Person/Platform, no GMeet click-filter.
+const bdIsConverted = r => !!r.crmMatched && r.effectiveStage === 'CONVERTED';
+
+function bdGmeetConversion(){
+  const tally = (label, sub, tot) => {
+    const matched = sub.filter(r => r.crmMatched).length;
+    const converted = sub.filter(bdIsConverted).length;
+    return {
+      'GMeet Joined': label, Total: sub.length, Matched: matched, 'Not Matched': sub.length - matched, Converted: converted,
+      'Converted Rate': sub.length>0 ? converted/sub.length : 0,
+      'Rate of Matched': matched>0 ? converted/matched : 0,
+      _tot: tot,
+    };
+  };
+  const rows = bdFilteredRowsBase();
+  return [...bdGmeetGroups(rows).map(g => tally(g.label, g.rows, false)), tally('Grand Total', rows, true)];
+}
+
+// One line per client behind bdGmeetConversion, for the download: lets anyone
+// check a count against the B2C file by email.
+function bdGmeetConversionLeads(){
+  const b2c = buildB2CEmailIndex();
+  const order = ['Yes','No','Pending','Not Logged'];
+  const state = r => BD_GMEET_STATES.includes(r.gmeetJoined) ? r.gmeetJoined : 'Not Logged';
+  return bdFilteredRowsBase().map(r => {
+    const b = b2c[bdClientKey(r)];
+    return {
+      'BD Rep': r.person || '',
+      Email: String(r.email == null ? '' : r.email),
+      'Client Name': (b && b.clientName) || '',
+      'Date Assigned': toIsoDate(r.dateAssigned) || '',
+      'GMeet Joined': state(r),
+      'Found in B2C': r.crmMatched ? 'Yes' : 'No',
+      'B2C Lead Status': b ? b.leadStatus : '',
+      'B2C Converted Month': b && b.CM !== 'N/A' ? b.CM : '',
+      'B2C Converted Date': b ? b.convertedDate : '',
+      Converted: bdIsConverted(r) ? 'Yes' : 'No',
+      Team: r.effectiveTeam || '',
+      RM: r.effectiveRM || '',
+    };
+  }).sort((a, b) => order.indexOf(a['GMeet Joined']) - order.indexOf(b['GMeet Joined']) ||
+    a['Found in B2C'].localeCompare(b['Found in B2C']) || a.Email.localeCompare(b.Email));
 }
 
 // Per-BD-rep summary joining the two data sources the whole tab is built
@@ -1354,11 +1410,12 @@ function bdCallsByPerson(){
 }
 
 // ---- Call → Meeting funnel ----
-// The whole funnel is scoped to Month + Person only (NOT Team/Platform):
 // Total Calls/Connected/CNP come from the BD Daily Log, which has no
-// lead-level linkage to derive a Team or Platform from, so applying those
-// filters to only later stages would silently desync the stages from
-// each other.
+// lead-level link to derive a Team or Platform from, so they honor Month +
+// Person only. Meetings Scheduled and the GMeet outcomes come from tracker
+// rows carrying the matched lead's Team and Platform, so they honor those too.
+// With either set, Meetings ÷ Calls Connected would divide a filtered count
+// by an unfiltered one, so meetingPct is null (shown as n/a).
 //
 // Meetings Scheduled / Joined / Not Joined / Pending all come from the same
 // row set -- every lead in the "<Person> Q<N>" tracker sheets whose Date
@@ -1373,8 +1430,11 @@ function bdCallsByPerson(){
 //
 // Meetings Scheduled vs Calls Connected IS still a cross-source comparison
 // (Daily Log vs tracker) and won't line up as cleanly -- see the % label.
+const bdLeadFiltersActive = () => !isAllBdTeams() || !isAllBdPlatforms();
+
 function bdFlowTrackerRows(){
-  return STATE.bd.filter(r => bdMonthMatch(toMmmYyyy(r.dateAssigned)) && bdPersonMatch(r.person));
+  return STATE.bd.filter(r => bdMonthMatch(toMmmYyyy(r.dateAssigned)) && bdPersonMatch(r.person) &&
+    bdTeamMatch(r.effectiveTeam) && bdPlatformMatch(r.effectivePlatform));
 }
 
 function bdCallFlow(){
@@ -1396,7 +1456,7 @@ function bdCallFlow(){
     meetings,
     connectedPct: c['Connected %'],
     cnpPct: c['CNP %'],
-    meetingPct: c['Calls Connected']>0 ? meetings/c['Calls Connected'] : 0,
+    meetingPct: bdLeadFiltersActive() ? null : (c['Calls Connected']>0 ? meetings/c['Calls Connected'] : 0),
     joined, notJoined, pending, notLogged,
     joinedPct: meetings>0 ? joined/meetings : 0,
     notJoinedPct: meetings>0 ? notJoined/meetings : 0,
@@ -1413,7 +1473,7 @@ function bdCallFlowStages(){
     {Stage:'Total Calls Made',    Count:f.totalCalls, Of:'—',                     Pct:null,             Source:'BD Daily Log'},
     {Stage:'↳ Calls Connected',   Count:f.connected,  Of:'of calls made',         Pct:f.connectedPct,   Source:'BD Daily Log'},
     {Stage:'↳ CNP (not picked)',  Count:f.cnp,        Of:'of calls made',         Pct:f.cnpPct,         Source:'BD Daily Log'},
-    {Stage:'Meetings Scheduled',  Count:f.meetings,   Of:'of calls connected',    Pct:f.meetingPct,     Source:'Tracker · Date Assigned'},
+    {Stage:'Meetings Scheduled',  Count:f.meetings,   Of:f.meetingPct===null ? 'n/a — Team/Platform filter applied' : 'of calls connected', Pct:f.meetingPct, Source:'Tracker · Date Assigned'},
     {Stage:'↳ Meeting Joined',    Count:f.joined,     Of:'of meetings scheduled', Pct:f.joinedPct,      Source:'Tracker · GMeet Joined?'},
     {Stage:'↳ Not Joined',        Count:f.notJoined,  Of:'of meetings scheduled', Pct:f.notJoinedPct,   Source:'Tracker · GMeet Joined?'},
     {Stage:'↳ Pending',           Count:f.pending,    Of:'of meetings scheduled', Pct:f.pendingPct,     Source:'Tracker · GMeet Joined?'},
@@ -1426,15 +1486,15 @@ function bdCallFlowStages(){
 // Detail tables' total (dated by the matched B2C lead's Created Month) for
 // the same month selection -- every lead below is one where those two
 // month-anchors disagree, so it's counted on one side but not the other.
-// Same Month + Person scoping as Call Flow itself (see bdFlowTrackerRows),
-// so this fully accounts for the gap between the two totals, not just part
-// of it. Only CRM-matched leads can ever appear here: an unmatched lead's
-// effectiveMonth is defined as toMmmYyyy(dateAssigned) (see
+// Same Person + Team + Platform scoping as Call Flow itself (see
+// bdFlowTrackerRows), so this fully accounts for the gap between the two
+// totals, not just part of it. Only CRM-matched leads can ever appear here:
+// an unmatched lead's effectiveMonth is defined as toMmmYyyy(dateAssigned) (see
 // annotateBDWithB2CMatch in app-state.js), so the two checks are identical
 // by construction for it and it can never be part of the gap.
 function bdMonthMismatchList(){
   const b2cIndex = buildB2CEmailIndex();
-  const rows = STATE.bd.filter(r => bdPersonMatch(r.person));
+  const rows = STATE.bd.filter(r => bdPersonMatch(r.person) && bdTeamMatch(r.effectiveTeam) && bdPlatformMatch(r.effectivePlatform));
   // The entries Lead-Level Detail actually counts: one per client, drawn from
   // the rows whose Created Month is in the selection. A row outside this set
   // is either in the wrong month or a repeat entry of a client counted

@@ -455,7 +455,8 @@ function renderBDGmeetChart(){
   const values = labels.map(l => counts[l]);
   const total = values.reduce((a,b)=>a+b,0);
   const totalEl = $('#bd-gmeet-total');
-  if(totalEl) totalEl.textContent = '(Total: ' + fmtIN(total) + (STATE.bdGmeetFilter!=='All' ? ' · filtered: '+STATE.bdGmeetFilter : '') + ')';
+  const notLogged = bdFilteredRows().length - total;
+  if(totalEl) totalEl.textContent = '(Total: ' + fmtIN(total) + (notLogged ? ' · ' + fmtIN(notLogged) + ' not logged, not shown' : '') + (STATE.bdGmeetFilter!=='All' ? ' · filtered: '+STATE.bdGmeetFilter : '') + ')';
   if(!total) return;
   const colors = ['#16a34a','#e11d48','#b45309'];
   const offsets = labels.map(l => l === STATE.bdGmeetFilter ? 18 : 0);
@@ -469,7 +470,8 @@ function renderBDGmeetChart(){
         if(!elements.length) return;
         const clicked = labels[elements[0].index];
         STATE.bdGmeetFilter = STATE.bdGmeetFilter === clicked ? 'All' : clicked;
-        renderBDPerformance();
+        // Rebuilding the chart inside its own click handler throws in Chart.js; let the event finish first.
+        setTimeout(renderBDPerformance, 0);
       },
       onHover:(evt, elements) => { evt.native.target.style.cursor = elements.length ? 'pointer' : 'default'; },
       plugins:{
@@ -582,6 +584,11 @@ function renderBDCallFlow(){
   if(!host) return;
   if(!STATE.filesLoaded.bd){ host.innerHTML = notUploadedHTML('bd'); return; }
   const f = bdCallFlow();
+  const scopeNote = $('#bd-callflow-scope-note');
+  if(scopeNote) scopeNote.textContent = bdLeadFiltersActive()
+    ? 'Team / Platform apply to Meetings Scheduled and the meeting outcomes only. Calls Made, Connected and CNP come from the BD Daily Log, '
+      + 'which has no team or platform, so they still show every call for the selected Month / Person — which is why "Meetings ÷ Calls Connected" is n/a here.'
+    : '';
   const node = (label, value, sub, tone) =>
     `<div class="cf-node cf-${tone}">
        <div class="cf-value">${fmtIN(value)}</div>
@@ -598,7 +605,7 @@ function renderBDCallFlow(){
         ${node('CNP · Not Picked', f.cnp, fmtPct(f.cnpPct)+' of calls made', 'red')}
       </div>
       <div class="cf-arrow" title="Calls Connected → Meetings Scheduled">&#8595;</div>
-      <div class="cf-row">${node('Meetings Scheduled', f.meetings, fmtPct(f.meetingPct)+' of calls connected', 'violet')}</div>
+      <div class="cf-row">${node('Meetings Scheduled', f.meetings, f.meetingPct === null ? 'n/a with a Team / Platform filter' : fmtPct(f.meetingPct)+' of calls connected', 'violet')}</div>
       <div class="cf-split cf-split-4"></div>
       <div class="cf-row cf-row-4">
         ${node('Meeting Joined', f.joined, fmtPct(f.joinedPct)+' of meetings scheduled', 'green')}
@@ -654,13 +661,31 @@ function renderBDCallsTable(){
   makeSortableTable('#tbl-bdcalls', headers, rows, renderBDCallsTable);
 }
 
+// The four header filters are built once, not on every render: rebuilding the
+// widget on each pick closed its dropdown, so a multi-select took one pick per open.
+let _bdFiltersBuilt = false;
+function buildBDFilters(){
+  buildMultiSelect('#bdperf-month-filter-wrap', ['All', ...bdMonthList()], STATE.bdMonthFilter,
+    val => { STATE.bdMonthFilter = val; renderBDPerformance(); }, {multi: true});
+  buildMultiSelect('#bdperf-team-filter-wrap', ['All', ...bdTeamList()], STATE.bdTeamFilter,
+    val => { STATE.bdTeamFilter = val; renderBDPerformance(); }, {multi: false});
+  buildMultiSelect('#bdperf-person-filter-wrap', ['All', ...bdPersonList()], STATE.bdPersonFilter,
+    val => { STATE.bdPersonFilter = val; renderBDPerformance(); }, {multi: true});
+  buildMultiSelect('#bdperf-platform-filter-wrap', ['All', ...bdPlatformList()], STATE.bdPlatformFilter,
+    val => { STATE.bdPlatformFilter = val; renderBDPerformance(); }, {multi: true});
+  _bdFiltersBuilt = true;
+}
+
 function renderBDPerformance(){
   if(!STATE.filesLoaded.bd){
+    _bdFiltersBuilt = false;
     setNotUploaded('#tbl-bdperf','bd');
     setNotUploaded('#tbl-bdcalls','bdcalls');
     setNotUploaded('#tbl-bd-call-flow','bd');
     $('#legend-bdperf').innerHTML = '';
     $('#tbl-bdperf-gmeet').innerHTML = '';
+    const convHost = $('#tbl-bdperf-gmeet-conv');
+    if(convHost) convHost.innerHTML = '';
     const flowHost = $('#bd-call-flow');
     if(flowHost) flowHost.innerHTML = notUploadedHTML('bd');
     const callsChartWrap = $('#bd-calls-chart-wrap');
@@ -671,20 +696,23 @@ function renderBDPerformance(){
     return;
   }
 
-  buildMultiSelect('#bdperf-month-filter-wrap', ['All', ...bdMonthList()], STATE.bdMonthFilter,
-    val => { STATE.bdMonthFilter = val; renderBDPerformance(); }, {multi: true});
-  buildMultiSelect('#bdperf-team-filter-wrap', ['All', ...bdTeamList()], STATE.bdTeamFilter,
-    val => { STATE.bdTeamFilter = val; renderBDPerformance(); }, {multi: false});
-  buildMultiSelect('#bdperf-person-filter-wrap', ['All', ...bdPersonList()], STATE.bdPersonFilter,
-    val => { STATE.bdPersonFilter = val; renderBDPerformance(); }, {multi: true});
-  buildMultiSelect('#bdperf-platform-filter-wrap', ['All', ...bdPlatformList()], STATE.bdPlatformFilter,
-    val => { STATE.bdPlatformFilter = val; renderBDPerformance(); }, {multi: true});
+  if(!_bdFiltersBuilt) buildBDFilters();
   const resetBtn = $('#bdperf-reset-filters');
   if(resetBtn) resetBtn.onclick = () => {
     STATE.bdMonthFilter = 'All'; STATE.bdTeamFilter = 'All'; STATE.bdPersonFilter = 'All';
     STATE.bdPlatformFilter = 'All'; STATE.bdGmeetFilter = 'All';
+    buildBDFilters();
     renderBDPerformance();
   };
+  // The pie chart's click-filter has no dropdown of its own, so show it (and a way to clear it) beside Reset.
+  const chip = $('#bdperf-gmeet-chip');
+  if(chip){
+    chip.innerHTML = STATE.bdGmeetFilter !== 'All'
+      ? `<button class="secondary" id="bdperf-gmeet-chip-btn" title="Set by clicking the GMeet Joined? pie chart — click to clear">GMeet: ${escHtml(STATE.bdGmeetFilter)} &times;</button>`
+      : '';
+    const chipBtn = $('#bdperf-gmeet-chip-btn');
+    if(chipBtn) chipBtn.onclick = () => { STATE.bdGmeetFilter = 'All'; renderBDPerformance(); };
+  }
 
   renderBDCallFlow();
   renderBDCallFlowTable();
@@ -694,6 +722,7 @@ function renderBDPerformance(){
   renderBDGmeetChart();
   renderBDStageChart();
   renderBDGmeetCorrelation();
+  renderBDGmeetConversion();
   renderBDCallsToConversion();
 
   const toggleWrap = $('#bdperf-status-source-toggle');
@@ -781,6 +810,42 @@ function renderBDGmeetCorrelation(){
     _tot: !!r._tot,
   }));
   renderTable('#tbl-bdperf-gmeet', headers, rows);
+}
+
+// GMeet Joined? vs Converted — same scope as the In Process table above. Matched /
+// Not Matched say how many of those leads were found in B2C by email, since only
+// a matched lead has a CRM status to read.
+function renderBDGmeetConversion(){
+  const host = $('#tbl-bdperf-gmeet-conv');
+  if(!host) return;
+  const data = bdGmeetConversion();
+  const headers = ['GMeet Joined', 'Total', 'Matched', 'Not Matched', 'Converted', 'Converted Rate', 'Rate of Matched'];
+  renderTable(host, headers, data.map(r => ({
+    'GMeet Joined': r['GMeet Joined'],
+    Total: fmtIN(r.Total),
+    Matched: fmtIN(r.Matched),
+    'Not Matched': fmtIN(r['Not Matched']),
+    Converted: fmtIN(r.Converted),
+    'Converted Rate': fmtPct(r['Converted Rate']),
+    'Rate of Matched': fmtPct(r['Rate of Matched']),
+    _tot: r._tot,
+  })));
+
+  const gt = data[data.length - 1];
+  const note = $('#bdperf-gmeet-conv-note');
+  if(note){
+    note.textContent = gt.Total
+      ? `Of ${fmtIN(gt.Total)} leads in this selection, ${fmtIN(gt.Matched)} (${fmtPct(gt.Matched / gt.Total)}) were found in the B2C file by email and `
+        + `${fmtIN(gt['Not Matched'])} (${fmtPct(gt['Not Matched'] / gt.Total)}) were not. ${fmtIN(gt.Converted)} of the matched leads are converted. `
+        + 'A lead that was not found has no CRM status to read, so it counts as not converted.'
+      : 'No leads in this selection.';
+  }
+  const dl = $('#bdperf-gmeet-conv-dl');
+  if(dl) dl.onclick = e => {
+    e.preventDefault();
+    downloadRowsAsXlsx(['BD Rep','Email','Client Name','Date Assigned','GMeet Joined','Found in B2C','B2C Lead Status','B2C Converted Month','B2C Converted Date','Converted','Team','RM'],
+      bdGmeetConversionLeads(), 'GMeet vs Converted', 'BD_GMeet_vs_Converted_Leads.xlsx');
+  };
 }
 
 function renderBDCallsToConversion(){
