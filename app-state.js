@@ -38,6 +38,7 @@ const STATE = {
   bdGmeetFilter: 'All',
   bdPlatformFilter: 'All',
   bdStatusSource: 'workpoint',
+  bd2: { month: 'All', team: 'All', rm: 'All', person: 'All', platform: 'All', sub: 'callflow', rmAll: false },
   mtdStart: 1,
   mtdEnd: 11,
   mtdFilterRefCold: 'Include',

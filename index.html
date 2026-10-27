@@ -255,6 +255,9 @@ tr.heat-vlow td{background:rgba(239,68,68,.16) !important}
 .ms-opt{display:flex;align-items:center;gap:8px;padding:7px 12px;cursor:pointer;font-size:13px;
   transition:background .1s}
 .ms-opt:hover{background:#f1f5f9}
+#bd2-rm-filter-wrap .ms-dropdown{min-width:290px;max-height:340px}
+#bd2-rm-filter-wrap .ms-opt{white-space:nowrap}
+.ms-dropdown .ms-search{position:sticky;top:0;z-index:1;display:block;width:calc(100% - 16px);height:30px;margin:2px 8px 6px;padding:0 8px;font-size:12px;box-sizing:border-box;background:#fff}
 .ms-opt input[type=checkbox]{width:14px;height:14px;accent-color:var(--accent);cursor:pointer;flex-shrink:0}
 .ms-opt.ms-all{font-weight:600;border-bottom:1px solid var(--line);padding-bottom:8px;margin-bottom:2px}
 .ms-opt.ms-selected{background:#eff6ff}
@@ -360,7 +363,7 @@ table.data tbody tr:hover{background:var(--orange-tint)}
 /* Categorized Leads: summary shows every category + Total unclipped; the detail list is a fixed-row-height window over the full lead list */
 .cat-scope{margin-top:8px;padding:7px 12px;border-left:4px solid var(--orange);background:var(--orange-tint);font-size:13px;font-weight:600}
 .cat-scope:empty{display:none}
-#tbl-categorized-summary{max-height:none}
+#tbl-categorized-summary,#tbl-bd2-rep,#tbl-bd2-team,#tbl-bd2-mapping,#tbl-bd2-rmflow{max-height:none}
 #tbl-categorized-detail{max-height:75vh;overflow-anchor:none}
 table.data.cat-window{table-layout:fixed;border-collapse:separate;border-spacing:0}
 table.data.cat-window th,table.data.cat-window td{text-align:left;overflow:hidden;text-overflow:ellipsis}
@@ -512,6 +515,30 @@ table.data.editable td input:focus{outline:2px solid var(--orange);background:va
   content:'';position:absolute;top:-14px;left:50%;width:2px;height:14px;
   background:var(--border-strong);transform:translateX(-50%);
 }
+/* BD Performance 2: connector from the Joined card down into the Workpoint-status row. */
+.cf-branch{position:relative;width:100%;height:28px}
+.cf-branch::before{
+  content:'';position:absolute;top:0;left:12.5%;width:2px;height:14px;
+  background:var(--border-strong);transform:translateX(-50%);
+}
+.cf-branch::after{
+  content:'';position:absolute;top:13px;left:12.5%;right:12.5%;height:2px;
+  background:var(--border-strong);
+}
+.cf-caption{width:100%;margin-top:12px;font-size:12px;color:var(--muted);text-align:center}
+/* Team-wise flow cards (BD Performance 2) */
+.tf-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(330px,1fr));gap:16px}
+.tf-card{background:#fff;border:2px solid var(--line);border-top:4px solid var(--violet);padding:12px 14px}
+.tf-team{font-size:11px;color:var(--muted);margin:-4px 0 8px}
+.tf-title{font-size:13px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px}
+.tf-row{display:grid;grid-template-columns:128px 1fr 54px;align-items:center;gap:8px;margin:5px 0;font-size:12px}
+.tf-row.tf-sub{padding-left:10px}
+.tf-bar{height:12px;background:var(--panel2)}
+.tf-fill{display:block;height:100%}
+.tf-fill.tf-violet{background:var(--violet)} .tf-fill.tf-green{background:var(--green)}
+.tf-fill.tf-amber{background:var(--amber)} .tf-fill.tf-muted{background:var(--border-strong)}
+.tf-num{text-align:right}
+.tf-meta{font-size:11px;color:var(--muted);margin:2px 0 6px}
 .cf-note{
   margin-top:14px;padding:10px 12px;
   background:var(--panel2);border-left:4px solid var(--amber);
@@ -1451,6 +1478,105 @@ table.data.editable td input:focus{outline:2px solid var(--orange);background:va
     </div>
   </div>
 
+  <!-- ===== BD PERFORMANCE 2 ===== -->
+  <div class="tab-panel" id="tab-bdperf2">
+    <div class="section bar-violet">
+      <h2>BD Performance 2 — Calls to Conversion
+        <button class="info-btn" data-info="bd2" title="Tab info">i</button>
+        <span style="float:right;font-weight:400;text-transform:none;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+          <label style="font-size:11px;color:var(--muted)">Month</label>
+          <div id="bd2-month-filter-wrap" style="display:inline-block;vertical-align:middle"></div>
+          <label style="font-size:11px;color:var(--muted);margin-left:6px">Team</label>
+          <div id="bd2-team-filter-wrap" style="display:inline-block;vertical-align:middle"></div>
+          <label style="font-size:11px;color:var(--muted);margin-left:6px">RM</label>
+          <div id="bd2-rm-filter-wrap" style="display:inline-block;vertical-align:middle"></div>
+          <label style="font-size:11px;color:var(--muted);margin-left:6px">Person</label>
+          <div id="bd2-person-filter-wrap" style="display:inline-block;vertical-align:middle"></div>
+          <label style="font-size:11px;color:var(--muted);margin-left:6px">Platform</label>
+          <div id="bd2-platform-filter-wrap" style="display:inline-block;vertical-align:middle"></div>
+          <button class="secondary" id="bd2-reset-filters" style="margin-left:6px">Reset filters</button>
+          <button class="secondary" id="bd2-xlsx-dl" title="The RM-wise flow for the current filters, the meetings behind it and the selection, as an Excel file">&darr; Excel</button>
+        </span>
+      </h2>
+      <div class="meta">The BD funnel from calls to conversion. A meeting is a lead logged in the BD tracker, counted in the month it was <strong>Date Assigned</strong>. Each lead is matched to the Workpoint B2C file by <strong>email only</strong>; a lead whose email is not found is grouped as <strong>Unmatched</strong>. In Process / Converted come from B2C. A lead's <strong>RM</strong>, and so its <strong>Team</strong>, is its first RM (or its current RM when the first RM is on the BD team). Pick an RM in the RM filter to see that RM's flow; <strong>↓ Excel</strong> downloads the RM-wise flow. Calls come from the BD Daily Log, which has no team, RM or platform, so they are shown as "—" while a Team, RM or Platform filter is set.</div>
+    </div>
+
+    <div class="dash-layout">
+      <nav class="dash-subnav" aria-label="BD Performance 2 subsections">
+        <button class="dash-subtab active" data-bd2subtab="callflow">Call Flow</button>
+        <button class="dash-subtab" data-bd2subtab="team">Team-BD Performance</button>
+        <button class="dash-subtab" data-bd2subtab="rm">RM BD Performance</button>
+      </nav>
+
+      <div class="dash-content">
+        <div class="dash-subpanel active" id="bd2sub-callflow">
+          <div class="section bar-blue">
+            <h2>Call Flow — Calls to Conversion
+              <button class="info-btn" data-info="bd2-flow" title="Flow info">i</button>
+              <a href="#" id="bd2-flow-dl" style="float:right;font-weight:400;text-transform:none;font-size:12px">Download the meeting list</a>
+            </h2>
+            <div id="bd2-flow-note" class="filter-note"></div>
+            <div id="bd2-call-flow"></div>
+          </div>
+
+          <div class="section bar-green">
+            <h2>BD Employee-wise Flow
+              <button class="info-btn" data-info="bd2-rep" title="Table info">i</button>
+            </h2>
+            <div class="table-wrap" id="tbl-bd2-rep"></div>
+            <div class="hint">The flow above, one row per BD rep. <strong>Meetings Joined</strong> = GMeet Joined? is Yes. <strong>In Process</strong>, <strong>Converted</strong>, <strong>Other States</strong> and <strong>Unmatched</strong> split the joined meetings by where the client stands in Workpoint, so they add up to Meetings Joined. <strong>Joined %</strong> = Meetings Joined ÷ Meetings Scheduled; <strong>In Process %</strong> and <strong>Converted %</strong> are of Meetings Joined. Click any column header to sort.</div>
+          </div>
+        </div>
+
+        <div class="dash-subpanel" id="bd2sub-team">
+          <div class="section bar-violet">
+            <h2>Team-wise Flow
+              <button class="info-btn" data-info="bd2-team" title="Flow info">i</button>
+            </h2>
+            <div class="hint" style="margin:0 0 12px">One flow per team, from meetings scheduled to where the joined clients stand in Workpoint. Bars are scaled to each team's own meetings. Calls are not split by team in the BD Daily Log, so they are not part of this view. A lead's team is the team of its <strong>first RM</strong>; the exception is a lead first handled by someone on the <strong>BD team</strong> (Himani, Suhani, Kajal, Kunal, Srishti), which takes the team of its <strong>current RM</strong>. Leads not found in B2C are <strong>Unmatched</strong>.</div>
+            <div id="bd2-team-basis" class="filter-note"></div>
+            <div id="bd2-team-flows" class="tf-grid"></div>
+          </div>
+
+          <div class="section bar-cyan">
+            <h2>Team Flow — Table</h2>
+            <div class="table-wrap" id="tbl-bd2-team"></div>
+            <div class="hint">Same flow as above in numbers, one row per team. Not Joined, Pending and Not Logged are the rest of the meetings that did not join. Click any column header to sort.</div>
+          </div>
+        </div>
+
+        <div class="dash-subpanel" id="bd2sub-rm">
+          <div class="section bar-green">
+            <h2>Google Sheet Clients — Mapped to Workpoint B2C
+              <button class="info-btn" data-info="bd2-mapping" title="Mapping info">i</button>
+            </h2>
+            <div id="bd2-mapping"></div>
+            <div class="table-wrap" id="tbl-bd2-mapping"></div>
+            <div id="bd2-mapping-note" class="hint"></div>
+            <div class="hint">A client is one distinct email in the BD tracker (the Google Sheet), so a client listed twice counts once here, while the flow counts every entry as a meeting — meetings exceed clients by the <strong>repeat entries</strong> shown on the first card. <strong>Mapped</strong> = that email was found in the Workpoint B2C file; <strong>Unmapped</strong> = it was not — a typo, a blank email, a lead not in the CRM, or one created before the period the uploaded B2C file covers. Unmapped clients have no RM or team to show, so they are grouped as <strong>Unmatched</strong> everywhere on this tab. The figures follow the filters above; the line under the cards is always the whole sheet.</div>
+          </div>
+
+          <div class="section bar-violet">
+            <h2>RM-wise Flow
+              <button class="info-btn" data-info="bd2-rm" title="Flow info">i</button>
+              <a href="#" id="bd2-rm-xlsx-dl" style="float:right;font-weight:400;text-transform:none;font-size:12px">&darr; Download Excel</a>
+            </h2>
+            <div class="hint" style="margin:0 0 12px">One flow per RM, from meetings scheduled to where the joined clients stand in Workpoint, busiest RMs first. An RM is the lead's <strong>first RM</strong>; the exception is a lead first handled by someone on the <strong>BD team</strong> (Himani, Suhani, Kajal, Kunal, Srishti), which is shown under its <strong>current RM</strong>. Leads not found in B2C are <strong>Unmatched</strong>. Use the RM filter above to see just one RM. Calls are not split by RM in the BD Daily Log, so they are not part of this view.</div>
+            <div id="bd2-rm-basis" class="filter-note"></div>
+            <div id="bd2-rm-flows" class="tf-grid"></div>
+            <div id="bd2-rm-more" style="text-align:center;margin-top:14px"></div>
+          </div>
+
+          <div class="section bar-cyan">
+            <h2>RM Flow — Table</h2>
+            <div class="table-wrap" id="tbl-bd2-rmflow"></div>
+            <div class="hint">Every RM in the current selection, in numbers. <strong>Support Wealth Manager</strong> is the generic pool most BD-desk leads end up in, not a person. Click any column header to sort; <strong>Download Excel</strong> gives this table, the meetings behind it and the selection with a tie-out.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- ===== CATEGORIZED LEADS ===== -->
   <div class="tab-panel" id="tab-categorized">
     <div class="section bar-pink">
@@ -1691,7 +1817,7 @@ table.data.editable td input:focus{outline:2px solid var(--orange);background:va
   (function(){
     var t = Date.now();
     var parent = document.currentScript.parentNode;
-    ['data.js','snapshot.js','categorized_leads_data.js','app-config.js','app-dateutils.js','app-state.js','app-dataload.js','app-filters.js','app-aggregators.js','app-rmperf.js','app-categorized.js','app-tables.js','app-renderers.js','app-ui.js','app-health.js','app-bootstrap.js'].forEach(function(src){
+    ['data.js','snapshot.js','categorized_leads_data.js','app-config.js','app-dateutils.js','app-state.js','app-dataload.js','app-filters.js','app-aggregators.js','app-rmperf.js','app-bd2.js','app-categorized.js','app-tables.js','app-renderers.js','app-ui.js','app-health.js','app-bootstrap.js'].forEach(function(src){
       var s = document.createElement('script');
       s.src = src + '?t=' + t;
       s.async = false;

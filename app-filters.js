@@ -68,6 +68,7 @@ document.addEventListener('click', () => $$('.ms-wrap.open').forEach(w => w.clas
 
 // Build a custom multi-select (or single-select) dropdown widget
 // opts.multi=false → radio-style (only one selected at a time)
+// opts.search=true → a type-to-filter box at the top of the list, for long lists
 function buildMultiSelect(containerId, options, currentVal, onChange, opts={}){
   const container = $(containerId);
   if(!container) return;
@@ -107,6 +108,22 @@ function buildMultiSelect(containerId, options, currentVal, onChange, opts={}){
   const dropdown = document.createElement('div');
   dropdown.className = 'ms-dropdown';
 
+  let searchBox = null;
+  if(opts.search){
+    searchBox = document.createElement('input');
+    searchBox.type = 'text';
+    searchBox.className = 'ms-search';
+    searchBox.placeholder = 'Search…';
+    searchBox.onclick = e => e.stopPropagation();
+    searchBox.oninput = () => {
+      const q = searchBox.value.trim().toLowerCase();
+      dropdown.querySelectorAll('.ms-opt:not(.ms-all)').forEach(it => {
+        it.style.display = !q || it.textContent.toLowerCase().includes(q) ? '' : 'none';
+      });
+    };
+    dropdown.appendChild(searchBox);
+  }
+
   const allOpts = options[0] === 'All' ? options : ['All', ...options];
   allOpts.forEach(opt => {
     const item = document.createElement('label');
@@ -123,7 +140,7 @@ function buildMultiSelect(containerId, options, currentVal, onChange, opts={}){
         // radio behaviour — clear all, select only this
         selected.clear();
         selected.add(opt);
-        dropdown.querySelectorAll('input').forEach(c => {
+        dropdown.querySelectorAll('.ms-opt input').forEach(c => {
           c.checked = c.value === opt;
           c.closest('.ms-opt').classList.toggle('ms-selected', c.checked);
         });
@@ -131,7 +148,7 @@ function buildMultiSelect(containerId, options, currentVal, onChange, opts={}){
       } else if(opt === 'All'){
         selected.clear();
         selected.add('All');
-        dropdown.querySelectorAll('input').forEach(c => {
+        dropdown.querySelectorAll('.ms-opt input').forEach(c => {
           c.checked = c.value === 'All';
           c.closest('.ms-opt').classList.toggle('ms-selected', c.value === 'All');
         });
@@ -159,6 +176,7 @@ function buildMultiSelect(containerId, options, currentVal, onChange, opts={}){
     e.stopPropagation();
     $$('.ms-wrap.open').forEach(w => { if(w !== wrap) w.classList.remove('open'); });
     wrap.classList.toggle('open');
+    if(searchBox && wrap.classList.contains('open')){ searchBox.value = ''; searchBox.oninput(); searchBox.focus(); }
   };
 
   wrap.appendChild(btn);
@@ -262,6 +280,7 @@ function tabBar(){
     {id:'rmperf',    label:'RM Performance',   primary:true},
     {id:'rmrev',     label:'RM Revenue',       primary:true},
     {id:'bdperf',    label:'BD Performance',   primary:true},
+    {id:'bdperf2',   label:'BD Performance 2', primary:true},
     {id:'categorized', label:'Categorized Leads', primary:true},
     {id:'cpc',       label:'Cost Per Campaign'},
     {id:'processed', label:'PROCESSED'},
@@ -289,6 +308,7 @@ function activateTab(id){
   if(id==='rmrev') drawRevChart();
   if(id==='rmperf') renderRMPerformance();
   if(id==='bdperf') renderBDPerformance();
+  if(id==='bdperf2') renderBD2();
   if(id==='categorized') renderCategorizedLeads();
   requestAnimationFrame(() => {
     const panel = $('#tab-'+id);
