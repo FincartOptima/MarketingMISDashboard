@@ -1,4 +1,4 @@
-// app-bd2.js — BD Performance 2 tab: calls -> meetings -> joined -> Workpoint status,
+// app-bd2.js — BD Performance tab: calls -> meetings -> joined -> Workpoint status,
 // by BD rep (Call Flow sub-tab) and by team (Team-BD Performance sub-tab).
 // Part of the app.js split (classic script, shares global scope with the other app-*.js files).
 //
@@ -12,7 +12,8 @@
 // In Process when its status is IN PROCESS, otherwise Other. The BD Daily Log has
 // no team, RM or platform, so call counts follow Month + Person only and are shown
 // as "—" while a Team, RM or Platform filter is set. The RM BD Performance sub-tab
-// also reports how many Google Sheet clients were mapped to B2C by email.
+// also reports how many Google Sheet clients were mapped to B2C by email. The bd2 prefix on
+// the names below dates from when this ran beside the original BD tab, which it replaced.
 
 const BD2_UNMATCHED = 'Unmatched';
 const BD2_NO_PLATFORM = 'No platform';
@@ -24,8 +25,9 @@ const BD2_BASIS_CURRENT = 'Current RM (first RM is on the BD team)';
 const bd2Month = r => toMmmYyyy(r.dateAssigned);
 
 // Resolves each tracker row's first RM, current RM, team and the basis used, once
-// per load. firstRmTeam() is the dashboard-wide first-RM rule (EMPLOYEE_REF, then
-// the RM Master alias, else SV); effectiveTeam is the current RM's team.
+// per load, and again when EMPLOYEE_REF or the RM Master change. firstRmTeam() is the
+// dashboard-wide first-RM rule (EMPLOYEE_REF, then the RM Master alias, else SV); the B2C
+// row's Team is the current RM's team.
 let _bd2Prepared = null;
 let _bd2RmNames = null;
 
@@ -60,15 +62,19 @@ function bd2Prepare(){
     const onDesk = firstTeam === BD2_DESK_TEAM;
     r.bd2 = {
       firstRm: b.firstRmName || '', currentRm: b.currentRmName || '', firstTeam,
-      team: onDesk ? (r.effectiveTeam || 'SV') : firstTeam,
+      team: onDesk ? (b.Team || 'SV') : firstTeam,
       rm: bd2RmLabel(onDesk ? b.currentRmName : b.firstRmName),
       basis: onDesk ? BD2_BASIS_CURRENT : BD2_BASIS_FIRST,
       firstRmKnown: !!teamForRmName(b.firstRmName),
     };
   }
-  _bd2Prepared = STATE.bd;
+  _bd2Prepared = [STATE.bd, STATE.teamMap, STATE.rmMasterLookup];
 }
-const bd2Info = r => { if(_bd2Prepared !== STATE.bd) bd2Prepare(); return r.bd2; };
+const bd2Info = r => {
+  const p = _bd2Prepared;
+  if(!p || p[0] !== STATE.bd || p[1] !== STATE.teamMap || p[2] !== STATE.rmMasterLookup) bd2Prepare();
+  return r.bd2;
+};
 const bd2Team = r => bd2Info(r).team;
 const bd2Rm = r => bd2Info(r).rm;
 const bd2Platform = r => r.crmMatched ? (r.effectivePlatform || BD2_NO_PLATFORM) : BD2_UNMATCHED;
@@ -221,7 +227,7 @@ function bd2MeetingLines(){
       'First RM': bd2Info(r).firstRm,
       'First RM Team': bd2Info(r).firstTeam,
       'Current RM': bd2Info(r).currentRm,
-      'Current RM Team': r.crmMatched ? (r.effectiveTeam || 'SV') : '',
+      'Current RM Team': b ? (b.Team || 'SV') : '',
       'Team Basis': bd2Info(r).basis,
       Team: bd2Team(r),
       RM: bd2Rm(r),
@@ -292,8 +298,8 @@ function buildBD2RmFilter(){
 
 function activateBd2Subtab(id){
   STATE.bd2.sub = id;
-  $$('#tab-bdperf2 .dash-subtab').forEach(b => b.classList.toggle('active', b.dataset.bd2subtab === id));
-  $$('#tab-bdperf2 .dash-subpanel').forEach(p => p.classList.toggle('active', p.id === 'bd2sub-' + id));
+  $$('#tab-bdperf .dash-subtab').forEach(b => b.classList.toggle('active', b.dataset.bd2subtab === id));
+  $$('#tab-bdperf .dash-subpanel').forEach(p => p.classList.toggle('active', p.id === 'bd2sub-' + id));
   requestAnimationFrame(() => {
     const panel = $('#bd2sub-' + id);
     if(panel) panel.querySelectorAll('.table-wrap').forEach(attachMirrorScroll);
@@ -539,7 +545,7 @@ function downloadBd2Workbook(){
   const f = STATE.bd2, sum = rows.reduce((a, r) => a + r.meetings, 0);
   const map = bd2Mapping(bd2Meetings()), mapAll = bd2Mapping(STATE.bd);
   const wsSel = XLSX.utils.aoa_to_sheet([
-    ['BD Performance 2 — RM-wise flow'], [],
+    ['BD Performance — RM-wise flow'], [],
     ['Month', bd2SelectionText(f.month)], ['Team', bd2SelectionText(f.team)], ['RM', bd2SelectionText(f.rm)],
     ['BD rep (Person)', bd2SelectionText(f.person)], ['Platform', bd2SelectionText(f.platform)], [],
     ['Meetings in this selection', total.meetings], ['RMs listed', rows.length], ['Sum of the RM rows', sum],
@@ -564,6 +570,7 @@ function renderBD2(){
     _bd2FiltersBuilt = false;
     ['#bd2-call-flow', '#tbl-bd2-rep', '#bd2-team-flows', '#tbl-bd2-team', '#bd2-mapping', '#tbl-bd2-mapping', '#bd2-rm-flows', '#tbl-bd2-rmflow']
       .forEach(sel => setNotUploaded(sel, 'bd'));
+    renderBD2Health();
     return;
   }
   if(!_bd2FiltersBuilt) buildBD2Filters();
@@ -573,7 +580,7 @@ function renderBD2(){
     buildBD2Filters();
     renderBD2();
   };
-  $$('#tab-bdperf2 .dash-subtab').forEach(b => { b.onclick = () => activateBd2Subtab(b.dataset.bd2subtab); });
+  $$('#tab-bdperf .dash-subtab').forEach(b => { b.onclick = () => activateBd2Subtab(b.dataset.bd2subtab); });
   const xl = $('#bd2-xlsx-dl');
   if(xl) xl.onclick = downloadBd2Workbook;
   const rmXl = $('#bd2-rm-xlsx-dl');
@@ -591,5 +598,6 @@ function renderBD2(){
   renderBD2Mapping();
   renderBD2RmFlows();
   renderBD2RmTable();
-  requestAnimationFrame(() => $$('#tab-bdperf2 .dash-subpanel.active .table-wrap').forEach(attachMirrorScroll));
+  renderBD2Health();
+  requestAnimationFrame(() => $$('#tab-bdperf .dash-subpanel.active .table-wrap').forEach(attachMirrorScroll));
 }

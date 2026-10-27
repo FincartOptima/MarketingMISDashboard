@@ -284,7 +284,7 @@ def load_bd_tracker_rows(file_like):
                 if key in variants:
                     col_for_idx[i] = canon
                     break
-        for row in all_rows[1:]:
+        for row_no, row in enumerate(all_rows[1:], start=2):
             obj = {}
             any_val = False
             for i, canon in col_for_idx.items():
@@ -303,6 +303,7 @@ def load_bd_tracker_rows(file_like):
             obj['person'] = person
             obj['quarter'] = 'Q' + quarter_num
             obj['sourceSheet'] = sheet_name
+            obj['sourceRow'] = row_no   # row number in that tab (header = 1), for the dashboard's data-health warnings
             out.append(obj)
     wb.close()
     return out

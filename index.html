@@ -139,6 +139,13 @@ header.app .spacer{flex:1}
 .tab.active{color:var(--orange);border-bottom-color:var(--orange);background:var(--orange-tint)}
 .tab.primary{color:#1e40af}
 .tab.primary.active{color:var(--blue);border-bottom-color:var(--blue);background:#eff6ff}
+.tab-more{display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.tab-more-caret{font-size:10px}
+.tab-menu{display:none;position:fixed;z-index:1000;min-width:210px;max-height:70vh;overflow-y:auto;background:#fff;border:1px solid var(--line);border-top:2px solid var(--orange);box-shadow:0 8px 20px rgba(15,23,42,.15)}
+.tab-menu.open{display:block}
+.tab-menu-item{display:block;width:100%;text-align:left;background:transparent;border:0;padding:10px 18px;font:600 13px/1.2 inherit;color:var(--text);cursor:pointer;white-space:nowrap}
+.tab-menu-item:hover,.tab-menu-item:focus{background:var(--orange-tint);color:var(--orange);outline:none}
+.tab-menu-item.active{color:var(--orange);background:var(--orange-tint)}
 
 /* ============ PANELS ============ */
 .tab-panel{display:none;padding:20px;max-width:1600px;margin:0 auto}
@@ -202,6 +209,17 @@ header.app .spacer{flex:1}
 .health-title{font-weight:700;margin-bottom:2px}
 .health-detail{color:var(--text)}
 .health-fix{color:var(--muted);margin-top:2px}
+.bd2h-bar{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;padding:0 16px 8px;font-size:12px;color:var(--muted)}
+.bd2h-dl{display:inline-block;margin-top:4px;font-size:12px}
+.bd2h-checks{padding:2px 16px 12px}
+.bd2h-table{width:100%;border-collapse:collapse;background:#fff;font-size:12px}
+.bd2h-table th,.bd2h-table td{border:1px solid var(--line);padding:5px 8px;text-align:left;vertical-align:top}
+.bd2h-table th{font-weight:700;background:#f8fafc}
+.bd2h-pass{color:#15803d;font-weight:700}
+.bd2h-fail{color:#b91c1c;font-weight:700}
+.bd2h-na{color:var(--muted)}
+.tab-badge{display:inline-block;min-width:16px;margin-left:6px;padding:0 5px;border-radius:2px;font-size:10px;line-height:16px;font-weight:700;color:#fff;background:#d97706;text-align:center;vertical-align:middle}
+.tab-badge.err{background:#dc2626}
 .info-btn{
   display:inline-flex;align-items:center;justify-content:center;
   width:20px;height:20px;border-radius:0;border:1.5px solid var(--muted);
@@ -515,7 +533,7 @@ table.data.editable td input:focus{outline:2px solid var(--orange);background:va
   content:'';position:absolute;top:-14px;left:50%;width:2px;height:14px;
   background:var(--border-strong);transform:translateX(-50%);
 }
-/* BD Performance 2: connector from the Joined card down into the Workpoint-status row. */
+/* BD Performance: connector from the Joined card down into the Workpoint-status row. */
 .cf-branch{position:relative;width:100%;height:28px}
 .cf-branch::before{
   content:'';position:absolute;top:0;left:12.5%;width:2px;height:14px;
@@ -526,7 +544,7 @@ table.data.editable td input:focus{outline:2px solid var(--orange);background:va
   background:var(--border-strong);
 }
 .cf-caption{width:100%;margin-top:12px;font-size:12px;color:var(--muted);text-align:center}
-/* Team-wise flow cards (BD Performance 2) */
+/* Team-wise flow cards (BD Performance) */
 .tf-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(330px,1fr));gap:16px}
 .tf-card{background:#fff;border:2px solid var(--line);border-top:4px solid var(--violet);padding:12px 14px}
 .tf-team{font-size:11px;color:var(--muted);margin:-4px 0 8px}
@@ -1360,128 +1378,7 @@ table.data.editable td input:focus{outline:2px solid var(--orange);background:va
   <!-- ===== BD PERFORMANCE ===== -->
   <div class="tab-panel" id="tab-bdperf">
     <div class="section bar-violet">
-      <h2>BD Performance — Accountability Tracker
-        <button class="info-btn" data-info="bdperf" title="Table info">i</button>
-        <span style="float:right;font-weight:400;text-transform:none;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-          <label style="font-size:11px;color:var(--muted)">Month</label>
-          <div id="bdperf-month-filter-wrap" style="display:inline-block;vertical-align:middle"></div>
-          <label style="font-size:11px;color:var(--muted);margin-left:6px">Team</label>
-          <div id="bdperf-team-filter-wrap" style="display:inline-block;vertical-align:middle"></div>
-          <label style="font-size:11px;color:var(--muted);margin-left:6px">Person</label>
-          <div id="bdperf-person-filter-wrap" style="display:inline-block;vertical-align:middle"></div>
-          <label style="font-size:11px;color:var(--muted);margin-left:6px">Platform</label>
-          <div id="bdperf-platform-filter-wrap" style="display:inline-block;vertical-align:middle"></div>
-          <span id="bdperf-gmeet-chip"></span>
-          <button class="secondary" id="bdperf-reset-filters" style="margin-left:6px">Reset filters</button>
-        </span>
-      </h2>
-      <div class="meta">This tab reads two sheets from the same BD Accountability Tracker upload. The <strong>Call Flow</strong> subsection comes from the <strong>BD Daily Log</strong> sheet (per rep, per day) plus the tracker's own GMeet Joined? column. The <strong>Lead-Level Detail</strong> subsection comes from the "&lt;Person&gt; Q&lt;N&gt;" sheets, matched to B2C by email for Stage/RM/Team/Platform. Month + Person apply to everything. Team + Platform apply to every lead-based figure (meetings and their outcomes, and all of Lead-Level Detail) but not to call counts, since the Daily Log has no per-lead link to derive them from. Month means Date Assigned on Call Flow and the lead's B2C Created Month on Lead-Level Detail.</div>
-    </div>
-
-    <div class="dash-layout">
-      <nav class="dash-subnav" aria-label="BD Performance subsections">
-        <button class="dash-subtab active" data-bdsubtab="callflow">Call Flow</button>
-        <button class="dash-subtab" data-bdsubtab="leadlevel">Lead-Level Detail — Tracker Sheets</button>
-      </nav>
-
-      <div class="dash-content">
-
-        <!-- ===== 1. THE FUNNEL: calls -> connected -> meetings -> joined ===== -->
-        <div class="dash-subpanel active" id="bdsub-callflow">
-          <div class="section bar-blue">
-            <h2>Call Flow — Calls to Meetings Joined
-              <button class="info-btn" data-info="bdcallflow" title="Flow info">i</button>
-            </h2>
-            <div id="bd-callflow-scope-note" class="filter-note"></div>
-            <div id="bd-call-flow"></div>
-          </div>
-
-          <div class="section bar-blue">
-            <h2>Call Flow — Stage by Stage</h2>
-            <div class="table-wrap" id="tbl-bd-call-flow"></div>
-          </div>
-
-          <div class="section bar-red">
-            <h2>Why "Meetings Scheduled" Doesn't Always Match the Lead-Level Detail Total <span id="bd-month-mismatch-count" style="font-weight:400;text-transform:none;font-size:12px;color:var(--muted)"></span>
-              <button class="info-btn" data-info="bd-month-mismatch" title="Table info">i</button>
-            </h2>
-            <div class="hint">"Meetings Scheduled" above counts a lead by the tracker's own <strong>Date Assigned</strong>. The Lead-Level Detail sub-tab counts the same lead by its <strong>B2C Created Month</strong> instead — usually the same month, but not always. Every client below is a named, exact case where the two disagree for whichever month(s) are currently selected: this is the complete list behind the gap, not an estimate.</div>
-            <div class="table-wrap" id="tbl-bd-month-mismatch"></div>
-          </div>
-
-          <div class="section bar-green">
-            <h2>Calls by Month — Made vs Connected vs CNP
-              <button class="info-btn" data-info="bdcalls" title="Chart info">i</button>
-            </h2>
-            <div id="bd-calls-chart-wrap" style="height:300px"><canvas id="bd-calls-chart"></canvas></div>
-            <div class="hint">Three bars side by side per month, counts printed above each. Honors the Month/Person filters above — Team/Platform don't apply to this sheet.</div>
-          </div>
-
-          <div class="section bar-green">
-            <h2>Call Activity by BD Rep</h2>
-            <div class="table-wrap" id="tbl-bdcalls"></div>
-            <div class="hint">Total Calls Made / Calls Connected / CNP as entered in the BD Daily Log sheet (not recomputed from each other) — a handful of rows in the source don't add up exactly; see the chart's info button for details. Connected % and CNP % are ÷ Total Calls Made. Meetings Scheduled is tracker-sourced, not from this sheet — see the Call Flow section above. Click any column header to sort.</div>
-          </div>
-        </div>
-
-        <!-- ===== 2. LEAD-LEVEL: what happened to the leads behind those meetings ===== -->
-        <div class="dash-subpanel" id="bdsub-leadlevel">
-          <div class="filter-note" style="margin-bottom:12px">On this sub-tab, Month is the lead's B2C Created Month (the tracker's Date Assigned for leads not found in B2C). Call Flow dates leads by Date Assigned instead.</div>
-          <div class="grid cols-2">
-            <div class="section bar-green">
-              <h2>GMeet Joined? <span id="bd-gmeet-total" style="font-weight:400;text-transform:none;font-size:12px;color:var(--muted)"></span></h2>
-              <div style="height:260px"><canvas id="bd-gmeet-chart"></canvas></div>
-              <div class="hint">Click a slice to filter the Current Stage chart &amp; the Team / RM Breakdown table — click it again to clear.</div>
-            </div>
-            <div class="section bar-violet">
-              <h2>Current Stage <span id="bd-stage-source-label" style="font-weight:400;text-transform:none;font-size:12px;color:var(--muted)"></span></h2>
-              <div style="height:260px"><canvas id="bd-stage-chart"></canvas></div>
-              <div class="hint">Follows the Workpoint Status / BD Team Status toggle below.</div>
-            </div>
-          </div>
-
-          <div class="section bar-cyan">
-            <h2>GMeet Joined? vs In Process</h2>
-            <div class="table-wrap" id="tbl-bdperf-gmeet"></div>
-            <div class="hint">Data as per the BD Performance Tracker Google Sheet maintained by the BD Team (Current Stage column) — not the B2C-derived status. Always shows all three GMeet states side by side (ignores the pie chart's click-filter above) — honors Month/Team/Person/Platform. <strong>Not Logged</strong> is clients with no GMeet value entered, so the Grand Total matches the Team / RM Breakdown total.</div>
-          </div>
-
-          <div class="section bar-green">
-            <h2>GMeet Joined? vs Converted
-              <button class="info-btn" data-info="bd-gmeet-converted" title="Table info">i</button>
-              <a href="#" id="bdperf-gmeet-conv-dl" style="float:right;font-weight:400;text-transform:none;font-size:12px">Download the lead list</a>
-            </h2>
-            <div class="table-wrap" id="tbl-bdperf-gmeet-conv"></div>
-            <div class="hint" id="bdperf-gmeet-conv-note"></div>
-            <div class="hint"><strong>Converted</strong> is read from the Workpoint B2C file: each lead's email is matched to B2C <code>userId</code>, and a matched lead counts as converted when it has a Converted Month. <strong>Matched</strong> / <strong>Not Matched</strong> is how many leads were found in B2C by email — a lead that was not found (typo'd email, not in the CRM, or created before the B2C file's period) has no status to read and counts as not converted. <strong>Converted Rate</strong> = Converted ÷ Total; <strong>Rate of Matched</strong> = Converted ÷ Matched. Honors Month/Team/Person/Platform and ignores the pie chart's click-filter, like the In Process table.</div>
-          </div>
-
-          <div class="section bar-cyan">
-            <h2>Calls Made vs Conversion — by BD Rep
-              <button class="info-btn" data-info="bd-calls-conversion" title="Table info">i</button>
-            </h2>
-            <div class="table-wrap" id="tbl-bd-calls-conversion"></div>
-            <div class="hint"><strong>Calls Made</strong> is from the BD Daily Log and only honors Month + Person (no Team/Platform link, same as the Call Flow tab). <strong>Total Leads</strong>, <strong>GMeet Joined</strong>, and <strong>Converted</strong> are from the tracker sheets and honor the full Month/Team/Person/Platform scope — Converted uses the same CM-presence rule as the rest of the dashboard, not the tracker's own Current Stage column (which has no "Converted" value of its own). <strong>Conversion Rate</strong> = Converted ÷ Total Leads, the same definition used everywhere else on this page — not ÷ Calls Made, which would make it a call-attempt rate rather than a lead conversion rate.</div>
-          </div>
-
-          <div class="section bar-orange">
-            <h2>Team / RM Breakdown
-              <span id="bdperf-status-source-toggle"></span>
-            </h2>
-            <div id="legend-bdperf"></div>
-            <div class="table-wrap" id="tbl-bdperf"></div>
-            <div class="hint">Data is synced live from the BD Accountability Tracker Google Sheet (see the info button above) — no manual file upload needed. <strong>Not Logged</strong> is a lead whose Stage under the current toggle has no value yet: under <strong>Workpoint Status</strong> that means it has no B2C match at all; under <strong>BD Team Status</strong> it means the BD rep hasn't filled in Current Stage for it. It still counts in Total.</div>
-          </div>
-        </div>
-
-      </div>
-    </div>
-  </div>
-
-  <!-- ===== BD PERFORMANCE 2 ===== -->
-  <div class="tab-panel" id="tab-bdperf2">
-    <div class="section bar-violet">
-      <h2>BD Performance 2 — Calls to Conversion
+      <h2>BD Performance — Calls to Conversion
         <button class="info-btn" data-info="bd2" title="Tab info">i</button>
         <span style="float:right;font-weight:400;text-transform:none;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
           <label style="font-size:11px;color:var(--muted)">Month</label>
@@ -1498,11 +1395,13 @@ table.data.editable td input:focus{outline:2px solid var(--orange);background:va
           <button class="secondary" id="bd2-xlsx-dl" title="The RM-wise flow for the current filters, the meetings behind it and the selection, as an Excel file">&darr; Excel</button>
         </span>
       </h2>
-      <div class="meta">The BD funnel from calls to conversion. A meeting is a lead logged in the BD tracker, counted in the month it was <strong>Date Assigned</strong>. Each lead is matched to the Workpoint B2C file by <strong>email only</strong>; a lead whose email is not found is grouped as <strong>Unmatched</strong>. In Process / Converted come from B2C. A lead's <strong>RM</strong>, and so its <strong>Team</strong>, is its first RM (or its current RM when the first RM is on the BD team). Pick an RM in the RM filter to see that RM's flow; <strong>↓ Excel</strong> downloads the RM-wise flow. Calls come from the BD Daily Log, which has no team, RM or platform, so they are shown as "—" while a Team, RM or Platform filter is set.</div>
+      <div class="meta">The BD funnel from calls to conversion. A meeting is a lead logged in the BD tracker, counted in the month it was <strong>Date Assigned</strong>. Each lead is matched to the Workpoint B2C file by <strong>email only</strong>; a lead whose email is not found is grouped as <strong>Unmatched</strong>. In Process / Converted come from B2C. A lead's <strong>RM</strong>, and so its <strong>Team</strong>, is its first RM (or its current RM when the first RM is on the BD team). Pick an RM in the RM filter to see that RM's flow; <strong>↓ Excel</strong> downloads the RM-wise flow. Calls come from the BD Daily Log, which has no team, RM or platform, so they are shown as "—" while a Team, RM or Platform filter is set. The panel under this heading checks the tracker, the Daily Log and the flow's arithmetic, and says how to fix anything it finds.</div>
     </div>
 
+    <div id="bd2-health"></div>
+
     <div class="dash-layout">
-      <nav class="dash-subnav" aria-label="BD Performance 2 subsections">
+      <nav class="dash-subnav" aria-label="BD Performance subsections">
         <button class="dash-subtab active" data-bd2subtab="callflow">Call Flow</button>
         <button class="dash-subtab" data-bd2subtab="team">Team-BD Performance</button>
         <button class="dash-subtab" data-bd2subtab="rm">RM BD Performance</button>
@@ -1817,7 +1716,7 @@ table.data.editable td input:focus{outline:2px solid var(--orange);background:va
   (function(){
     var t = Date.now();
     var parent = document.currentScript.parentNode;
-    ['data.js','snapshot.js','categorized_leads_data.js','app-config.js','app-dateutils.js','app-state.js','app-dataload.js','app-filters.js','app-aggregators.js','app-rmperf.js','app-bd2.js','app-categorized.js','app-tables.js','app-renderers.js','app-ui.js','app-health.js','app-bootstrap.js'].forEach(function(src){
+    ['data.js','snapshot.js','categorized_leads_data.js','app-config.js','app-dateutils.js','app-state.js','app-dataload.js','app-filters.js','app-aggregators.js','app-rmperf.js','app-bd2.js','app-bd2-health.js','app-categorized.js','app-tables.js','app-renderers.js','app-ui.js','app-health.js','app-bootstrap.js'].forEach(function(src){
       var s = document.createElement('script');
       s.src = src + '?t=' + t;
       s.async = false;

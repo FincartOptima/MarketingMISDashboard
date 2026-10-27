@@ -273,42 +273,107 @@ function initPremiumLock(){
   updatePremiumLockUI();
 }
 
+// Dashboard, MTD Performance, BD Performance and Categorized Leads stay in the bar; every other
+// tab (menu: true) opens from the "More" dropdown at the end of it.
 function tabBar(){
   const tabs = [
     {id:'dashboard', label:'Dashboard',        primary:true},
     {id:'mtd',       label:'MTD Performance',  primary:true},
-    {id:'rmperf',    label:'RM Performance',   primary:true},
-    {id:'rmrev',     label:'RM Revenue',       primary:true},
     {id:'bdperf',    label:'BD Performance',   primary:true},
-    {id:'bdperf2',   label:'BD Performance 2', primary:true},
     {id:'categorized', label:'Categorized Leads', primary:true},
-    {id:'cpc',       label:'Cost Per Campaign'},
-    {id:'processed', label:'PROCESSED'},
-    {id:'rawdata',   label:'RAW_DATA'},
-    {id:'b2braw',    label:'B2B RAW_DATA'},
-    {id:'employee',  label:'EMPLOYEE_REF'},
-    {id:'rmmaster',  label:'RM MASTER MAPPING'},
-    {id:'missing',   label:'MISSING_LEADS'},
+    {id:'rmperf',    label:'RM Performance',   menu:true},
+    {id:'rmrev',     label:'RM Revenue',       menu:true},
+    {id:'cpc',       label:'Cost Per Campaign', menu:true},
+    {id:'processed', label:'PROCESSED',        menu:true},
+    {id:'rawdata',   label:'RAW_DATA',         menu:true},
+    {id:'b2braw',    label:'B2B RAW_DATA',     menu:true},
+    {id:'employee',  label:'EMPLOYEE_REF',     menu:true},
+    {id:'rmmaster',  label:'RM MASTER MAPPING', menu:true},
+    {id:'missing',   label:'MISSING_LEADS',    menu:true},
   ];
   const bar = $('#tabs'); bar.innerHTML='';
-  tabs.forEach((t,i) => {
+  tabs.filter(t => !t.menu).forEach(t => {
     const b = document.createElement('button');
     b.className = 'tab' + (t.primary?' primary':'');
     b.dataset.tab = t.id; b.textContent = t.label;
     b.onclick = () => activateTab(t.id);
     bar.appendChild(b);
   });
+  buildTabMenu(bar, tabs.filter(t => t.menu));
   activateTab('dashboard');
+}
+
+// The "More" button and its menu. The menu hangs off <body> and is positioned from the button:
+// #tabs scrolls sideways, so a menu inside it would be clipped.
+let _tabMenuTabs = [];
+let _tabMenuBound = false;
+function buildTabMenu(bar, menuTabs){
+  _tabMenuTabs = menuTabs;
+  const btn = document.createElement('button');
+  btn.type = 'button'; btn.id = 'tab-more'; btn.className = 'tab tab-more';
+  btn.setAttribute('aria-haspopup', 'true'); btn.setAttribute('aria-expanded', 'false');
+  btn.innerHTML = '<span class="tab-more-label">More</span><span class="tab-more-caret">&#9662;</span>';
+  bar.appendChild(btn);
+
+  const stale = $('#tab-menu'); if(stale) stale.remove();
+  const menu = document.createElement('div');
+  menu.id = 'tab-menu'; menu.className = 'tab-menu'; menu.setAttribute('role', 'menu');
+  menuTabs.forEach(t => {
+    const item = document.createElement('button');
+    item.type = 'button'; item.className = 'tab-menu-item'; item.setAttribute('role', 'menuitem');
+    item.dataset.tab = t.id; item.textContent = t.label;
+    item.onclick = () => { closeTabMenu(); activateTab(t.id); };
+    menu.appendChild(item);
+  });
+  document.body.appendChild(menu);
+
+  btn.onclick = () => menu.classList.contains('open') ? closeTabMenu() : openTabMenu();
+  menu.onkeydown = e => {
+    const items = [...menu.querySelectorAll('.tab-menu-item')], at = items.indexOf(document.activeElement);
+    if(e.key === 'ArrowDown'){ e.preventDefault(); items[(at + 1) % items.length].focus(); }
+    else if(e.key === 'ArrowUp'){ e.preventDefault(); items[(at - 1 + items.length) % items.length].focus(); }
+  };
+  if(_tabMenuBound) return;
+  _tabMenuBound = true;
+  document.addEventListener('click', e => { if(!e.target.closest('#tab-menu, #tab-more')) closeTabMenu(); });
+  document.addEventListener('keydown', e => {
+    const open = $('#tab-menu') && $('#tab-menu').classList.contains('open');
+    if(e.key === 'Escape' && open){ closeTabMenu(); $('#tab-more').focus(); }
+  });
+  window.addEventListener('resize', closeTabMenu);
+  bar.addEventListener('scroll', closeTabMenu);
+}
+function openTabMenu(){
+  const btn = $('#tab-more'), menu = $('#tab-menu');
+  if(!btn || !menu) return;
+  menu.classList.add('open');
+  const r = btn.getBoundingClientRect();
+  menu.style.top = r.bottom + 'px';
+  menu.style.left = Math.max(8, Math.min(r.left, window.innerWidth - menu.offsetWidth - 8)) + 'px';
+  btn.setAttribute('aria-expanded', 'true');
+  (menu.querySelector('.tab-menu-item.active') || menu.querySelector('.tab-menu-item')).focus();
+}
+function closeTabMenu(){
+  const btn = $('#tab-more'), menu = $('#tab-menu');
+  if(menu) menu.classList.remove('open');
+  if(btn) btn.setAttribute('aria-expanded', 'false');
 }
 function activateTab(id){
   $$('.tab').forEach(b => b.classList.toggle('active', b.dataset.tab===id));
   $$('.tab-panel').forEach(p => p.classList.toggle('active', p.id==='tab-'+id));
+  // A tab opened from the menu is named on the More button, which takes the active look.
+  const inMenu = _tabMenuTabs.find(t => t.id === id);
+  const more = $('#tab-more');
+  if(more){
+    more.classList.toggle('active', !!inMenu);
+    more.querySelector('.tab-more-label').textContent = inMenu ? inMenu.label : 'More';
+  }
+  $$('#tab-menu .tab-menu-item').forEach(i => i.classList.toggle('active', i.dataset.tab === id));
   const hf = $('#header-dash-filters');
   if(hf) hf.style.display = id==='dashboard' ? '' : 'none';
   if(id==='rmrev') drawRevChart();
   if(id==='rmperf') renderRMPerformance();
-  if(id==='bdperf') renderBDPerformance();
-  if(id==='bdperf2') renderBD2();
+  if(id==='bdperf') renderBD2();
   if(id==='categorized') renderCategorizedLeads();
   requestAnimationFrame(() => {
     const panel = $('#tab-'+id);
@@ -321,9 +386,9 @@ function activateTab(id){
 // long scroll. Every subpanel's tables still render on every filter change
 // exactly as before (see renderDashboard); this only changes what's shown.
 // BD Performance reuses the same .dash-subtab/.dash-subpanel visual classes
-// for its own two subsections (see initBdSubtabs below) — every selector
-// here is scoped to #tab-dashboard so the two tabs' sub-nav bars don't
-// interfere with each other.
+// for its own subsections (see activateBd2Subtab in app-bd2.js) — every
+// selector here is scoped to #tab-dashboard so the two tabs' sub-nav bars
+// don't interfere with each other.
 function initDashSubtabs(){
   $$('#tab-dashboard .dash-subtab').forEach(btn => {
     btn.onclick = () => activateDashSubtab(btn.dataset.subtab);
@@ -342,23 +407,3 @@ function activateDashSubtab(id){
     if(window.Chart) Object.values(Chart.instances||{}).forEach(c => c.resize());
   });
 }
-
-// BD Performance's own two subsections (Call Flow / Lead-Level Detail) —
-// same pattern as initDashSubtabs/activateDashSubtab above, scoped to
-// #tab-bdperf instead so the two sub-nav bars stay independent.
-function initBdSubtabs(){
-  $$('#tab-bdperf .dash-subtab').forEach(btn => {
-    btn.onclick = () => activateBdSubtab(btn.dataset.bdsubtab);
-  });
-}
-function activateBdSubtab(id){
-  STATE.bdSubtab = id;
-  $$('#tab-bdperf .dash-subtab').forEach(b => b.classList.toggle('active', b.dataset.bdsubtab===id));
-  $$('#tab-bdperf .dash-subpanel').forEach(p => p.classList.toggle('active', p.id==='bdsub-'+id));
-  requestAnimationFrame(() => {
-    const panel = $('#bdsub-'+id);
-    if(panel) panel.querySelectorAll('.table-wrap').forEach(attachMirrorScroll);
-    if(window.Chart) Object.values(Chart.instances||{}).forEach(c => c.resize());
-  });
-}
-

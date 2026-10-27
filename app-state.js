@@ -32,12 +32,6 @@ const STATE = {
   filterLeadHead: 'Primary',
   filterTable: 'All',
   teamPerfTeamFilter: 'All',
-  bdMonthFilter: 'All',
-  bdTeamFilter: 'All',
-  bdPersonFilter: 'All',
-  bdGmeetFilter: 'All',
-  bdPlatformFilter: 'All',
-  bdStatusSource: 'workpoint',
   bd2: { month: 'All', team: 'All', rm: 'All', person: 'All', platform: 'All', sub: 'callflow', rmAll: false },
   mtdStart: 1,
   mtdEnd: 11,
@@ -52,13 +46,9 @@ const STATE = {
   lpLandingPages: null,
   revChart: null,
   statusChart: null,
-  bdGmeetChart: null,
-  bdStageChart: null,
-  bdCallsChart: null,
   rawFilters: {},
   premiumUnlocked: false,
   dashSubtab: 'overview',
-  bdSubtab: 'callflow',
   stagnantPage: 1,
   stagnantTeamFilter: 'All',
   teamPerfMode: 'first',
@@ -209,42 +199,19 @@ function mapRM(rawName){
 
 // Matches every BD tracker row to its B2C record by email (BD tracker) <->
 // userId (B2C, despite the name — verified to be the client's email and
-// unique across the file). The tracker only supplies dateAssigned/email/
-// gmeetJoined now — Stage/RM/Team/Month all come from the matched B2C
+// unique across the file). The tracker supplies Date Assigned, Email and
+// GMeet Joined?; for a matched row the stage and platform come from the B2C
 // record (bdStageFromB2C/buildB2CEmailIndex, both in app-aggregators.js).
-// The matched RM name is passed through mapRM() since B2C's own
-// currentRmName isn't reliably canonical on its own (e.g. "Ankit Kumar
-// KaundaL" on one lead vs. the properly-cased form on another) — this keeps
-// the RM breakdown from fragmenting the same person into multiple rows.
-//
-// No match found (lead not yet in the CRM, or an email typo) means there's
-// no Stage/RM/Team data in the CRM for that lead. It gets a team row of its
-// own (BD_NOT_IN_CRM) rather than being folded into SV, and shows the status
-// the BD rep logged in the tracker (Current Stage) since the CRM has none.
-// Month falls back to the tracker's own Date Assigned (Column A).
+// A row with no match (not yet in the CRM, or an email typo) is left with
+// crmMatched false and no B2C data; the BD Performance tab (app-bd2.js)
+// groups those as Unmatched.
 function annotateBDWithB2CMatch(){
   const b2cIndex = buildB2CEmailIndex();
   for(const r of STATE.bd){
-    const email = (r.email||'').toString().trim().toLowerCase();
-    const b2cRow = email ? b2cIndex[email] : null;
-    if(b2cRow){
-      r.crmMatched = true;
-      r.effectiveStage = bdStageFromB2C(b2cRow);
-      r.effectiveRM = mapRM(b2cRow.currentRmName) || b2cRow.currentRmName || '(unassigned)';
-      r.effectiveTeam = b2cRow.Team || 'SV';
-      r.effectiveMonth = b2cRow.CTM;
-      r.effectivePlatform = b2cRow.platformName || '';
-    } else {
-      r.crmMatched = false;
-      r.effectiveStage = BD_STAGES.includes(r.currentStage) ? r.currentStage : '';
-      r.effectiveRM = '(Not in CRM)';
-      r.effectiveTeam = BD_NOT_IN_CRM;
-      r.effectiveMonth = toMmmYyyy(r.dateAssigned) || 'N/A';
-      r.effectivePlatform = '';
-    }
-    const a = resolveBDAssignment(r);
-    r.assignedTeam = a.team;
-    r.assignedRM = a.rm;
+    const b2cRow = b2cIndex[bdClientKey(r)];
+    r.crmMatched = !!b2cRow;
+    r.effectiveStage = b2cRow ? bdStageFromB2C(b2cRow) : '';
+    r.effectivePlatform = b2cRow ? (b2cRow.platformName || '') : '';
   }
 }
 // The tracker (its sheet names) and the BD Daily Log both name the BD rep, and

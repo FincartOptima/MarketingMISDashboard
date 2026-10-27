@@ -1272,7 +1272,7 @@ function renderAll(){
   renderRMMaster();
   renderMissing();
   renderRMRev();
-  renderBDPerformance();
+  renderBD2();
   requestAnimationFrame(attachAllMirrors);
 }
 

@@ -218,8 +218,8 @@ function dataHealthChecks(){
   const rev = rmRevenueIssueReport();
   if(rev) add('warn', 'revenue', rev.headline, rev.detail, rev.fix);
   if(STATE.filesLoaded.bd){
-    const bd = bdTrackerIssueReport();
-    if(bd) add('info', 'bd-tracker', bd.headline, bd.detail, bd.fix);
+    const bd = bd2HealthSummary();
+    if(bd) add(bd.level, 'bd-tracker', bd.title, bd.detail, bd.fix);
   }
 
   return checks.sort((a, b) => HEALTH_LEVEL_RANK[a.level] - HEALTH_LEVEL_RANK[b.level]);
