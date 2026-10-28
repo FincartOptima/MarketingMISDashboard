@@ -106,7 +106,7 @@ function categorizedSnapshotAgeDays(){
 
 /**
  * Integrity findings for the loaded classification snapshot.
- * @returns {{blankCategory:number, blankEmail:number, reconciles:boolean,
+ * @returns {{blankCategory:number, blankEmail:number, duplicateEmails:number, reconciles:boolean,
  *            ageDays:number|null, stale:boolean, needsReview:boolean}}
  */
 function categorizedDataIssues(){
@@ -116,6 +116,10 @@ function categorizedDataIssues(){
   const blankCategory = STATE.categorizedLeads.reduce((n, r) => n + (r.category ? 0 : 1), 0);
   // Email is the join key to every other dataset — blank rows can't be matched.
   const blankEmail = STATE.categorizedLeads.reduce((n, r) => n + (r.email ? 0 : 1), 0);
+  // Email identifies a lead, so a repeat means the same lead is listed twice and
+  // every count on this tab includes it twice.
+  const emails = STATE.categorizedLeads.map(r => (r.email || '').toLowerCase()).filter(Boolean);
+  const duplicateEmails = emails.length - new Set(emails).size;
   const summed = Object.values(counts).reduce((a, b) => a + b, 0);
   const ageDays = categorizedSnapshotAgeDays();
   const stale = ageDays != null && ageDays > CATEGORIZED_STALE_DAYS;
@@ -123,10 +127,11 @@ function categorizedDataIssues(){
   return {
     blankCategory,
     blankEmail,
+    duplicateEmails,
     reconciles: summed === total,
     ageDays,
     stale,
-    needsReview: blankCategory > 0 || blankEmail > 0 || summed !== total || stale,
+    needsReview: blankCategory > 0 || blankEmail > 0 || duplicateEmails > 0 || summed !== total || stale,
   };
 }
 
@@ -141,6 +146,7 @@ function categorizedDataIssueReport(){
   const problems = [];
   if(issues.blankCategory) problems.push(`${fmtIN(issues.blankCategory)} row(s) have no category, so they form a blank bucket in the dropdown`);
   if(issues.blankEmail) problems.push(`${fmtIN(issues.blankEmail)} row(s) have no email, so they can't be matched to any other report`);
+  if(issues.duplicateEmails) problems.push(`${fmtIN(issues.duplicateEmails)} row(s) repeat an email that is already listed, so those leads are counted more than once`);
   if(!issues.reconciles) problems.push('the per-category counts do not add up to the row total');
   if(issues.stale) problems.push(`the classification is ${issues.ageDays} days old, so recent On-Hold leads are missing`);
 
