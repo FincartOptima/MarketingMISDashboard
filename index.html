@@ -674,6 +674,52 @@ table.data.editable td input:focus{outline:2px solid var(--orange);background:va
 </style>
 </head>
 <body>
+<script>try{if(sessionStorage.getItem('mis_auth')==='1')document.documentElement.classList.add('authed')}catch(e){}</script>
+
+<!-- ============ SIGN-IN ============ -->
+<!-- Shown until app-login.js marks the page signed in (html.authed, set above before first paint when
+     the tab already has a session). Fails closed: if the script never loads, this stays up. The inline
+     onsubmit keeps the browser from putting the credentials into the URL in that case. -->
+<style>
+  #login-screen{
+    position:fixed;inset:0;z-index:10000;   /* above the loading screen (1000) and every modal */
+    display:flex;overflow-y:auto;padding:16px;
+    background:#f7f9fb;font-family:Inter,system-ui,'Segoe UI',sans-serif;
+  }
+  html.authed #login-screen{display:none}
+  .login-card{
+    width:100%;max-width:380px;margin:auto;padding:30px 32px 26px;
+    background:#fff;border:1px solid var(--line);border-top:3px solid var(--orange);
+    box-shadow:0 10px 30px rgba(15,23,42,.08);
+  }
+  .login-logo{display:block;height:44px;width:auto;margin:0 auto 20px}
+  .login-card h1{font-size:18px;font-weight:900;letter-spacing:-.5px;text-align:center;color:var(--orange)}
+  .login-card h1 em{font-style:normal;color:var(--blue)}
+  .login-sub{margin:4px 0 22px;font-size:12px;text-align:center;color:var(--muted)}
+  .login-card label{display:block;margin-bottom:5px;font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase}
+  .login-card input{
+    display:block;width:100%;margin-bottom:14px;padding:9px 10px;
+    background:#fff;color:var(--text);border:2px solid var(--line);font:inherit;
+  }
+  .login-card input:focus{outline:none;border-color:var(--orange)}
+  .login-error{min-height:18px;margin:-2px 0 10px;font-size:12px;font-weight:600;color:var(--red)}
+  .login-card button{width:100%;height:40px}
+  @media (max-width:480px){.login-card input{font-size:16px}}   /* 16px stops iOS zooming in on focus */
+</style>
+
+<div id="login-screen">
+  <form class="login-card" id="login-form" method="post" action="#" onsubmit="return false" aria-labelledby="login-title" novalidate>
+    <img src="logo.png" class="login-logo" alt="Fincart" onerror="this.style.display='none'">
+    <h1 id="login-title">Marketing <em>MIS</em> Dashboard</h1>
+    <p class="login-sub">Sign in to continue</p>
+    <label for="login-user">Username</label>
+    <input id="login-user" name="username" type="text" autocomplete="username" autocapitalize="off" spellcheck="false">
+    <label for="login-pass">Password</label>
+    <input id="login-pass" name="password" type="password" autocomplete="current-password">
+    <div class="login-error" id="login-error" role="alert"></div>
+    <button type="submit" id="login-submit">Sign in</button>
+  </form>
+</div>
 
 <!-- ============ LOADING ============ -->
 <style>
@@ -971,6 +1017,7 @@ table.data.editable td input:focus{outline:2px solid var(--orange);background:va
       <a class="secondary" id="feedback-link" href="#" target="_blank" rel="noopener" title="Suggest an improvement" style="text-decoration:none;display:inline-flex;align-items:center;padding:6px 12px;font-size:13px">💡 Suggest an Improvement</a>
       <button class="secondary" id="settings-btn" title="Settings">⚙️</button>
       <button class="btn-blue" id="download-json-btn">↓ Webpage</button>
+      <button class="secondary" id="signout-btn" title="Sign out of the dashboard">Sign out</button>
     </div>
   </header>
 
@@ -1709,18 +1756,28 @@ table.data.editable td input:focus{outline:2px solid var(--orange);background:va
   </div>
 </div>
 
+<script src="app-login.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
 <script>
   (function(){
-    var t = Date.now();
     var parent = document.currentScript.parentNode;
-    ['data.js','snapshot.js','categorized_leads_data.js','app-config.js','app-dateutils.js','app-state.js','app-dataload.js','app-filters.js','app-aggregators.js','app-rmperf.js','app-bd2.js','app-bd2-health.js','app-categorized.js','app-tables.js','app-renderers.js','app-ui.js','app-health.js','app-bootstrap.js'].forEach(function(src){
-      var s = document.createElement('script');
-      s.src = src + '?t=' + t;
-      s.async = false;
-      parent.appendChild(s);
+    // app-login.js did not load: put the sign-in screen back with a reason, instead of a spinner that never ends.
+    if(!window.MISAuth){
+      document.documentElement.classList.remove('authed');
+      document.getElementById('login-error').textContent = 'The sign-in script could not be loaded. Refresh the page; if it keeps happening, tell the MIS team.';
+      return;
+    }
+    // Nothing below is requested until sign-in succeeds.
+    MISAuth.ready(function(){
+      var t = Date.now();
+      ['data.js','snapshot.js','categorized_leads_data.js','app-config.js','app-dateutils.js','app-state.js','app-dataload.js','app-filters.js','app-aggregators.js','app-rmperf.js','app-bd2.js','app-bd2-health.js','app-categorized.js','app-tables.js','app-renderers.js','app-ui.js','app-health.js','app-bootstrap.js'].forEach(function(src){
+        var s = document.createElement('script');
+        s.src = src + '?t=' + t;
+        s.async = false;
+        parent.appendChild(s);
+      });
     });
   })();
 </script>
