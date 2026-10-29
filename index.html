@@ -672,272 +672,185 @@ table.data.editable td input:focus{outline:2px solid var(--orange);background:va
   .dash-subnav .dash-subtab{width:auto;flex:1 1 auto}
 }
 
-/* ============ L&D DASHBOARD (app-ld.js) — "Executive Blue" ============
-   Light surfaces, dark text and restrained blue accents. Every rule is scoped to #tab-ld, and the
-   shared colour tokens other components read (--orange, --text, ...) are redefined only inside it,
-   so no other tab changes. Layout: a white left nav (L&D Flow / Employee View / L&D Details / Data
-   Quality) beside a main column of white cards on a pale blue-grey page. */
+/* ============ L&D DASHBOARD (app-ld.js) ============
+   Same building blocks as every other tab (.section, .kpi, table.data, the BD-style side sub-nav and
+   flow boxes), recoloured for this tab only: the dashboard's colour tokens are redefined on #tab-ld,
+   so every shared component inside it picks up the emerald / mint theme below, and nothing outside
+   it changes. */
 #tab-ld{
-  --ld-page:#F4F7FB; --ld-surface:#FFFFFF; --ld-text:#17263C; --ld-text-secondary:#526176;
-  --ld-border:#DCE4EE; --ld-primary:#245ACA; --ld-primary-soft:#EDF3FF; --ld-success:#208168;
-  --ld-other:#8794A8; --ld-warning-bg:#FFF9ED; --ld-warning-border:#EADBB9; --ld-warning-text:#684B16;
-  --ld-head:#EEF2F8; --ld-radius:10px;
-  /* shared tokens, re-pointed so reused dashboard components follow this theme */
-  --orange:var(--ld-primary); --orange-tint:var(--ld-primary-soft); --orange-hover:#1C4AA8;
-  --text:var(--ld-text); --muted:var(--ld-text-secondary); --line:var(--ld-border); --panel2:var(--ld-head);
-  /* Workpoint status colours: In process blue, Converted green, the rest muted */
-  --s-converted:#208168; --s-inprocess:#245ACA; --s-reassigned:#6E93D6; --s-onhold:#B7892F;
-  --s-followup:#8E6BB5; --s-assigned:#3F9A8A; --s-dead:#8794A8; --s-other:#B5566A; --s-none:#B8C2D0;
-  font-family:Inter,system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
-  color:var(--ld-text); font-size:14px; line-height:1.5; font-variant-numeric:tabular-nums;
+  /* colour theme */
+  --bg-main:#f0fdf4; --bg-card:#ffffff; --bg-sidebar:#f7fee7;
+  --primary:#047857; --primary-hover:#065f46; --primary-light:#dcfce7; --accent-mint:#10b981;
+  --text-main:#064e3b; --text-muted:#374151; --text-light:#6b7280;
+  --border-color:#bbf7d0; --border-focus:#059669; --badge-bg:#e6f4ea; --badge-text:#137333;
+  /* the tokens this stylesheet and the shared components read, mapped onto the theme */
+  --orange:var(--primary); --orange-tint:var(--primary-light); --orange-hover:var(--primary-hover);
+  --ld-ink:var(--text-main); --ld-amber:var(--accent-mint); --ld-amber-tint:var(--primary-light);
+  --text:var(--text-main); --muted:var(--text-light); --line:var(--border-color); --border-strong:#86efac;
+  --panel2:var(--badge-bg); --green:var(--accent-mint);
+  /* lead status: In process emerald, Converted mint (success); the rest stay distinct */
+  --s-converted:#10b981; --s-inprocess:#047857; --s-reassigned:#0891b2; --s-onhold:#ca8a04;
+  --s-followup:#db2777; --s-assigned:#65a30d; --s-dead:#6b7280; --s-other:#e11d48; --s-none:#9ca3af;
+  background:var(--bg-main); color:var(--text-muted);
 }
-#tab-ld.active{background:var(--ld-page);padding:24px}
-#tab-ld :focus-visible{outline:2px solid var(--ld-primary);outline-offset:2px}
-#tab-ld h1,#tab-ld h2,#tab-ld h3{color:var(--ld-text);text-transform:none;letter-spacing:0}
-#tab-ld [hidden]{display:none !important}
-
-/* ---- tab lock (sign-in box; shown while #tab-ld has .ld-locked) ---- */
+#tab-ld :focus-visible{outline:2px solid var(--border-focus);outline-offset:2px}
+/* tab lock: while locked only the sign-in box shows (nothing else is built until it is unlocked) */
 #tab-ld.ld-locked > :not(.ld-lock){display:none}
 #tab-ld:not(.ld-locked) > .ld-lock{display:none}
 #tab-ld .ld-lock{display:flex;align-items:center;justify-content:center;min-height:420px}
-#tab-ld .lock-box{background:var(--ld-surface);border:1px solid var(--ld-border);border-radius:var(--ld-radius);padding:32px 32px 24px;box-shadow:0 1px 2px rgba(23,38,60,.06)}
-#tab-ld .lock-box h3{font-size:17px;font-weight:600}
-#tab-ld .lock-box p{color:var(--ld-text-secondary);font-size:13px}
-#tab-ld .lock-box input{width:100%;margin-bottom:10px;text-align:center;box-sizing:border-box;border:1px solid var(--ld-border);border-radius:8px;padding:9px 10px;font-size:14px}
-#tab-ld .lock-box button{background:var(--ld-primary);border:1px solid var(--ld-primary);color:#fff;border-radius:8px;padding:9px;font-weight:600}
-#tab-ld .lock-box .lock-error{color:#B3261E}
-
-/* ---- shell: left nav + main ---- */
-#tab-ld .ld-shell{display:grid;grid-template-columns:184px minmax(0,1fr);align-items:start;
-  background:var(--ld-surface);border:1px solid var(--ld-border);border-radius:var(--ld-radius)}
-#tab-ld .ld-nav{position:sticky;top:76px;display:flex;flex-direction:column;gap:4px;padding:16px 12px;border-right:1px solid var(--ld-border);min-height:100%}
-#tab-ld .ld-nav-title{font-size:12px;font-weight:600;color:var(--ld-text-secondary);padding:0 8px 8px}
-#tab-ld .ld-nav-item{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;text-align:left;
-  background:transparent;border:0;border-radius:8px;padding:9px 10px;font:500 14px/1.3 inherit;color:var(--ld-text);cursor:pointer}
-#tab-ld .ld-nav-item:hover{background:var(--ld-page)}
-#tab-ld .ld-nav-item.active{background:var(--ld-primary-soft);color:#1A469E;font-weight:600}
-#tab-ld .ld-nav-lock{margin-top:16px;align-self:flex-start;background:transparent;border:1px solid var(--ld-border);border-radius:8px;
-  padding:6px 10px;font:500 12px/1.2 inherit;color:var(--ld-text-secondary);cursor:pointer}
-#tab-ld .ld-nav-lock:hover{color:var(--ld-text);border-color:#B9C6D6}
-#tab-ld .ld-main{min-width:0;padding:24px;background:var(--ld-page);border-radius:0 var(--ld-radius) var(--ld-radius) 0;display:flex;flex-direction:column;gap:16px}
-
-/* ---- page heading ---- */
-#tab-ld .ld-head{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:8px 24px}
-#tab-ld .ld-crumb{font-size:12px;color:var(--ld-text-secondary);margin-bottom:2px}
-#tab-ld .ld-title{font-size:27px;font-weight:600;line-height:1.2;margin:0}
-#tab-ld .ld-subtitle{font-size:14px;color:var(--ld-text-secondary);margin:4px 0 0;max-width:72ch}
-#tab-ld .ld-headmeta{display:flex;flex-direction:column;align-items:flex-end;gap:6px}
-#tab-ld .ld-period{display:inline-block;background:var(--ld-primary-soft);color:#1A469E;border-radius:999px;padding:4px 12px;font-size:13px;font-weight:600}
-#tab-ld .ld-updated{font-size:12px;color:var(--ld-text-secondary)}
-
-/* ---- cards, notes, buttons ---- */
-#tab-ld .ld-card{background:var(--ld-surface);border:1px solid var(--ld-border);border-radius:var(--ld-radius);padding:16px 20px 20px}
-#tab-ld .ld-card h2{font-size:16px;font-weight:600;margin:0}
-#tab-ld .ld-card h3{font-size:14px;font-weight:600;margin:0 0 8px}
-#tab-ld .ld-card-head{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:4px 16px;margin-bottom:4px}
-#tab-ld .ld-card-sub{font-size:13px;color:var(--ld-text-secondary);margin:2px 0 12px}
-#tab-ld .ld-card-sub b,#tab-ld .ld-note b{color:var(--ld-text);font-weight:600}
-#tab-ld .ld-link{font-size:13px;font-weight:500;color:var(--ld-primary);text-decoration:none;white-space:nowrap}
-#tab-ld .ld-link:hover{text-decoration:underline}
-#tab-ld .ld-btn{background:var(--ld-surface);border:1px solid var(--ld-border);border-radius:8px;padding:7px 12px;font:500 13px/1.2 inherit;color:var(--ld-text);cursor:pointer}
-#tab-ld .ld-btn:hover{border-color:#B9C6D6;background:var(--ld-page)}
-#tab-ld .ld-note{font-size:13px;color:var(--ld-text-secondary);background:var(--ld-page);border:1px solid var(--ld-border);border-radius:8px;padding:8px 12px}
-#tab-ld .ld-state{background:var(--ld-surface);border:1px solid var(--ld-border);border-radius:var(--ld-radius);padding:20px 24px;font-size:14px}
-#tab-ld .ld-state.ld-error{background:var(--ld-warning-bg);border-color:var(--ld-warning-border);color:var(--ld-warning-text)}
-#tab-ld .ld-loading{color:var(--ld-text-secondary)}
-#tab-ld .ld-notes{background:var(--ld-surface);border:1px solid var(--ld-border);border-radius:var(--ld-radius);padding:12px 20px}
-#tab-ld .ld-notes summary,#tab-ld .ld-more summary{cursor:pointer;font-size:14px;font-weight:600;color:var(--ld-text)}
-#tab-ld .ld-notes[open] summary{margin-bottom:8px}
-#tab-ld .ld-notes p{font-size:13px;color:var(--ld-text-secondary);margin:0 0 8px;max-width:110ch}
-#tab-ld .ld-notes code{font-size:12px;background:var(--ld-page);padding:0 4px;border-radius:4px}
-
-/* ---- filter toolbars ---- */
-#tab-ld .ld-toolbar{display:flex;flex-wrap:wrap;align-items:flex-end;gap:12px 16px;background:var(--ld-surface);
-  border:1px solid var(--ld-border);border-radius:var(--ld-radius);padding:12px 16px}
-#tab-ld .ld-toolbar-scope{flex:1 1 100%;font-size:12px;font-weight:600;color:var(--ld-text-secondary)}
-#tab-ld .ld-field{display:flex;flex-direction:column;gap:4px;font-size:12px;font-weight:500;color:var(--ld-text-secondary)}
-#tab-ld .ld-field select,#tab-ld .ld-field input[type=search]{font:400 13px/1.3 inherit;color:var(--ld-text);background:var(--ld-surface);
-  border:1px solid var(--ld-border);border-radius:8px;padding:7px 10px;min-width:150px;height:34px;box-sizing:border-box}
-#tab-ld .ld-field select:hover,#tab-ld .ld-field input[type=search]:hover{border-color:#B9C6D6}
+#tab-ld .lock-box{border-color:var(--ld-ink)}
+#tab-ld .lock-box input{width:100%;margin-bottom:10px;text-align:center;box-sizing:border-box}
+#tab-ld .lock-box button{background:var(--orange);border-color:var(--orange);color:#fff}
+#tab-ld .ld-relock{font:600 11px/1 inherit;text-transform:none;letter-spacing:0;padding:4px 10px;cursor:pointer;
+  background:rgba(0,0,0,.18);color:#ecfdf5;border:1px solid rgba(255,255,255,.35)}
+#tab-ld .ld-relock:hover{background:rgba(0,0,0,.32)}
+#tab-ld .section.bar-ld{border-top-color:var(--orange)}
+#tab-ld .section.bar-amber{border-top-color:var(--ld-amber)}
+#tab-ld .ld-hero{background:linear-gradient(120deg,var(--primary-hover),var(--primary) 70%,var(--accent-mint));border:0;color:#ecfdf5}
+#tab-ld .ld-hero h2{color:#fff;font-size:14px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+#tab-ld .ld-hero .meta{color:#d1fae5;font-size:12.5px;max-width:110ch}
+#tab-ld .ld-hero .meta strong{color:#fff}
+#tab-ld .ld-stamp{margin-left:auto;font-size:11px;font-weight:600;text-transform:none;letter-spacing:0;color:#d1fae5;background:rgba(0,0,0,.18);padding:3px 9px}
+#tab-ld .ld-empty{background:var(--ld-amber-tint);border:2px solid var(--line);border-left:5px solid var(--ld-amber);padding:18px 20px;font-size:13px;margin-bottom:16px}
+#tab-ld .ld-subnav{background:var(--bg-sidebar);border:2px solid var(--border-color)}
+#tab-ld .ld-subnav .dash-subtab{color:var(--text-muted);display:flex;align-items:center;justify-content:space-between;gap:8px}
+#tab-ld .ld-subnav .dash-subtab:hover{background:var(--primary-light);color:var(--text-main)}
+#tab-ld .ld-subnav .dash-subtab.active{background:var(--primary);border-color:var(--primary);color:#fff}
+#tab-ld .ld-subnav-label{margin:8px 4px 0;padding-top:10px;border-top:1px solid var(--border-color);font-size:10px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;color:var(--text-light)}
+#tab-ld .ld-count{min-width:22px;padding:1px 6px;font-size:10px;font-weight:800;text-align:center;background:var(--badge-bg);color:var(--badge-text)}
+#tab-ld .ld-subnav .dash-subtab.active .ld-count{background:rgba(255,255,255,.2);color:#fff}
+#tab-ld .ld-subpanel{display:none}
+#tab-ld .ld-subpanel.active{display:block}
+#tab-ld .ld-filterbar{display:flex;flex-wrap:wrap;align-items:flex-end;gap:10px 14px;background:#fff;border:2px solid var(--line);border-left:5px solid var(--orange);padding:12px 14px;margin-bottom:16px}
+#tab-ld .ld-filterbar label,#tab-ld .ld-filterbar .ld-fg{display:flex;flex-direction:column;gap:4px;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:var(--muted)}
+#tab-ld .ld-filterbar select,#tab-ld .ld-filterbar input[type=search]{font-size:12.5px;text-transform:none;letter-spacing:0;font-weight:400;color:var(--text);min-width:150px}
+#tab-ld .ld-filterbar input[type=search]{padding:6px 8px;border:1px solid var(--border-strong)}
 #tab-ld .ld-grow{flex:1 1 200px}
-#tab-ld .ld-grow input{width:100%}
-#tab-ld .ld-chiprow{flex:1 1 100%;display:flex;flex-direction:column;gap:6px}
-#tab-ld .ld-chiplabel{font-size:12px;font-weight:500;color:var(--ld-text-secondary)}
+#tab-ld .ld-chiprow{flex:1 1 100%}
+#tab-ld .ld-chiplabel{display:block;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:6px}
 #tab-ld .ld-chips{display:flex;flex-wrap:wrap;gap:6px}
-#tab-ld .ld-chip{display:inline-flex;align-items:center;gap:6px;background:var(--ld-surface);border:1px solid var(--ld-border);border-radius:999px;
-  padding:4px 10px;font:500 12px/1.3 inherit;color:var(--ld-text);cursor:pointer}
-#tab-ld .ld-chip[data-off="1"]{color:var(--ld-text-secondary);background:var(--ld-page);text-decoration:line-through}
-#tab-ld .dot{display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--c,var(--s-none));flex:none}
+#tab-ld .ld-chip{display:inline-flex;align-items:center;gap:7px;background:#fff;border:1px solid var(--border-strong);padding:5px 10px;font-size:12px;cursor:pointer;color:var(--text)}
+#tab-ld .ld-chip[data-off="1"]{opacity:.4;text-decoration:line-through}
+#tab-ld .dot{display:inline-block;width:9px;height:9px;background:var(--c,var(--s-none));flex:none}
+#tab-ld .ld-dl,#tab-ld .ld-h2-ctl{float:right;font-weight:600;text-transform:none;letter-spacing:0;font-size:12px}
+#tab-ld .ld-h2-ctl label{font-size:11px;color:var(--muted);display:inline-flex;align-items:center;gap:6px}
+#tab-ld .kpi{border-left-width:5px}
+#tab-ld .ld-kpi-note{font-size:11px;color:var(--muted);margin-top:4px}
+#tab-ld .ld-kpi-note b{color:var(--text)}
+#tab-ld .ld-two{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media(max-width:1100px){#tab-ld .ld-two{grid-template-columns:1fr}}
+#tab-ld .ld-foot{font-size:11.5px;color:var(--muted);line-height:1.7;border-top:1px solid var(--line);padding-top:12px;margin-top:4px}
+#tab-ld .ld-foot code{font-size:11px;background:var(--panel2);padding:0 4px}
 
-/* ticket-subject pickers (Flow toolbar and the Details master filter) */
-#tab-ld .ld-subjdd{position:relative}
-#tab-ld .ld-subjdd-toggle{display:inline-flex;align-items:center;justify-content:space-between;gap:10px;min-width:210px;height:34px;box-sizing:border-box;
-  background:var(--ld-surface);border:1px solid var(--ld-border);border-radius:8px;padding:7px 10px;font:400 13px/1.2 inherit;color:var(--ld-text);cursor:pointer}
-#tab-ld .ld-subjdd-toggle:hover{border-color:#B9C6D6}
-#tab-ld .ld-subjchips{display:none;flex-wrap:wrap;gap:6px;position:absolute;top:calc(100% + 6px);left:0;z-index:40;background:var(--ld-surface);
-  border:1px solid var(--ld-border);border-radius:var(--ld-radius);padding:12px;width:min(600px,86vw);max-height:340px;overflow:auto;box-shadow:0 8px 24px rgba(23,38,60,.12)}
-#tab-ld .ld-subjdd[data-open="1"] .ld-subjchips{display:flex}
-#tab-ld .ld-subj-actions{flex:1 1 100%;display:flex;flex-wrap:wrap;gap:6px;padding-bottom:8px;margin-bottom:2px;border-bottom:1px solid var(--ld-border)}
-#tab-ld .ld-subj-actions button{font:500 12px/1 inherit;padding:6px 10px;cursor:pointer;background:var(--ld-primary-soft);color:#1A469E;border:1px solid #C9D8F5;border-radius:6px}
-#tab-ld .ld-subj-actions button:hover{border-color:var(--ld-primary)}
-#tab-ld .subjchip{display:inline-flex;gap:8px;align-items:center;background:var(--ld-surface);border:1px solid var(--ld-border);border-radius:999px;
-  padding:5px 10px;font:400 12px/1.3 inherit;color:var(--ld-text-secondary);cursor:pointer}
-#tab-ld .subjchip .n{color:var(--ld-text-secondary)}
-#tab-ld .subjchip[aria-pressed="true"]{border-color:var(--ld-primary);background:var(--ld-primary-soft);color:#1A469E;font-weight:600}
-#tab-ld .ld-master-actions{display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end}
-
-/* ---- KPI cards ---- */
-#tab-ld .ld-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px}
-#tab-ld .ld-kpis.ld-kpis-6{grid-template-columns:repeat(6,minmax(0,1fr))}
-#tab-ld .ld-kpi{background:var(--ld-surface);border:1px solid var(--ld-border);border-radius:var(--ld-radius);padding:16px}
-#tab-ld .ld-kpi.ld-kpi-primary{border-top:3px solid var(--ld-primary);padding-top:14px}
-#tab-ld .ld-kpi-label{font-size:13px;font-weight:500;color:var(--ld-text-secondary)}
-#tab-ld .ld-kpi-value{font-size:32px;font-weight:600;line-height:1.15;margin:4px 0 2px;color:var(--ld-text)}
-#tab-ld .ld-kpis-6 .ld-kpi-value{font-size:28px}
-#tab-ld .ld-kpi-note{font-size:12px;color:var(--ld-text-secondary)}
-#tab-ld .ld-kpi-note b{color:var(--ld-text);font-weight:600}
-
-/* ---- Flow: analysis row ---- */
-#tab-ld .ld-grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
-#tab-ld .ld-bars{display:flex;flex-direction:column;gap:14px}
-#tab-ld .ld-bar-top{display:flex;justify-content:space-between;align-items:baseline;gap:12px;font-size:14px}
-#tab-ld .ld-bar-top .v{font-weight:600}
-#tab-ld .ld-bar-top .p{color:var(--ld-text-secondary);font-weight:400;margin-left:6px}
-#tab-ld .ld-bar-track{height:10px;background:var(--ld-head);border-radius:999px;margin-top:6px;overflow:hidden}
-#tab-ld .ld-bar-fill{height:100%;border-radius:999px;background:var(--c)}
-#tab-ld .ld-group + .ld-group{margin-top:16px;padding-top:16px;border-top:1px solid var(--ld-border)}
-#tab-ld .ld-group-title{font-size:13px;font-weight:600;margin:0 0 2px}
-#tab-ld .ld-group-note{font-size:12px;color:var(--ld-text-secondary);margin:0 0 8px}
-#tab-ld .ld-kv{display:grid;grid-template-columns:1fr auto auto;gap:6px 16px;font-size:14px;margin:0}
-#tab-ld .ld-kv dt{color:var(--ld-text)}
-#tab-ld .ld-kv dd{margin:0;text-align:right;font-weight:600}
-#tab-ld .ld-kv dd.p{font-weight:400;color:var(--ld-text-secondary);min-width:52px}
-#tab-ld .ld-context{background:var(--ld-surface);border:1px solid var(--ld-border);border-left:3px solid var(--ld-primary);border-radius:var(--ld-radius);
-  padding:12px 16px;font-size:14px;margin:0}
-#tab-ld .ld-context b{font-weight:600}
-#tab-ld .ld-context .ld-context-note{display:block;font-size:12px;color:var(--ld-text-secondary);margin-top:2px}
-
-/* ---- data-quality strip (Flow) and summary cards (Data Quality) ---- */
-#tab-ld .ld-dq{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;background:var(--ld-warning-bg);border:1px solid var(--ld-warning-border);
-  border-radius:var(--ld-radius);padding:10px 16px;color:var(--ld-warning-text);font-size:13px}
-#tab-ld .ld-dq-title{font-weight:600;margin-right:4px}
-#tab-ld .ld-dq-item{display:inline-flex;align-items:baseline;gap:6px;background:transparent;border:1px solid var(--ld-warning-border);border-radius:999px;
-  padding:4px 12px;font:500 13px/1.3 inherit;color:var(--ld-warning-text);cursor:pointer}
-#tab-ld .ld-dq-item b{font-weight:700}
-#tab-ld .ld-dq-item:hover{background:#FFF1D6}
-#tab-ld .ld-dq-summary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
-#tab-ld .ld-dq-card{background:var(--ld-surface);border:1px solid var(--ld-border);border-radius:var(--ld-radius);padding:16px;text-align:left;font:inherit;color:inherit;cursor:pointer}
-#tab-ld .ld-dq-card.active{border-color:var(--ld-primary);box-shadow:inset 0 0 0 1px var(--ld-primary)}
-#tab-ld .ld-dq-card .k{font-size:13px;font-weight:600}
-#tab-ld .ld-dq-card .v{font-size:28px;font-weight:600;line-height:1.2;margin:4px 0}
-#tab-ld .ld-dq-card .s{font-size:12px;color:var(--ld-text-secondary)}
-
-/* ---- local tabs (Details sections, Data Quality reports) ---- */
-#tab-ld .ld-localtabs{display:flex;flex-wrap:wrap;gap:4px;border-bottom:1px solid var(--ld-border)}
-#tab-ld .ld-localtab{background:transparent;border:0;border-bottom:2px solid transparent;margin-bottom:-1px;padding:8px 12px;
-  font:500 14px/1.3 inherit;color:var(--ld-text-secondary);cursor:pointer;display:inline-flex;align-items:center;gap:6px}
-#tab-ld .ld-localtab:hover{color:var(--ld-text)}
-#tab-ld .ld-localtab[aria-selected="true"]{color:#1A469E;border-bottom-color:var(--ld-primary);font-weight:600}
-#tab-ld .ld-count{min-width:22px;padding:1px 7px;font-size:12px;font-weight:600;text-align:center;border-radius:999px;background:var(--ld-head);color:var(--ld-text)}
-#tab-ld .ld-dsec,#tab-ld .ld-dqsec{display:none;flex-direction:column;gap:16px}
-#tab-ld .ld-dsec.active,#tab-ld .ld-dqsec.active{display:flex}
-#tab-ld .ld-ctx{font-size:13px;color:var(--ld-text-secondary)}
-#tab-ld .ld-ctx b{color:var(--ld-text);font-weight:600}
-#tab-ld .ld-subpanel{display:none;flex-direction:column;gap:16px}
-#tab-ld .ld-subpanel.active{display:flex}
-
-/* ---- tables (dashboard table.data, restyled light) ---- */
-#tab-ld .table-wrap{border:1px solid var(--ld-border);border-radius:8px;max-height:520px}
-#tab-ld .scroll-mirror{scrollbar-color:var(--ld-other) var(--ld-page)}
-#tab-ld table.data{font-size:13px}
-#tab-ld table.data th,#tab-ld table.data td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--ld-border)}
+/* tables: text left, numbers right; a teal header instead of slate */
+#tab-ld table.data th,#tab-ld table.data td{text-align:left}
 #tab-ld table.data .num{text-align:right;font-variant-numeric:tabular-nums}
-#tab-ld table.data thead th,#tab-ld table.data thead th:first-child{background:var(--ld-head);color:var(--ld-text);
-  font:600 12px/1.3 inherit;text-transform:none;letter-spacing:0;border-bottom:1px solid #C9D4E2}
-#tab-ld table.data thead th.grp{text-align:center;font-weight:600;color:var(--ld-text-secondary);border-bottom:1px solid var(--ld-border)}
-#tab-ld table.data thead th.grp-edge,#tab-ld table.data td.grp-edge{border-left:1px solid #C9D4E2}
-#tab-ld table.data td:first-child{background:var(--ld-surface)}
-#tab-ld table.data tbody tr:hover td{background:#F7FAFE}
-#tab-ld table.data tr.totrow td{font-weight:600;background:var(--ld-primary-soft);color:var(--ld-text);border-top:1px solid #C9D8F5;border-bottom:0}
+#tab-ld table.data thead th,#tab-ld table.data thead th:first-child{background:var(--ld-ink);border-bottom-color:var(--ld-amber)}
+#tab-ld table.data thead th.grp{text-align:center;background:var(--primary-hover);border-bottom:1px solid rgba(255,255,255,.2)}
+#tab-ld table.data tr.totrow td{font-weight:800;background:var(--orange-tint);color:var(--ld-ink);border-top:2px solid var(--orange)}
 #tab-ld table.data td.wrapcell{white-space:normal;min-width:170px}
-#tab-ld table.data .muted-col{color:var(--ld-text-secondary)}
-#tab-ld table.data thead th.muted-col{color:var(--ld-text-secondary)}
-#tab-ld table.data .sub-pct{color:var(--ld-text-secondary);font-size:12px;font-weight:400}
-#tab-ld table.data td.rowhead{font-weight:600}
-#tab-ld table.data td.cell[data-zero="1"]{color:var(--ld-text-secondary)}
-#tab-ld table.data td.diag{background:#F7FAFE}
+#tab-ld table.data .muted-col{color:var(--muted)}
+#tab-ld table.data thead th.muted-col{color:#a7f3d0}
+#tab-ld table.data .sub-pct{color:var(--muted);font-size:11px;font-weight:400}
+#tab-ld table.data td.rowhead{font-weight:700}
+#tab-ld table.data td.cell[data-zero="1"]{color:var(--muted)}
+#tab-ld table.data td.diag{background:var(--ld-amber-tint)}
 #tab-ld #ld-flowEmpTbl tbody tr[data-emp]{cursor:pointer}
-#tab-ld #ld-flowEmpTbl tbody tr[data-on="1"] td{background:var(--ld-primary-soft);font-weight:600}
+#tab-ld #ld-flowEmpTbl tbody tr[data-on="1"] td{background:var(--ld-amber-tint);font-weight:700}
 #tab-ld #ld-clientTbl th[data-key]{cursor:pointer}
-#tab-ld #ld-flowTierTbl,#tab-ld #ld-srcTbl{max-height:none}
+#tab-ld #ld-flowTierTbl,#tab-ld #ld-flowEmpTbl,#tab-ld #ld-srcTbl{max-height:none}
 #tab-ld .ld-pill{display:inline-flex;align-items:center;gap:6px}
-#tab-ld .ld-more{margin-top:12px}
-#tab-ld .ld-more ul{margin:8px 0 0;padding-left:18px;font-size:13px;color:var(--ld-text-secondary)}
-#tab-ld .ld-more li b{color:var(--ld-text);font-weight:600}
 
-/* ---- Details charts and bars ---- */
-#tab-ld .ld-srcsplit{display:flex;height:28px;border-radius:8px;overflow:hidden;margin:0 0 12px;border:1px solid var(--ld-border)}
-#tab-ld .ld-srcsplit>div{display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden}
-#tab-ld .ld-srcsplit .s-pa{background:var(--ld-primary);color:#fff}
-#tab-ld .ld-srcsplit .s-fy{background:var(--ld-primary-soft);color:#1A469E}
+/* data flags */
+#tab-ld .ld-flags{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:10px;margin-bottom:16px}
+#tab-ld .ld-flag{display:block;width:100%;text-align:left;font:inherit;cursor:pointer;background:#fff;border:2px solid var(--line);border-left:5px solid var(--red);padding:12px 14px}
+#tab-ld .ld-flag:hover{background:#fff1f2}
+#tab-ld .ld-flag[data-zero="1"]{border-left-color:var(--green)}
+#tab-ld .ld-flag[data-zero="1"]:hover{background:var(--orange-tint)}
+#tab-ld .ld-flag .fk{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:var(--red)}
+#tab-ld .ld-flag[data-zero="1"] .fk{color:var(--green)}
+#tab-ld .ld-flag .fv{font-size:26px;font-weight:900;letter-spacing:-1px;line-height:1.1;margin:4px 0 2px;color:var(--text)}
+#tab-ld .ld-flag .fn{font-size:11.5px;color:var(--muted)}
+#tab-ld .ld-flag .fgo{font-size:10.5px;font-weight:700;color:var(--orange);margin-top:6px}
+
+/* flow: the dashboard's .cf-node boxes, joined by drawn connectors. The two-way split sits in a
+   block whose halves are exactly 50% each, so the bar's ends (25% / 75%) meet each box's centre. */
+#tab-ld .ld-flowbox{display:flex;flex-direction:column;align-items:center;padding:6px 0 2px}
+#tab-ld .ld-row{display:flex;justify-content:center;width:100%}
+#tab-ld .cf-node{border-top-color:var(--c,var(--orange));position:relative;max-width:300px}
+#tab-ld .cf-node .cf-value{color:var(--c,var(--orange))}
+#tab-ld .cf-node .cf-sub b{color:var(--text)}
+#tab-ld .cf-node.ld-wide{max-width:560px;flex-basis:560px}
+#tab-ld .ld-break{display:grid;grid-template-columns:1fr auto;gap:4px 16px;text-align:left;margin:12px 0 0;padding:10px 0 0;border-top:1px dashed var(--border-strong);font-size:12px}
+#tab-ld .ld-break dt{color:var(--muted)}
+#tab-ld .ld-break dd{margin:0;text-align:right;font-weight:800;font-variant-numeric:tabular-nums}
+#tab-ld .ld-break .sep{grid-column:1/-1;border-top:1px dashed var(--line);margin:3px 0 1px}
+#tab-ld .ld-stem{width:2px;height:26px;background:var(--border-strong)}
+#tab-ld .ld-fork{width:min(660px,100%)}
+#tab-ld .ld-split{position:relative;height:26px}
+#tab-ld .ld-split::before{content:'';position:absolute;top:0;left:50%;width:2px;height:13px;background:var(--border-strong);transform:translateX(-50%)}
+#tab-ld .ld-split::after{content:'';position:absolute;top:12px;left:25%;right:25%;height:2px;background:var(--border-strong)}
+#tab-ld .ld-pair{display:flex}
+#tab-ld .ld-cell{flex:0 0 50%;padding:0 10px;display:flex;justify-content:center}
+/* top: -18px = 14px up to the bar, plus the 4px top border the pseudo-element sits inside */
+#tab-ld .ld-pair .cf-node::before{content:'';position:absolute;top:-18px;left:50%;width:2px;height:14px;background:var(--border-strong);transform:translateX(-50%)}
+#tab-ld .ld-caption{margin-top:14px;font-size:12.5px;color:var(--muted);text-align:center;max-width:90ch}
+#tab-ld .ld-caption b{color:var(--text)}
+@media(max-width:700px){
+  #tab-ld .ld-pair{flex-direction:column;gap:10px}
+  #tab-ld .ld-cell{padding:0}
+  #tab-ld .ld-split{height:10px}
+  #tab-ld .ld-split::after,#tab-ld .ld-pair .cf-node::before{display:none}
+}
+
+/* master subject filter */
+#tab-ld .ld-mhead{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+#tab-ld .ld-subjdd{position:relative}
+#tab-ld .ld-subjdd-toggle{display:inline-flex;gap:10px;justify-content:space-between;min-width:260px;background:#fff;border:1px solid var(--border-strong);padding:7px 12px;font:600 12.5px/1.2 inherit;cursor:pointer;color:var(--text)}
+#tab-ld .ld-subjchips{display:none;flex-wrap:wrap;gap:6px;position:absolute;top:calc(100% + 4px);left:0;z-index:40;background:#fff;border:2px solid var(--ld-ink);padding:10px;width:min(600px,90vw);max-height:320px;overflow:auto;box-shadow:0 8px 20px rgba(15,23,42,.15)}
+#tab-ld .ld-subjdd[data-open="1"] .ld-subjchips{display:flex}
+/* the flow's subject dropdown sits in the filter bar, so it matches the selects beside it */
+#tab-ld .ld-subjdd-toggle.ld-subjdd-sm{min-width:210px;padding:6px 10px;font:400 12.5px/1.2 inherit;text-transform:none;letter-spacing:0}
+#tab-ld .ld-subj-actions{flex:1 1 100%;display:flex;gap:6px;padding-bottom:8px;margin-bottom:2px;border-bottom:1px solid var(--line)}
+#tab-ld .ld-subj-actions button{font:600 11px/1 inherit;padding:5px 9px;cursor:pointer;background:var(--orange-tint);color:var(--ld-ink);border:1px solid var(--orange)}
+#tab-ld .ld-subj-actions button:hover{background:var(--orange);color:#fff}
+#tab-ld .ld-filterbar .subjchip{text-transform:none;letter-spacing:0;font-weight:400}
+#tab-ld .subjchip{display:inline-flex;gap:8px;align-items:center;background:#fff;border:1px solid var(--line);padding:5px 10px;font-size:12px;cursor:pointer;color:var(--muted)}
+#tab-ld .subjchip[aria-pressed="true"]{border-color:var(--orange);background:var(--orange-tint);color:var(--ld-ink);font-weight:700}
+#tab-ld .subjchip .n{font-variant-numeric:tabular-nums;color:var(--ld-amber)}
+
+/* composition split, status bars, subject bars */
+#tab-ld .ld-srcsplit{display:flex;height:26px;border:1px solid var(--ld-ink);margin:0 0 12px}
+#tab-ld .ld-srcsplit>div{display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;white-space:nowrap;overflow:hidden}
+#tab-ld .ld-srcsplit .s-pa{background:var(--orange);color:#fff}
+#tab-ld .ld-srcsplit .s-fy{background:var(--orange-tint);color:var(--ld-ink);border-left:1px solid var(--ld-ink)}
 #tab-ld .ld-vchart{display:flex;align-items:flex-end;gap:14px;height:230px;padding-left:44px;position:relative}
 #tab-ld .ld-vchart .gridlines{position:absolute;inset:0 0 0 44px;pointer-events:none}
-#tab-ld .ld-vchart .gl{position:absolute;left:0;right:0;border-top:1px solid var(--ld-border)}
-#tab-ld .ld-vchart .gl span{position:absolute;left:-44px;top:-8px;font-size:12px;color:var(--ld-text-secondary)}
-#tab-ld .ld-vchart .vcol{flex:1 1 0;display:flex;flex-direction:column;justify-content:flex-end;height:100%;min-width:0;cursor:pointer;
-  background:transparent;border:0;padding:0;font:inherit;color:inherit}
-#tab-ld .ld-vchart .vcol[data-dim="1"]{opacity:.35}
-#tab-ld .ld-vchart .vval{text-align:center;font-size:13px;font-weight:600;margin-bottom:4px}
-#tab-ld .ld-vchart .vbar{background:var(--c);min-height:3px;border-radius:4px 4px 0 0}
-#tab-ld .ld-vaxis{display:flex;gap:14px;padding-left:44px;border-top:1px solid #C9D4E2;padding-top:8px}
-#tab-ld .ld-vaxis .vlab{flex:1 1 0;text-align:center;font-size:12px;color:var(--ld-text-secondary);min-width:0;overflow-wrap:anywhere}
-#tab-ld .ld-nomatch{display:flex;flex-wrap:wrap;align-items:baseline;gap:8px;margin-top:12px;padding-top:10px;border-top:1px solid var(--ld-border);font-size:13px}
+#tab-ld .ld-vchart .gl{position:absolute;left:0;right:0;border-top:1px solid var(--line)}
+#tab-ld .ld-vchart .gl span{position:absolute;left:-44px;top:-8px;font-size:10px;color:var(--muted)}
+#tab-ld .ld-vchart .vcol{flex:1 1 0;display:flex;flex-direction:column;justify-content:flex-end;height:100%;min-width:0;cursor:pointer;position:relative}
+#tab-ld .ld-vchart .vcol[data-dim="1"]{opacity:.3}
+#tab-ld .ld-vchart .vval{text-align:center;font-size:12px;font-weight:800;margin-bottom:4px}
+#tab-ld .ld-vchart .vbar{background:var(--c);min-height:3px}
+#tab-ld .ld-vaxis{display:flex;gap:14px;padding-left:44px;border-top:2px solid var(--text);padding-top:7px}
+#tab-ld .ld-vaxis .vlab{flex:1 1 0;text-align:center;font-size:11px;color:var(--muted);min-width:0;overflow-wrap:anywhere}
+#tab-ld .ld-nomatch{display:flex;flex-wrap:wrap;align-items:baseline;gap:10px;margin-top:14px;padding-top:10px;border-top:1px dashed var(--line);font-size:12px}
 #tab-ld .ld-nomatch:empty{display:none}
-#tab-ld .ld-nomatch .nm-name{display:inline-flex;align-items:center;gap:6px;font-weight:600}
+#tab-ld .ld-nomatch .nm-name{display:inline-flex;align-items:center;gap:7px;font-weight:700}
 #tab-ld .ld-nomatch .nm-name .dot{background:var(--s-none)}
-#tab-ld .ld-nomatch .nm-val{font-weight:600}
-#tab-ld .ld-nomatch .sub-pct{color:var(--ld-text-secondary)}
-#tab-ld .ld-nomatch .nm-note{flex:1 1 100%;color:var(--ld-text-secondary);margin:0}
-#tab-ld .ld-hbars{display:flex;flex-direction:column;gap:8px}
-#tab-ld .hbar{display:grid;grid-template-columns:minmax(120px,240px) 1fr 60px;gap:12px;align-items:center;font-size:13px}
-#tab-ld .hbar .track{background:var(--ld-head);height:10px;border-radius:999px;overflow:hidden}
-#tab-ld .hbar .fill{height:100%;background:var(--ld-primary);border-radius:999px}
-#tab-ld .hbar .val{text-align:right;font-weight:600}
-#tab-ld .ld-tip{position:fixed;z-index:1100;pointer-events:none;opacity:0;transition:opacity .1s;background:var(--ld-surface);border:1px solid var(--ld-border);
-  border-radius:8px;box-shadow:0 6px 18px rgba(23,38,60,.14);padding:8px 10px;font-size:13px;max-width:280px}
-#tab-ld .ld-tip .t{font-weight:600;margin-bottom:4px}
+#tab-ld .ld-nomatch .nm-val{font-weight:800}
+#tab-ld .ld-nomatch .sub-pct{color:var(--muted)}
+#tab-ld .ld-nomatch .nm-note{flex:1 1 100%;color:var(--muted);margin:0}
+#tab-ld .ld-hbars{display:flex;flex-direction:column;gap:6px}
+#tab-ld .hbar{display:grid;grid-template-columns:minmax(120px,220px) 1fr 60px;gap:12px;align-items:center;font-size:12.5px}
+#tab-ld .hbar .track{background:var(--panel2);height:14px}
+#tab-ld .hbar .fill{height:100%;background:linear-gradient(90deg,var(--primary),var(--accent-mint))}
+#tab-ld .hbar .val{text-align:right;font-weight:800;font-variant-numeric:tabular-nums}
+#tab-ld .ld-tip{position:fixed;z-index:1100;pointer-events:none;opacity:0;transition:opacity .1s;background:#fff;border:2px solid var(--ld-ink);padding:8px 10px;font-size:12px;max-width:280px}
+#tab-ld .ld-tip .t{font-weight:800;margin-bottom:4px}
 #tab-ld .ld-tip .r{display:flex;gap:10px;align-items:center}
-#tab-ld .ld-tip .r .v{margin-left:auto;font-weight:600}
-#tab-ld .ld-tip .m{color:var(--ld-text-secondary);margin-top:4px;font-size:12px}
-#tab-ld .ld-warn{background:var(--ld-warning-bg);border:1px solid var(--ld-warning-border);color:var(--ld-warning-text);border-radius:8px;padding:8px 12px;font-size:13px}
-
-/* ---- responsive ---- */
-@media(max-width:1200px){ #tab-ld .ld-kpis.ld-kpis-6{grid-template-columns:repeat(3,minmax(0,1fr))} }
-@media(max-width:1100px){
-  #tab-ld .ld-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}
-  #tab-ld .ld-grid2{grid-template-columns:minmax(0,1fr)}
-}
-@media(max-width:860px){
-  #tab-ld.active{padding:12px}
-  #tab-ld .ld-shell{grid-template-columns:minmax(0,1fr)}
-  #tab-ld .ld-nav{position:static;flex-direction:row;flex-wrap:wrap;border-right:0;border-bottom:1px solid var(--ld-border);padding:8px;min-height:0}
-  #tab-ld .ld-nav-title{display:none}
-  #tab-ld .ld-nav-item{width:auto}
-  #tab-ld .ld-nav-lock{margin:0 0 0 auto}
-  #tab-ld .ld-main{padding:16px;border-radius:0 0 var(--ld-radius) var(--ld-radius)}
-  #tab-ld .ld-headmeta{align-items:flex-start}
-  #tab-ld .ld-dq-summary{grid-template-columns:minmax(0,1fr)}
-}
-@media(max-width:600px){
-  #tab-ld .ld-kpis,#tab-ld .ld-kpis.ld-kpis-6{grid-template-columns:minmax(0,1fr)}
-  #tab-ld .ld-title{font-size:22px}
-  #tab-ld .ld-toolbar{flex-direction:column;align-items:stretch}
-  #tab-ld .ld-field select,#tab-ld .ld-field input[type=search],#tab-ld .ld-subjdd-toggle{width:100%;min-width:0}
-  #tab-ld .hbar{grid-template-columns:minmax(0,1fr) 48px;grid-template-areas:"lab val" "track track"}
-  #tab-ld .hbar .lab{grid-area:lab} #tab-ld .hbar .val{grid-area:val} #tab-ld .hbar .track{grid-area:track}
-  #tab-ld .ld-vchart{gap:6px;padding-left:36px} #tab-ld .ld-vchart .gridlines{left:36px} #tab-ld .ld-vaxis{gap:6px;padding-left:36px}
-}
-#tab-ld .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
+#tab-ld .ld-tip .r .v{margin-left:auto;font-weight:800}
+#tab-ld .ld-tip .m{color:var(--muted);margin-top:4px;font-size:11px}
 </style>
 </head>
 <body>
@@ -1797,278 +1710,220 @@ table.data.editable td input:focus{outline:2px solid var(--orange);background:va
     <!-- Own sign-in for this tab (see "tab lock" in app-ld.js); shown while #tab-ld has .ld-locked. -->
     <div class="ld-lock">
       <form class="lock-box" id="ld-lock-form" autocomplete="off">
-        <div class="lock-icon" aria-hidden="true">🔒</div>
+        <div class="lock-icon">🔒</div>
         <h3>L&amp;D Dashboard is locked</h3>
         <p>Sign in with the L&amp;D Dashboard username and password.</p>
-        <label class="sr-only" for="ld-lock-user">Username</label>
         <input type="text" id="ld-lock-user" placeholder="Username" autocomplete="username" spellcheck="false">
-        <label class="sr-only" for="ld-lock-pass">Password</label>
         <input type="password" id="ld-lock-pass" placeholder="Password" autocomplete="current-password">
         <button type="submit" id="ld-lock-submit">Unlock</button>
-        <div class="lock-error" id="ld-lock-error" role="alert"></div>
+        <div class="lock-error" id="ld-lock-error"></div>
       </form>
     </div>
 
-    <div class="ld-state ld-error" id="ld-empty" role="status" hidden></div>
+    <div class="section ld-hero">
+      <h2>L&amp;D Dashboard — Financial Planning<span class="ld-stamp" id="ld-stamp"></span>
+        <button type="button" class="ld-relock" id="ld-relock" title="Lock the L&amp;D Dashboard again">🔒 Lock</button></h2>
+      <div class="meta">The L&amp;D team's plan work — plan approvals and FY planning tickets from the L&amp;D workbook — joined by
+        <strong>client email</strong> to the client's Workpoint lead record. <strong>L&amp;D Flow</strong> follows leads from created to
+        converted and by L&amp;D employee; <strong>L&amp;D Details</strong> is the full breakdown. Clients whose email is not in the lead
+        data are listed under <strong>Unmapped clients</strong> and left out of every count.</div>
+    </div>
 
-    <div class="ld-shell" id="ld-layout">
-      <nav class="ld-nav" aria-label="L&amp;D Dashboard views">
-        <div class="ld-nav-title">L&amp;D Dashboard</div>
-        <button class="ld-nav-item active" type="button" data-ldsub="flow" aria-current="page">L&amp;D Flow</button>
-        <button class="ld-nav-item" type="button" data-ldsub="employee">Employee View</button>
-        <button class="ld-nav-item" type="button" data-ldsub="details">L&amp;D Details</button>
-        <button class="ld-nav-item" type="button" data-ldsub="quality">Data Quality</button>
-        <button class="ld-nav-lock" type="button" id="ld-relock" title="Lock the L&amp;D Dashboard again">Lock L&amp;D</button>
+    <div class="ld-empty" id="ld-empty" hidden></div>
+
+    <div class="dash-layout" id="ld-layout">
+      <nav class="dash-subnav ld-subnav" aria-label="L&amp;D Dashboard subsections">
+        <button class="dash-subtab active" type="button" data-ldsub="flow">L&amp;D Flow</button>
+        <button class="dash-subtab" type="button" data-ldsub="details">L&amp;D Details</button>
+        <div class="ld-subnav-label">Data flags</div>
+        <button class="dash-subtab" type="button" data-ldsub="unmapped">Unmapped clients <span class="ld-count" id="ld-unmappedBadge">0</span></button>
+        <button class="dash-subtab" type="button" data-ldsub="dateissues">Date issues <span class="ld-count" id="ld-dateIssuesBadge">0</span></button>
+        <button class="dash-subtab" type="button" data-ldsub="noemail">Missing emails <span class="ld-count" id="ld-noEmailBadge">0</span></button>
       </nav>
 
-      <div class="ld-main">
-        <header class="ld-head">
-          <div>
-            <div class="ld-crumb">Financial Planning / L&amp;D</div>
-            <h1 class="ld-title" id="ld-viewTitle">L&amp;D at a glance</h1>
-            <p class="ld-subtitle" id="ld-viewSub">How many leads L&amp;D reached, where they stand in Workpoint now, and who worked on them.</p>
-          </div>
-          <div class="ld-headmeta">
-            <span class="ld-period" id="ld-period"></span>
-            <span class="ld-updated" id="ld-stamp"></span>
-          </div>
-        </header>
-
-        <div class="ld-state ld-loading" id="ld-loading" role="status" hidden>Preparing the L&amp;D data…</div>
-
-        <!-- Filters shared by L&D Flow and Employee View (app-ld.js hides this bar on the other views) -->
-        <section class="ld-toolbar" id="ld-flowFilters" aria-label="Filters for L&amp;D Flow and Employee View">
-          <div class="ld-toolbar-scope">Filters for L&amp;D Flow and Employee View</div>
-          <label class="ld-field">Month <select id="ld-fFlowMonth"><option value="">Whole financial year</option></select></label>
-          <!-- a div, not a <label>: a label would forward clicks on its text to the first button inside -->
-          <div class="ld-field"><span id="ld-flowSubjCap">Ticket subjects</span>
-            <div class="ld-subjdd" id="ld-flowSubjDd" data-open="0">
-              <button type="button" class="ld-subjdd-toggle" id="ld-flowSubjToggle" aria-expanded="false" aria-haspopup="true"
-                aria-controls="ld-flowSubjChips" aria-labelledby="ld-flowSubjCap ld-flowSubjLabel">
-                <span id="ld-flowSubjLabel">L&amp;D plan subjects</span><span aria-hidden="true">▾</span></button>
-              <div class="ld-subjchips" id="ld-flowSubjChips" role="group" aria-label="Ticket subjects"></div>
-            </div>
-          </div>
-          <label class="ld-field">L&amp;D employee <select id="ld-fFlowEmp"><option value="">All L&amp;D employees</option></select></label>
-          <label class="ld-field">Team <select id="ld-fFlowTeam"><option value="">All teams</option></select></label>
-          <button class="ld-btn" type="button" id="ld-flowResetBtn">Reset filters</button>
-        </section>
-
+      <div class="dash-content">
         <!-- L&D FLOW -->
         <div class="ld-subpanel active" id="ld-sub-flow">
-          <div class="ld-kpis" id="ld-flowKpis"></div>
+          <div class="ld-filterbar">
+            <label>Month <select id="ld-fFlowMonth"><option value="">Whole financial year</option></select></label>
+            <!-- a div, not a <label>: a label would forward clicks on its text to the first button inside -->
+            <div class="ld-fg">Ticket subjects
+              <div class="ld-subjdd" id="ld-flowSubjDd" data-open="0">
+                <button type="button" class="ld-subjdd-toggle ld-subjdd-sm" id="ld-flowSubjToggle" aria-expanded="false" aria-haspopup="true">
+                  <span id="ld-flowSubjLabel">L&amp;D plan subjects</span><span aria-hidden="true">▾</span></button>
+                <div class="ld-subjchips" id="ld-flowSubjChips"></div>
+              </div>
+            </div>
+            <label>L&amp;D employee <select id="ld-fFlowEmp"><option value="">All L&amp;D employees</option></select></label>
+            <label>Team <select id="ld-fFlowTeam"><option value="">All teams</option></select></label>
+            <button class="secondary" type="button" id="ld-flowResetBtn">Reset filters</button>
+          </div>
+          <div class="ld-flags" id="ld-flowFlags" aria-label="Data flags"></div>
 
-          <div class="ld-grid2">
-            <section class="ld-card" aria-labelledby="ld-statusTitle">
-              <h2 id="ld-statusTitle">Current lead status</h2>
-              <p class="ld-card-sub" id="ld-statusSub"></p>
-              <div class="ld-bars" id="ld-statusBars"></div>
-            </section>
-            <section class="ld-card" aria-labelledby="ld-reachTitle">
-              <h2 id="ld-reachTitle">How L&amp;D reached these leads</h2>
-              <p class="ld-card-sub">Two separate breakdowns of the same touched leads — each adds up to the total on its own.</p>
-              <div id="ld-reach"></div>
-            </section>
+          <div class="section bar-ld">
+            <h2>L&amp;D Flow — Lead Created to Converted</h2>
+            <div class="filter-note" id="ld-flowCap"></div>
+            <div class="ld-flowbox" id="ld-flow"></div>
           </div>
 
-          <p class="ld-context" id="ld-flowContext"></p>
-
-          <div class="ld-dq" id="ld-flowFlags" role="group" aria-label="Data quality, current view"></div>
-
-          <section class="ld-card" aria-labelledby="ld-tierTitle">
-            <div class="ld-card-head">
-              <h2 id="ld-tierTitle">Status by client tier</h2>
-              <a href="#" class="ld-link" id="ld-flowTierCsvBtn">Download client details (CSV)</a>
-            </div>
-            <p class="ld-card-sub" id="ld-flowTierCap"></p>
+          <div class="section bar-amber">
+            <h2>Leads Touched by L&amp;D — Status by Client Tier
+              <a href="#" class="ld-dl" id="ld-flowTierCsvBtn">&darr; Download client details (CSV)</a></h2>
             <div class="table-wrap"><table class="data" id="ld-flowTierTbl"></table></div>
-            <details class="ld-more"><summary>Show the “Other statuses” breakdown by tier</summary><ul id="ld-otherBreakdown"></ul></details>
-          </section>
-        </div>
+            <div class="hint" id="ld-flowTierCap"></div>
+          </div>
 
-        <!-- EMPLOYEE VIEW -->
-        <div class="ld-subpanel" id="ld-sub-employee">
-          <section class="ld-card" aria-labelledby="ld-empTitle">
-            <div class="ld-card-head">
-              <h2 id="ld-empTitle">Plans and client outcomes by L&amp;D employee</h2>
-              <a href="#" class="ld-link" id="ld-flowEmpCsvBtn">Download client details (CSV)</a>
-            </div>
-            <p class="ld-card-sub" id="ld-flowEmpCap"></p>
-            <p class="ld-note">A client handled by more than one employee appears under each of them, so the employee rows do not add up to
-              the distinct-client total — use the <b>Total (distinct clients)</b> row for that.</p>
-            <div class="table-wrap" style="margin-top:12px"><table class="data" id="ld-flowEmpTbl"></table></div>
-          </section>
+          <div class="section bar-ld">
+            <h2>By L&amp;D Employee — Plans Created / Approved and Workpoint Status
+              <a href="#" class="ld-dl" id="ld-flowEmpCsvBtn">&darr; Download client details (CSV)</a></h2>
+            <div class="table-wrap"><table class="data" id="ld-flowEmpTbl"></table></div>
+            <div class="hint" id="ld-flowEmpCap"></div>
+          </div>
         </div>
 
         <!-- L&D DETAILS -->
         <div class="ld-subpanel" id="ld-sub-details">
-          <p class="ld-note" id="ld-detailsScope"></p>
-          <section class="ld-toolbar" aria-label="Filters for L&amp;D Details">
-            <div class="ld-toolbar-scope">Filters for L&amp;D Details (they also narrow the Data Quality lists)</div>
-            <label class="ld-field">Month <select id="ld-fMonth"><option value="">All months</option></select></label>
-            <label class="ld-field">Client tier <select id="ld-fTier"><option value="">All tiers</option></select></label>
-            <label class="ld-field">Client tenure <select id="ld-fTenure"><option value="">All tenures</option></select></label>
-            <label class="ld-field">Team <select id="ld-fTeam"><option value="">All teams</option></select></label>
-            <label class="ld-field">Platform <select id="ld-fPlatform"><option value="">All platforms</option></select></label>
-            <label class="ld-field">Advisor / RM <select id="ld-fAdvisor"><option value="">All advisors</option></select></label>
-            <label class="ld-field">Lead source <select id="ld-fSource"><option value="">All sources</option></select></label>
-            <label class="ld-field ld-grow">Search name / email <input type="search" id="ld-fSearch" placeholder="e.g. gmail.com, Sagar"></label>
-            <div class="ld-field"><span id="ld-subjDdCap">Ticket subjects (master filter)</span>
-              <div class="ld-master-actions">
-                <div class="ld-subjdd" id="ld-subjDd" data-open="0">
-                  <button type="button" class="ld-subjdd-toggle" id="ld-subjDdToggle" aria-expanded="false" aria-haspopup="true"
-                    aria-controls="ld-subjChips" aria-labelledby="ld-subjDdCap ld-subjDdLabel">
-                    <span id="ld-subjDdLabel">All subjects</span><span aria-hidden="true">▾</span></button>
-                  <div class="ld-subjchips" id="ld-subjChips" role="group" aria-label="Ticket subjects"></div>
-                </div>
-                <button class="ld-btn" type="button" id="ld-subjAll">Select all</button>
-                <button class="ld-btn" type="button" id="ld-subjNone">Clear all</button>
-                <button class="ld-btn" type="button" id="ld-subjFP">FP only</button>
+          <div class="ld-filterbar">
+            <label>Month <select id="ld-fMonth"><option value="">All months</option></select></label>
+            <label>Client tier <select id="ld-fTier"><option value="">All tiers</option></select></label>
+            <label>Client tenure <select id="ld-fTenure"><option value="">All tenures</option></select></label>
+            <label>Team <select id="ld-fTeam"><option value="">All teams</option></select></label>
+            <label>Platform <select id="ld-fPlatform"><option value="">All platforms</option></select></label>
+            <label>Advisor / RM <select id="ld-fAdvisor"><option value="">All advisors</option></select></label>
+            <label>Lead source <select id="ld-fSource"><option value="">All sources</option></select></label>
+            <label class="ld-grow">Search name / email <input type="search" id="ld-fSearch" placeholder="e.g. gmail.com, Sagar"></label>
+            <button class="secondary" type="button" id="ld-resetBtn">Reset filters</button>
+            <div class="ld-chiprow"><span class="ld-chiplabel">Lead status — mapped clients only (click to include / exclude)</span>
+              <div class="ld-chips" id="ld-statusChips"></div></div>
+          </div>
+
+          <div class="section bar-amber ld-master">
+            <h2>Ticket Subject — Master Filter</h2>
+            <div class="ld-mhead">
+              <div class="ld-subjdd" id="ld-subjDd" data-open="0">
+                <button type="button" class="ld-subjdd-toggle" id="ld-subjDdToggle" aria-expanded="false" aria-haspopup="true">
+                  <span id="ld-subjDdLabel">All subjects</span><span aria-hidden="true">▾</span></button>
+                <div class="ld-subjchips" id="ld-subjChips"></div>
               </div>
+              <button class="secondary" type="button" id="ld-subjAll">Select all</button>
+              <button class="secondary" type="button" id="ld-subjNone">Clear all</button>
+              <button class="secondary" type="button" id="ld-subjFP">FP only</button>
             </div>
-            <button class="ld-btn" type="button" id="ld-resetBtn">Reset filters</button>
-            <div class="ld-chiprow"><span class="ld-chiplabel" id="ld-statusChipsCap">Lead status — mapped clients only (click to include / exclude)</span>
-              <div class="ld-chips" id="ld-statusChips" role="group" aria-labelledby="ld-statusChipsCap"></div></div>
-          </section>
-          <p class="ld-ctx" id="ld-masterNote"></p>
-
-          <div class="ld-localtabs" role="tablist" aria-label="L&amp;D Details sections">
-            <button class="ld-localtab" type="button" role="tab" data-dsec="overview" aria-selected="true">Overview</button>
-            <button class="ld-localtab" type="button" role="tab" data-dsec="team" aria-selected="false">Team &amp; status</button>
-            <button class="ld-localtab" type="button" role="tab" data-dsec="segments" aria-selected="false">Tickets &amp; client segments</button>
-            <button class="ld-localtab" type="button" role="tab" data-dsec="revenue" aria-selected="false">Revenue</button>
-            <button class="ld-localtab" type="button" role="tab" data-dsec="records" aria-selected="false">Client records</button>
+            <div class="hint" id="ld-masterNote"></div>
           </div>
 
-          <div class="ld-dsec active" id="ld-dsec-overview" role="tabpanel">
-            <div class="ld-kpis ld-kpis-6" id="ld-kpis"></div>
-            <section class="ld-card">
-              <div class="ld-card-head"><h2>Where the client universe comes from</h2></div>
-              <p class="ld-card-sub" id="ld-srcCap"></p>
-              <div class="ld-srcsplit" id="ld-srcSplit"></div>
-              <div class="table-wrap"><table class="data" id="ld-srcTbl"></table></div>
-            </section>
-            <section class="ld-card">
-              <h2>Lead status distribution</h2>
-              <p class="ld-card-sub" id="ld-distCap"></p>
-              <div class="ld-vchart" id="ld-statusChart"></div>
-              <div class="ld-vaxis" id="ld-statusAxis"></div>
-              <div class="ld-nomatch" id="ld-nomatchNote"></div>
-            </section>
+          <div class="kpis" id="ld-kpis"></div>
+
+          <div class="section bar-ld">
+            <h2>Client Details <a href="#" class="ld-dl" id="ld-clientCsvBtn">&darr; Download client details (CSV)</a></h2>
+            <div class="hint" id="ld-downloadCap" style="margin-top:0"></div>
           </div>
 
-          <div class="ld-dsec" id="ld-dsec-team" role="tabpanel">
-            <section class="ld-card">
-              <h2 id="ld-teamTblTitle">Team-wise status</h2>
-              <p class="ld-card-sub" id="ld-teamTblCap"></p>
-              <div class="table-wrap"><table class="data" id="ld-teamTbl"></table></div>
-            </section>
-            <section class="ld-card">
-              <h2 id="ld-teamTierTitle">Team-wise client tier distribution</h2>
-              <p class="ld-card-sub" id="ld-teamTierCap"></p>
-              <div class="table-wrap"><table class="data" id="ld-teamTierTbl"></table></div>
-            </section>
-            <section class="ld-card">
-              <h2>Month-wise lead status split</h2>
-              <p class="ld-card-sub">Months across the top, lead status down the side. A client is counted in every month they have a row in any
-                L&amp;D tab — someone active across several months appears in each, so a row's cells can add up to more than its own Total.</p>
-              <div class="table-wrap"><table class="data" id="ld-monthMatrix"></table></div>
-            </section>
+          <div class="section bar-ld">
+            <h2>01 — Where the Client Universe Comes From</h2>
+            <div class="hint" id="ld-srcCap" style="margin:0 0 10px"></div>
+            <div class="ld-srcsplit" id="ld-srcSplit"></div>
+            <div class="table-wrap"><table class="data" id="ld-srcTbl"></table></div>
           </div>
 
-          <div class="ld-dsec" id="ld-dsec-segments" role="tabpanel">
-            <section class="ld-card">
-              <h2>What the tickets are for</h2>
-              <p class="ld-card-sub" id="ld-subjCap"></p>
-              <div class="ld-hbars" id="ld-subjBars"></div>
-            </section>
-            <div class="ld-grid2">
-              <section class="ld-card">
-                <h2>Client tier distribution</h2>
-                <p class="ld-card-sub" id="ld-tierCap"></p>
-                <div class="table-wrap"><table class="data" id="ld-tierTbl"></table></div>
-              </section>
-              <section class="ld-card">
-                <h2>Client tenure distribution</h2>
-                <p class="ld-card-sub" id="ld-tenureCap"></p>
-                <div class="table-wrap"><table class="data" id="ld-tenureTbl"></table></div>
-              </section>
+          <div class="section bar-ld">
+            <h2>02 — Lead Status Distribution</h2>
+            <div class="hint" id="ld-distCap" style="margin:0 0 12px"></div>
+            <div class="ld-vchart" id="ld-statusChart"></div>
+            <div class="ld-vaxis" id="ld-statusAxis"></div>
+            <div class="ld-nomatch" id="ld-nomatchNote"></div>
+          </div>
+
+          <div class="section bar-ld">
+            <h2 id="ld-teamTblTitle">03 — Team-wise Status</h2>
+            <div class="table-wrap"><table class="data" id="ld-teamTbl"></table></div>
+            <div class="hint" id="ld-teamTblCap"></div>
+          </div>
+
+          <div class="section bar-ld">
+            <h2 id="ld-teamTierTitle">04 — Team-wise Client Tier Distribution</h2>
+            <div class="table-wrap"><table class="data" id="ld-teamTierTbl"></table></div>
+            <div class="hint" id="ld-teamTierCap"></div>
+          </div>
+
+          <div class="section bar-ld">
+            <h2>05 — Month-wise Lead Status Split</h2>
+            <div class="table-wrap"><table class="data" id="ld-monthMatrix"></table></div>
+            <div class="hint">Months across the top, lead status down the side. A client is counted in every month they have a row in any
+              L&amp;D tab — someone active across several months appears in each, so a row's cells can add up to more than its own Total.</div>
+          </div>
+
+          <div class="section bar-ld">
+            <h2>06 — What the Tickets Are For</h2>
+            <div class="hint" id="ld-subjCap" style="margin:0 0 12px"></div>
+            <div class="ld-hbars" id="ld-subjBars"></div>
+          </div>
+
+          <div class="ld-two">
+            <div class="section bar-amber">
+              <h2>07 — Client Tier Distribution</h2>
+              <div class="table-wrap"><table class="data" id="ld-tierTbl"></table></div>
+              <div class="hint" id="ld-tierCap"></div>
             </div>
-            <section class="ld-card">
-              <h2>Tier against tenure</h2>
-              <p class="ld-card-sub" id="ld-crossCap"></p>
-              <div class="table-wrap"><table class="data" id="ld-crossTbl"></table></div>
-            </section>
-            <section class="ld-card">
-              <div class="ld-card-head"><h2>Client distribution: tier × lead status</h2>
-                <a href="#" class="ld-link" id="ld-tierStatusCsvBtn">Download CSV</a></div>
-              <p class="ld-card-sub">Client counts. Percentages are of the row (tier) total.</p>
-              <div class="table-wrap"><table class="data" id="ld-tierStatusTbl"></table></div>
-            </section>
+            <div class="section bar-amber">
+              <h2>07 — Client Tenure Distribution</h2>
+              <div class="table-wrap"><table class="data" id="ld-tenureTbl"></table></div>
+              <div class="hint" id="ld-tenureCap"></div>
+            </div>
           </div>
 
-          <div class="ld-dsec" id="ld-dsec-revenue" role="tabpanel">
-            <section class="ld-card">
-              <div class="ld-card-head"><h2>Revenue distribution: tier × lead status</h2>
-                <label class="ld-field" style="flex-direction:row;align-items:center;gap:8px">Product <select id="ld-fProduct"></select></label></div>
-              <p class="ld-card-sub" id="ld-revCap"></p>
-              <div id="ld-revWarn"></div>
-              <div class="table-wrap" style="margin-top:12px"><table class="data" id="ld-revTbl"></table></div>
-            </section>
+          <div class="section bar-ld">
+            <h2>08 — Tier Against Tenure</h2>
+            <div class="table-wrap"><table class="data" id="ld-crossTbl"></table></div>
+            <div class="hint" id="ld-crossCap"></div>
           </div>
 
-          <div class="ld-dsec" id="ld-dsec-records" role="tabpanel">
-            <section class="ld-card">
-              <div class="ld-card-head"><h2>Client details</h2>
-                <a href="#" class="ld-link" id="ld-clientCsvBtn">Download client details (CSV)</a></div>
-              <p class="ld-card-sub" id="ld-downloadCap"></p>
-            </section>
-            <section class="ld-card">
-              <h2>Client list</h2>
-              <p class="ld-card-sub" id="ld-listCap"></p>
-              <div class="table-wrap"><table class="data" id="ld-clientTbl"></table></div>
-            </section>
+          <div class="section bar-ld">
+            <h2>09 — Client Distribution: Tier × Lead Status
+              <a href="#" class="ld-dl" id="ld-tierStatusCsvBtn">&darr; Download CSV</a></h2>
+            <div class="table-wrap"><table class="data" id="ld-tierStatusTbl"></table></div>
+            <div class="hint">Client counts. Percentages are of the row (tier) total.</div>
+          </div>
+
+          <div class="section bar-amber">
+            <h2>10 — Revenue Distribution: Tier × Lead Status
+              <span class="ld-h2-ctl"><label>Product <select id="ld-fProduct"></select></label></span></h2>
+            <div id="ld-revWarn"></div>
+            <div class="table-wrap"><table class="data" id="ld-revTbl"></table></div>
+            <div class="hint" id="ld-revCap"></div>
+          </div>
+
+          <div class="section bar-ld">
+            <h2>11 — Client List</h2>
+            <div class="hint" id="ld-listCap" style="margin:0 0 10px"></div>
+            <div class="table-wrap"><table class="data" id="ld-clientTbl"></table></div>
           </div>
         </div>
 
-        <!-- DATA QUALITY -->
-        <div class="ld-subpanel" id="ld-sub-quality">
-          <p class="ld-note">Rows the dashboard cannot count. The cards show <b>all sheets</b>; the list below each card follows the
-            <b>L&amp;D Details</b> filters. The amber strip on L&amp;D Flow shows the same checks for the <b>current Flow view</b> only.</p>
-          <div class="ld-dq-summary" id="ld-dqSummary"></div>
-          <div class="ld-localtabs" role="tablist" aria-label="Data quality reports">
-            <button class="ld-localtab" type="button" role="tab" data-dq="unmapped" aria-selected="true">Unmapped clients <span class="ld-count" id="ld-unmappedBadge">0</span></button>
-            <button class="ld-localtab" type="button" role="tab" data-dq="dateissues" aria-selected="false">Date issues <span class="ld-count" id="ld-dateIssuesBadge">0</span></button>
-            <button class="ld-localtab" type="button" role="tab" data-dq="noemail" aria-selected="false">Missing emails <span class="ld-count" id="ld-noEmailBadge">0</span></button>
-          </div>
-          <section class="ld-card ld-dqsec active" id="ld-dq-unmapped" role="tabpanel">
-            <div class="ld-card-head"><h2>Unmapped clients</h2><a href="#" class="ld-link" id="ld-unmappedCsvBtn">Download CSV</a></div>
-            <p class="ld-card-sub" id="ld-unmappedCap"></p>
+        <!-- DATA FLAGS -->
+        <div class="ld-subpanel" id="ld-sub-unmapped">
+          <div class="section bar-red">
+            <h2>Unmapped Clients <a href="#" class="ld-dl" id="ld-unmappedCsvBtn">&darr; Download CSV</a></h2>
+            <div class="hint" id="ld-unmappedCap" style="margin:0 0 10px"></div>
             <div class="table-wrap"><table class="data" id="ld-unmappedTbl"></table></div>
-          </section>
-          <section class="ld-card ld-dqsec" id="ld-dq-dateissues" role="tabpanel">
-            <div class="ld-card-head"><h2>Date issues</h2><a href="#" class="ld-link" id="ld-dateIssuesCsvBtn">Download CSV</a></div>
-            <p class="ld-card-sub" id="ld-dateIssuesCap"></p>
+          </div>
+        </div>
+        <div class="ld-subpanel" id="ld-sub-dateissues">
+          <div class="section bar-red">
+            <h2>Date Issues <a href="#" class="ld-dl" id="ld-dateIssuesCsvBtn">&darr; Download CSV</a></h2>
+            <div class="hint" id="ld-dateIssuesCap" style="margin:0 0 10px"></div>
             <div class="table-wrap"><table class="data" id="ld-dateIssuesTbl"></table></div>
-          </section>
-          <section class="ld-card ld-dqsec" id="ld-dq-noemail" role="tabpanel">
-            <div class="ld-card-head"><h2>Rows missing a client email</h2><a href="#" class="ld-link" id="ld-noEmailCsvBtn">Download CSV</a></div>
-            <p class="ld-card-sub" id="ld-noEmailCap"></p>
+          </div>
+        </div>
+        <div class="ld-subpanel" id="ld-sub-noemail">
+          <div class="section bar-red">
+            <h2>Rows Missing a Client Email <a href="#" class="ld-dl" id="ld-noEmailCsvBtn">&darr; Download CSV</a></h2>
+            <div class="hint" id="ld-noEmailCap" style="margin:0 0 10px"></div>
             <div class="table-wrap"><table class="data" id="ld-noEmailTbl"></table></div>
-          </section>
+          </div>
         </div>
 
-        <details class="ld-notes">
-          <summary>Definitions &amp; source notes</summary>
-          <p>The L&amp;D team's plan work — plan approvals and FY planning tickets from the L&amp;D workbook — is joined by <b>client email</b>
-            to the client's Workpoint lead record. Clients whose email is not in the lead data are listed under <b>Data Quality → Unmapped
-            clients</b> and left out of every status count.</p>
-          <p id="ld-flowCap"></p>
-          <p id="ld-scopeDiff"></p>
-          <p>Lead status is the client's <b>current</b> Workpoint status. It shows where the client stands now; it is not evidence that
-            L&amp;D work caused a conversion.</p>
-          <p id="ld-foot"></p>
-        </details>
+        <p class="ld-foot" id="ld-foot"></p>
       </div>
     </div>
     <div class="ld-tip" id="ld-tip" role="tooltip"></div>
