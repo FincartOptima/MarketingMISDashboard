@@ -60,6 +60,9 @@
     <label>BD Accountability Tracker <span class="opt">(optional fallback — normally synced live from Google Sheets, see below; also populates BD Daily Log)</span></label>
     <input type="file" name="bd" accept=".xlsx">
 
+    <label>L&amp;D Financial Planning workbook <span class="opt">(optional — the "Financial Planning Tickets Summary" file; feeds the L&amp;D Dashboard tab{% if ld_sync and ld_sync.enabled %}; normally synced live from Google Sheets, see below{% endif %})</span></label>
+    <input type="file" name="ld" accept=".xlsx">
+
     <label>Upload Password</label>
     <input type="password" name="password" required>
 
@@ -87,6 +90,19 @@
     {% if bd_sync.last_success %}<p class="ok">Last successful sync: {{ bd_sync.last_success }}</p>{% else %}<p>No successful sync yet.</p>{% endif %}
     {% if bd_sync.last_error %}<p class="err">Last error: {{ bd_sync.last_error }}</p>{% endif %}
     <form method="POST" action="/sync-bd">
+      <input type="password" name="password" placeholder="Upload password" required>
+      <button type="submit">Sync now</button>
+    </form>
+  </div>
+  {% endif %}
+
+  {% if ld_sync and ld_sync.enabled %}
+  <div class="bdsync">
+    <strong>L&amp;D Financial Planning workbook — live Google Sheets sync</strong>
+    <p>Runs automatically (throttled) whenever the dashboard loads data.</p>
+    {% if ld_sync.last_success %}<p class="ok">Last successful sync: {{ ld_sync.last_success }}</p>{% else %}<p>No successful sync yet.</p>{% endif %}
+    {% if ld_sync.last_error %}<p class="err">Last error: {{ ld_sync.last_error }}</p>{% endif %}
+    <form method="POST" action="/sync-ld">
       <input type="password" name="password" placeholder="Upload password" required>
       <button type="submit">Sync now</button>
     </form>

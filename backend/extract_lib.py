@@ -405,3 +405,51 @@ def load_bd_daily_log_rows(file_like):
         obj['sourceRow'] = sheet_row
         out.append(obj)
     return out
+
+
+# ---------- L&D Financial Planning workbook ----------
+# The L&D team's "Financial Planning Tickets Summary" workbook: two Plan Approval tabs and two FY
+# ticket tabs, one per quarter. The L&D Dashboard tab (app-ld.js) does all the joining and
+# counting in the browser, so this only lifts the rows out, keeping each cell under its own header
+# (the tabs spell some headers differently, e.g. "Lead Status" vs "Lead Statues", and app-ld.js
+# looks each field up by the per-tab name). New quarter tabs are picked up by name pattern alone.
+LD_SHEET_PATTERN = re.compile(r'^(plan approval sheet|fy \d{4}-\d{4})\s+q\d+$', re.IGNORECASE)
+# Headers app-ld.js reads, lower-cased. Everything else (remarks, discussion notes, TAT columns)
+# is dropped to keep the stored dataset small.
+LD_COLUMNS = {
+    'month', 'd', 'date', 'tkt recd date', 'ticket id', 'sr no', 'advisor', 'rm name',
+    'client name', 'email id', 'client mail id', 'lead source', 'client type', 'ticket subject',
+    'assigned to', 'drafted by', 'approved by', 'approval date', 'approved/rejected',
+    'unlisted allocation', 'grip allocation', 'ulip allocation', 'monthly revised surplus',
+    'total equity allocation',
+}
+
+
+def load_ld_workbook_rows(file_like):
+    """Every data row of every Plan Approval / FY tab, as {header: value} plus `_sheet` and `_row`
+    (its row number in the tab, header = 1), so the dashboard can point at the exact row to fix."""
+    # Tab and header names are compared with case and spacing ignored, so "Plan Approval  Sheet Q3"
+    # or an "Email ID" header in a new quarter's tab is still read (app-ld.js matches the same way).
+    squash = lambda t: re.sub(r'\s+', ' ', t).strip().lower()
+    wb = openpyxl.load_workbook(file_like, read_only=True, data_only=True)
+    out = []
+    for sheet_name in wb.sheetnames:
+        if not LD_SHEET_PATTERN.match(squash(sheet_name)):
+            continue
+        all_rows = read_all_rows(wb[sheet_name])
+        if not all_rows:
+            continue
+        headers = [header_text(h) for h in all_rows[0]]
+        keep = [(i, h) for i, h in enumerate(headers) if h and squash(h) in LD_COLUMNS]
+        for row_no, row in enumerate(all_rows[1:], start=2):
+            obj = {}
+            for i, h in keep:
+                v = cell_value(row[i] if i < len(row) else None)
+                if v != '':
+                    obj[h] = v
+            if obj:
+                obj['_sheet'] = sheet_name.strip()
+                obj['_row'] = row_no
+                out.append(obj)
+    wb.close()
+    return out

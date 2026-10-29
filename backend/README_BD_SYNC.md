@@ -96,3 +96,24 @@ editor that might auto-format JSON, since either can silently convert the
 The manual "BD Accountability Tracker" file upload on `/upload` still works
 as an emergency fallback (e.g. if the service account credentials ever
 break), but note it'll be overwritten by the next successful automatic sync.
+
+## L&D Financial Planning workbook — same mechanism
+
+The L&D Dashboard tab reads the `ld` dataset: the L&D team's "Financial Planning
+Tickets Summary" workbook (its Plan Approval and FY tabs). Until it is linked, upload
+the file in the **L&D Financial Planning workbook** field on `/upload`. To have it
+pulled automatically instead:
+
+1. Open the L&D Google Sheet → Share → add the **same** service account email used
+   for the BD tracker (`client_email` in the key file) as **Viewer**.
+2. Copy the sheet ID from its URL (between `/d/` and `/edit`).
+3. On PythonAnywhere (Web tab → Environment variables, or `os.environ.setdefault`
+   in the WSGI file) set `LD_SHEET_ID` to that ID. Optional: `LD_SYNC_MIN_INTERVAL`
+   (seconds between pulls, default `300`).
+4. Reload the web app. `/upload` now shows an **"L&D Financial Planning workbook —
+   live Google Sheets sync"** section; click **Sync now** to confirm it works.
+
+New quarter tabs ("Plan Approval Sheet Q3", "FY 2026-2027 Q3", …) are picked up by
+name automatically. Workpoint values for L&D clients older than the daily B2C file
+come from `ld_leads_snapshot.js` — regenerate it with `build_ld_snapshot.py` whenever
+a fresh all-time lead export is available.

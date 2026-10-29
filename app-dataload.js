@@ -236,7 +236,7 @@ async function loadAllFromRepo(){
   // the page stays completely blank (no spinner, no error) for the entire loading
   // and render pass, which can take well over a minute on a large dataset.
   showUpload();
-  STATE.filesLoaded = { fin23: false, rev: false, b2b: false, fy: false, pa: false, bd: false, bdcalls: false };
+  STATE.filesLoaded = { fin23: false, rev: false, b2b: false, fy: false, pa: false, bd: false, bdcalls: false, ld: false };
 
   loadEmployeeFromStorage();
   loadCostFromStorage();
@@ -321,6 +321,12 @@ async function loadAllFromRepo(){
     STATE.bdCalls = [];
   }
   canonicalizeBDNames();
+
+  // L&D Financial Planning workbook rows, as stored by the backend ('ld'). The L&D Dashboard tab
+  // (app-ld.js) joins them to STATE.raw itself, the first time the tab is opened.
+  STATE.ldRows = (d.ld && d.ld.length) ? d.ld : [];
+  STATE.filesLoaded.ld = STATE.ldRows.length > 0;
+  if(!STATE.filesLoaded.ld) console.warn('[MIS] ld (L&D workbook) data missing');
 
   // On-Hold lead remarks, bucketed into categories by a calibrated
   // rule-based matcher (see scratch_mfsa/classify.py) — extracted locally,

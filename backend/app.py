@@ -90,6 +90,17 @@ SOURCE_CONFIGS = [
         'loader': extract_lib.load_bd_daily_log_rows,
         'loader_kwargs': {},
     },
+    {
+        # L&D "Financial Planning Tickets Summary" workbook (Plan Approval + FY ticket tabs) for
+        # the L&D Dashboard tab. Normally synced from Google Sheets once LD_SHEET_ID is set (see
+        # sync_ld_from_google); the upload field is the fallback until then.
+        'key': 'ld',
+        'form_field': 'ld',
+        'required': False,
+        'human_label': 'L&D Financial Planning workbook',
+        'loader': extract_lib.load_ld_workbook_rows,
+        'loader_kwargs': {},
+    },
 ]
 SOURCES = [cfg['key'] for cfg in SOURCE_CONFIGS]
 
@@ -208,6 +219,10 @@ def _google_credentials():
 
 
 def _fetch_bd_workbook_bytes():
+    return _fetch_drive_workbook_bytes(BD_SHEET_ID)
+
+
+def _fetch_drive_workbook_bytes(file_id):
     from google.auth.transport.requests import Request as GoogleAuthRequest
     creds = _google_credentials()
     creds.refresh(GoogleAuthRequest())
@@ -223,12 +238,12 @@ def _fetch_bd_workbook_bytes():
     # formats and 403s on anything else). Check which one it currently is
     # rather than assuming, since that can change if someone opens the
     # uploaded file with Sheets and lets Drive convert it in place.
-    meta = json.loads(_get(f'https://www.googleapis.com/drive/v3/files/{BD_SHEET_ID}?fields=mimeType'))
+    meta = json.loads(_get(f'https://www.googleapis.com/drive/v3/files/{file_id}?fields=mimeType'))
     if meta.get('mimeType') == 'application/vnd.google-apps.spreadsheet':
-        url = (f'https://www.googleapis.com/drive/v3/files/{BD_SHEET_ID}/export'
+        url = (f'https://www.googleapis.com/drive/v3/files/{file_id}/export'
                '?mimeType=application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
     else:
-        url = f'https://www.googleapis.com/drive/v3/files/{BD_SHEET_ID}?alt=media'
+        url = f'https://www.googleapis.com/drive/v3/files/{file_id}?alt=media'
     return _get(url)
 
 
@@ -263,6 +278,43 @@ def sync_bd_from_google(force=False):
     _bd_sync_state['last_error'] = None
 
 
+# ---------- Live L&D workbook sync (private Google Sheet) ----------
+# Same mechanism as the BD tracker above: share the L&D Financial Planning sheet with the same
+# service account (Viewer), then set LD_SHEET_ID. Until LD_SHEET_ID is set this does nothing and
+# the 'ld' dataset comes only from the upload form.
+LD_SHEET_ID = os.environ.get('LD_SHEET_ID', '')
+LD_SYNC_MIN_INTERVAL = int(os.environ.get('LD_SYNC_MIN_INTERVAL', '300'))  # seconds
+_ld_sync_state = {'last_attempt': 0.0, 'last_success': None, 'last_error': None,
+                  'enabled': bool(LD_SHEET_ID)}
+
+
+def sync_ld_from_google(force=False):
+    """Pull the L&D workbook from Google Sheets and store it exactly like a manual 'ld' upload.
+    Throttled and failure-tolerant in the same way as sync_bd_from_google."""
+    if not LD_SHEET_ID:
+        return
+    now = time.time()
+    if not force and (now - _ld_sync_state['last_attempt']) < LD_SYNC_MIN_INTERVAL:
+        return
+    _ld_sync_state['last_attempt'] = now
+    try:
+        rows = extract_lib.load_ld_workbook_rows(io.BytesIO(_fetch_drive_workbook_bytes(LD_SHEET_ID)))
+    except Exception as e:
+        _ld_sync_state['last_error'] = str(e)
+        return
+    updated_at = datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')
+    db = get_db()
+    db.execute(
+        'INSERT INTO datasets (key, json_data, row_count, updated_at) VALUES (?, ?, ?, ?) '
+        'ON CONFLICT(key) DO UPDATE SET json_data=excluded.json_data, '
+        'row_count=excluded.row_count, updated_at=excluded.updated_at',
+        ('ld', json.dumps(rows, ensure_ascii=False), len(rows), updated_at)
+    )
+    db.commit()
+    _ld_sync_state['last_success'] = updated_at
+    _ld_sync_state['last_error'] = None
+
+
 def _status():
     db = get_db()
     rows = db.execute('SELECT key, row_count, updated_at FROM datasets').fetchall()
@@ -276,6 +328,7 @@ def api_data():
     if request.method == 'OPTIONS':
         return cors(Response(status=204))
     sync_bd_from_google()
+    sync_ld_from_google()
     db = get_db()
     rows = db.execute('SELECT key, json_data, row_count, updated_at FROM datasets').fetchall()
     by_key = {r[0]: r for r in rows}
@@ -419,6 +472,32 @@ def sync_bd_now():
         return render_template('upload.html', error=f"BD Google Sheet sync failed: {_bd_sync_state['last_error']}",
                                 status=status, sources=SOURCES, bd_sync=_bd_sync_state)
     return render_template('upload.html', success='BD Accountability Tracker synced from Google Sheets.',
+                            status=status, sources=SOURCES, bd_sync=_bd_sync_state)
+
+
+@app.context_processor
+def _inject_ld_sync():
+    # Every upload.html render shows the L&D sync panel (when LD_SHEET_ID is set) without each
+    # render_template call above having to pass it.
+    return {'ld_sync': _ld_sync_state}
+
+
+@app.route('/sync-ld', methods=['POST'])
+def sync_ld_now():
+    # On-demand L&D pull, bypassing the throttle -- same as /sync-bd.
+    password = request.form.get('password', '')
+    if not _password_ok(password):
+        return render_template('upload.html', error='Incorrect password.',
+                                status=_status(), sources=SOURCES, bd_sync=_bd_sync_state), 403
+    if not LD_SHEET_ID:
+        return render_template('upload.html', error='L&D Google Sheet sync is not set up (LD_SHEET_ID is empty).',
+                                status=_status(), sources=SOURCES, bd_sync=_bd_sync_state)
+    sync_ld_from_google(force=True)
+    status = _status()
+    if _ld_sync_state['last_error']:
+        return render_template('upload.html', error=f"L&D Google Sheet sync failed: {_ld_sync_state['last_error']}",
+                                status=status, sources=SOURCES, bd_sync=_bd_sync_state)
+    return render_template('upload.html', success='L&D Financial Planning workbook synced from Google Sheets.',
                             status=status, sources=SOURCES, bd_sync=_bd_sync_state)
 
 

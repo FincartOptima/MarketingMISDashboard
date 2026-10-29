@@ -671,6 +671,158 @@ table.data.editable td input:focus{outline:2px solid var(--orange);background:va
   .dash-subnav{position:static;width:100%;flex-direction:row;flex-wrap:wrap}
   .dash-subnav .dash-subtab{width:auto;flex:1 1 auto}
 }
+
+/* ============ L&D DASHBOARD (app-ld.js) ============
+   Same building blocks as every other tab (.section, .kpi, table.data, the BD-style side sub-nav and
+   flow boxes), recoloured for this tab only: the dashboard's colour tokens are redefined on #tab-ld,
+   so every shared component inside it picks up deep teal with an amber accent, and nothing outside
+   it changes. Lead-status colours match the standalone L&D page. */
+#tab-ld{
+  --orange:#0f766e; --orange-tint:#ecfdf5; --orange-hover:#115e59;
+  --ld-ink:#134e4a; --ld-amber:#d97706; --ld-amber-tint:#fffbeb;
+  --s-converted:#2563eb; --s-inprocess:#ea580c; --s-reassigned:#0d9488; --s-onhold:#ca8a04;
+  --s-followup:#db2777; --s-assigned:#16a34a; --s-dead:#6d28d9; --s-other:#e11d48; --s-none:#94a3b8;
+}
+#tab-ld .section.bar-ld{border-top-color:var(--orange)}
+#tab-ld .section.bar-amber{border-top-color:var(--ld-amber)}
+#tab-ld .ld-hero{background:linear-gradient(120deg,var(--ld-ink),#0f766e 70%,#14b8a6);border:0;color:#ecfdf5}
+#tab-ld .ld-hero h2{color:#fff;font-size:14px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+#tab-ld .ld-hero .meta{color:#ccfbf1;font-size:12.5px;max-width:110ch}
+#tab-ld .ld-hero .meta strong{color:#fff}
+#tab-ld .ld-stamp{margin-left:auto;font-size:11px;font-weight:600;text-transform:none;letter-spacing:0;color:#99f6e4;background:rgba(0,0,0,.18);padding:3px 9px}
+#tab-ld .ld-empty{background:var(--ld-amber-tint);border:2px solid var(--line);border-left:5px solid var(--ld-amber);padding:18px 20px;font-size:13px;margin-bottom:16px}
+#tab-ld .ld-subnav{background:var(--ld-ink)}
+#tab-ld .ld-subnav .dash-subtab{color:#99f6e4;display:flex;align-items:center;justify-content:space-between;gap:8px}
+#tab-ld .ld-subnav .dash-subtab:hover{background:rgba(255,255,255,.08);color:#fff}
+#tab-ld .ld-subnav .dash-subtab.active{background:var(--ld-amber);border-color:var(--ld-amber);color:#1c1917}
+#tab-ld .ld-subnav-label{margin:8px 4px 0;padding-top:10px;border-top:1px solid rgba(255,255,255,.15);font-size:10px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;color:#5eead4}
+#tab-ld .ld-count{min-width:22px;padding:1px 6px;font-size:10px;font-weight:800;text-align:center;background:rgba(0,0,0,.25);color:#fff}
+#tab-ld .ld-subpanel{display:none}
+#tab-ld .ld-subpanel.active{display:block}
+#tab-ld .ld-filterbar{display:flex;flex-wrap:wrap;align-items:flex-end;gap:10px 14px;background:#fff;border:2px solid var(--line);border-left:5px solid var(--orange);padding:12px 14px;margin-bottom:16px}
+#tab-ld .ld-filterbar label{display:flex;flex-direction:column;gap:4px;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:var(--muted)}
+#tab-ld .ld-filterbar select,#tab-ld .ld-filterbar input[type=search]{font-size:12.5px;text-transform:none;letter-spacing:0;font-weight:400;color:var(--text);min-width:150px}
+#tab-ld .ld-filterbar input[type=search]{padding:6px 8px;border:1px solid var(--border-strong)}
+#tab-ld .ld-grow{flex:1 1 200px}
+#tab-ld .ld-chiprow{flex:1 1 100%}
+#tab-ld .ld-chiplabel{display:block;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:6px}
+#tab-ld .ld-chips{display:flex;flex-wrap:wrap;gap:6px}
+#tab-ld .ld-chip{display:inline-flex;align-items:center;gap:7px;background:#fff;border:1px solid var(--border-strong);padding:5px 10px;font-size:12px;cursor:pointer;color:var(--text)}
+#tab-ld .ld-chip[data-off="1"]{opacity:.4;text-decoration:line-through}
+#tab-ld .dot{display:inline-block;width:9px;height:9px;background:var(--c,var(--s-none));flex:none}
+#tab-ld .ld-dl,#tab-ld .ld-h2-ctl{float:right;font-weight:600;text-transform:none;letter-spacing:0;font-size:12px}
+#tab-ld .ld-h2-ctl label{font-size:11px;color:var(--muted);display:inline-flex;align-items:center;gap:6px}
+#tab-ld .kpi{border-left-width:5px}
+#tab-ld .ld-kpi-note{font-size:11px;color:var(--muted);margin-top:4px}
+#tab-ld .ld-kpi-note b{color:var(--text)}
+#tab-ld .ld-two{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media(max-width:1100px){#tab-ld .ld-two{grid-template-columns:1fr}}
+#tab-ld .ld-foot{font-size:11.5px;color:var(--muted);line-height:1.7;border-top:1px solid var(--line);padding-top:12px;margin-top:4px}
+#tab-ld .ld-foot code{font-size:11px;background:var(--panel2);padding:0 4px}
+
+/* tables: text left, numbers right; a teal header instead of slate */
+#tab-ld table.data th,#tab-ld table.data td{text-align:left}
+#tab-ld table.data .num{text-align:right;font-variant-numeric:tabular-nums}
+#tab-ld table.data thead th,#tab-ld table.data thead th:first-child{background:var(--ld-ink);border-bottom-color:var(--ld-amber)}
+#tab-ld table.data thead th.grp{text-align:center;background:#115e59;border-bottom:1px solid rgba(255,255,255,.2)}
+#tab-ld table.data tr.totrow td{font-weight:800;background:var(--orange-tint);color:var(--ld-ink);border-top:2px solid var(--orange)}
+#tab-ld table.data td.wrapcell{white-space:normal;min-width:170px}
+#tab-ld table.data .muted-col{color:var(--muted)}
+#tab-ld table.data thead th.muted-col{color:#99f6e4}
+#tab-ld table.data .sub-pct{color:var(--muted);font-size:11px;font-weight:400}
+#tab-ld table.data td.rowhead{font-weight:700}
+#tab-ld table.data td.cell[data-zero="1"]{color:var(--muted)}
+#tab-ld table.data td.diag{background:var(--ld-amber-tint)}
+#tab-ld #ld-flowEmpTbl tbody tr[data-emp]{cursor:pointer}
+#tab-ld #ld-flowEmpTbl tbody tr[data-on="1"] td{background:var(--ld-amber-tint);font-weight:700}
+#tab-ld #ld-clientTbl th[data-key]{cursor:pointer}
+#tab-ld #ld-flowTierTbl,#tab-ld #ld-flowEmpTbl,#tab-ld #ld-srcTbl{max-height:none}
+#tab-ld .ld-pill{display:inline-flex;align-items:center;gap:6px}
+
+/* data flags */
+#tab-ld .ld-flags{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:10px;margin-bottom:16px}
+#tab-ld .ld-flag{display:block;width:100%;text-align:left;font:inherit;cursor:pointer;background:#fff;border:2px solid var(--line);border-left:5px solid var(--red);padding:12px 14px}
+#tab-ld .ld-flag:hover{background:#fff1f2}
+#tab-ld .ld-flag[data-zero="1"]{border-left-color:var(--green)}
+#tab-ld .ld-flag[data-zero="1"]:hover{background:var(--orange-tint)}
+#tab-ld .ld-flag .fk{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:var(--red)}
+#tab-ld .ld-flag[data-zero="1"] .fk{color:var(--green)}
+#tab-ld .ld-flag .fv{font-size:26px;font-weight:900;letter-spacing:-1px;line-height:1.1;margin:4px 0 2px;color:var(--text)}
+#tab-ld .ld-flag .fn{font-size:11.5px;color:var(--muted)}
+#tab-ld .ld-flag .fgo{font-size:10.5px;font-weight:700;color:var(--orange);margin-top:6px}
+
+/* flow: the dashboard's .cf-node boxes, joined by drawn connectors. The two-way split sits in a
+   block whose halves are exactly 50% each, so the bar's ends (25% / 75%) meet each box's centre. */
+#tab-ld .ld-flowbox{display:flex;flex-direction:column;align-items:center;padding:6px 0 2px}
+#tab-ld .ld-row{display:flex;justify-content:center;width:100%}
+#tab-ld .cf-node{border-top-color:var(--c,var(--orange));position:relative;max-width:300px}
+#tab-ld .cf-node .cf-value{color:var(--c,var(--orange))}
+#tab-ld .cf-node .cf-sub b{color:var(--text)}
+#tab-ld .cf-node.ld-wide{max-width:560px;flex-basis:560px}
+#tab-ld .ld-break{display:grid;grid-template-columns:1fr auto;gap:4px 16px;text-align:left;margin:12px 0 0;padding:10px 0 0;border-top:1px dashed var(--border-strong);font-size:12px}
+#tab-ld .ld-break dt{color:var(--muted)}
+#tab-ld .ld-break dd{margin:0;text-align:right;font-weight:800;font-variant-numeric:tabular-nums}
+#tab-ld .ld-break .sep{grid-column:1/-1;border-top:1px dashed var(--line);margin:3px 0 1px}
+#tab-ld .ld-stem{width:2px;height:26px;background:var(--border-strong)}
+#tab-ld .ld-fork{width:min(660px,100%)}
+#tab-ld .ld-split{position:relative;height:26px}
+#tab-ld .ld-split::before{content:'';position:absolute;top:0;left:50%;width:2px;height:13px;background:var(--border-strong);transform:translateX(-50%)}
+#tab-ld .ld-split::after{content:'';position:absolute;top:12px;left:25%;right:25%;height:2px;background:var(--border-strong)}
+#tab-ld .ld-pair{display:flex}
+#tab-ld .ld-cell{flex:0 0 50%;padding:0 10px;display:flex;justify-content:center}
+/* top: -18px = 14px up to the bar, plus the 4px top border the pseudo-element sits inside */
+#tab-ld .ld-pair .cf-node::before{content:'';position:absolute;top:-18px;left:50%;width:2px;height:14px;background:var(--border-strong);transform:translateX(-50%)}
+#tab-ld .ld-caption{margin-top:14px;font-size:12.5px;color:var(--muted);text-align:center;max-width:90ch}
+#tab-ld .ld-caption b{color:var(--text)}
+@media(max-width:700px){
+  #tab-ld .ld-pair{flex-direction:column;gap:10px}
+  #tab-ld .ld-cell{padding:0}
+  #tab-ld .ld-split{height:10px}
+  #tab-ld .ld-split::after,#tab-ld .ld-pair .cf-node::before{display:none}
+}
+
+/* master subject filter */
+#tab-ld .ld-mhead{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+#tab-ld .ld-subjdd{position:relative}
+#tab-ld .ld-subjdd-toggle{display:inline-flex;gap:10px;justify-content:space-between;min-width:260px;background:#fff;border:1px solid var(--border-strong);padding:7px 12px;font:600 12.5px/1.2 inherit;cursor:pointer;color:var(--text)}
+#tab-ld .ld-subjchips{display:none;flex-wrap:wrap;gap:6px;position:absolute;top:calc(100% + 4px);left:0;z-index:40;background:#fff;border:2px solid var(--ld-ink);padding:10px;width:min(600px,90vw);max-height:320px;overflow:auto;box-shadow:0 8px 20px rgba(15,23,42,.15)}
+#tab-ld .ld-subjdd[data-open="1"] .ld-subjchips{display:flex}
+#tab-ld .subjchip{display:inline-flex;gap:8px;align-items:center;background:#fff;border:1px solid var(--line);padding:5px 10px;font-size:12px;cursor:pointer;color:var(--muted)}
+#tab-ld .subjchip[aria-pressed="true"]{border-color:var(--orange);background:var(--orange-tint);color:var(--ld-ink);font-weight:700}
+#tab-ld .subjchip .n{font-variant-numeric:tabular-nums;color:var(--ld-amber)}
+
+/* composition split, status bars, subject bars */
+#tab-ld .ld-srcsplit{display:flex;height:26px;border:1px solid var(--ld-ink);margin:0 0 12px}
+#tab-ld .ld-srcsplit>div{display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;white-space:nowrap;overflow:hidden}
+#tab-ld .ld-srcsplit .s-pa{background:var(--orange);color:#fff}
+#tab-ld .ld-srcsplit .s-fy{background:var(--orange-tint);color:var(--ld-ink);border-left:1px solid var(--ld-ink)}
+#tab-ld .ld-vchart{display:flex;align-items:flex-end;gap:14px;height:230px;padding-left:44px;position:relative}
+#tab-ld .ld-vchart .gridlines{position:absolute;inset:0 0 0 44px;pointer-events:none}
+#tab-ld .ld-vchart .gl{position:absolute;left:0;right:0;border-top:1px solid var(--line)}
+#tab-ld .ld-vchart .gl span{position:absolute;left:-44px;top:-8px;font-size:10px;color:var(--muted)}
+#tab-ld .ld-vchart .vcol{flex:1 1 0;display:flex;flex-direction:column;justify-content:flex-end;height:100%;min-width:0;cursor:pointer;position:relative}
+#tab-ld .ld-vchart .vcol[data-dim="1"]{opacity:.3}
+#tab-ld .ld-vchart .vval{text-align:center;font-size:12px;font-weight:800;margin-bottom:4px}
+#tab-ld .ld-vchart .vbar{background:var(--c);min-height:3px}
+#tab-ld .ld-vaxis{display:flex;gap:14px;padding-left:44px;border-top:2px solid var(--text);padding-top:7px}
+#tab-ld .ld-vaxis .vlab{flex:1 1 0;text-align:center;font-size:11px;color:var(--muted);min-width:0;overflow-wrap:anywhere}
+#tab-ld .ld-nomatch{display:flex;flex-wrap:wrap;align-items:baseline;gap:10px;margin-top:14px;padding-top:10px;border-top:1px dashed var(--line);font-size:12px}
+#tab-ld .ld-nomatch:empty{display:none}
+#tab-ld .ld-nomatch .nm-name{display:inline-flex;align-items:center;gap:7px;font-weight:700}
+#tab-ld .ld-nomatch .nm-name .dot{background:var(--s-none)}
+#tab-ld .ld-nomatch .nm-val{font-weight:800}
+#tab-ld .ld-nomatch .sub-pct{color:var(--muted)}
+#tab-ld .ld-nomatch .nm-note{flex:1 1 100%;color:var(--muted);margin:0}
+#tab-ld .ld-hbars{display:flex;flex-direction:column;gap:6px}
+#tab-ld .hbar{display:grid;grid-template-columns:minmax(120px,220px) 1fr 60px;gap:12px;align-items:center;font-size:12.5px}
+#tab-ld .hbar .track{background:var(--panel2);height:14px}
+#tab-ld .hbar .fill{height:100%;background:linear-gradient(90deg,var(--orange),#14b8a6)}
+#tab-ld .hbar .val{text-align:right;font-weight:800;font-variant-numeric:tabular-nums}
+#tab-ld .ld-tip{position:fixed;z-index:1100;pointer-events:none;opacity:0;transition:opacity .1s;background:#fff;border:2px solid var(--ld-ink);padding:8px 10px;font-size:12px;max-width:280px}
+#tab-ld .ld-tip .t{font-weight:800;margin-bottom:4px}
+#tab-ld .ld-tip .r{display:flex;gap:10px;align-items:center}
+#tab-ld .ld-tip .r .v{margin-left:auto;font-weight:800}
+#tab-ld .ld-tip .m{color:var(--muted);margin-top:4px;font-size:11px}
 </style>
 </head>
 <body>
@@ -1523,6 +1675,210 @@ table.data.editable td input:focus{outline:2px solid var(--orange);background:va
     </div>
   </div>
 
+  <!-- ===== L&D DASHBOARD ===== -->
+  <!-- Built and rendered by app-ld.js. Every id is prefixed "ld-" (app-ld.js looks them up by the
+       unprefixed name), and its styles are scoped to #tab-ld under "L&D DASHBOARD" in <style>. -->
+  <div class="tab-panel" id="tab-ld">
+    <div class="section ld-hero">
+      <h2>L&amp;D Dashboard — Financial Planning<span class="ld-stamp" id="ld-stamp"></span></h2>
+      <div class="meta">The L&amp;D team's plan work — plan approvals and FY planning tickets from the L&amp;D workbook — joined by
+        <strong>client email</strong> to the client's Workpoint lead record. <strong>L&amp;D Flow</strong> follows leads from created to
+        converted and by L&amp;D employee; <strong>L&amp;D Details</strong> is the full breakdown. Clients whose email is not in the lead
+        data are listed under <strong>Unmapped clients</strong> and left out of every count.</div>
+    </div>
+
+    <div class="ld-empty" id="ld-empty" hidden></div>
+
+    <div class="dash-layout" id="ld-layout">
+      <nav class="dash-subnav ld-subnav" aria-label="L&amp;D Dashboard subsections">
+        <button class="dash-subtab active" type="button" data-ldsub="flow">L&amp;D Flow</button>
+        <button class="dash-subtab" type="button" data-ldsub="details">L&amp;D Details</button>
+        <div class="ld-subnav-label">Data flags</div>
+        <button class="dash-subtab" type="button" data-ldsub="unmapped">Unmapped clients <span class="ld-count" id="ld-unmappedBadge">0</span></button>
+        <button class="dash-subtab" type="button" data-ldsub="dateissues">Date issues <span class="ld-count" id="ld-dateIssuesBadge">0</span></button>
+        <button class="dash-subtab" type="button" data-ldsub="noemail">Missing emails <span class="ld-count" id="ld-noEmailBadge">0</span></button>
+      </nav>
+
+      <div class="dash-content">
+        <!-- L&D FLOW -->
+        <div class="ld-subpanel active" id="ld-sub-flow">
+          <div class="ld-filterbar">
+            <label>Month <select id="ld-fFlowMonth"><option value="">Whole financial year</option></select></label>
+            <label>L&amp;D employee <select id="ld-fFlowEmp"><option value="">All L&amp;D employees</option></select></label>
+            <label>Team <select id="ld-fFlowTeam"><option value="">All teams</option></select></label>
+            <button class="secondary" type="button" id="ld-flowResetBtn">Reset filters</button>
+          </div>
+          <div class="ld-flags" id="ld-flowFlags" aria-label="Data flags"></div>
+
+          <div class="section bar-ld">
+            <h2>L&amp;D Flow — Lead Created to Converted</h2>
+            <div class="filter-note" id="ld-flowCap"></div>
+            <div class="ld-flowbox" id="ld-flow"></div>
+          </div>
+
+          <div class="section bar-amber">
+            <h2>Leads Touched by L&amp;D — Status by Client Tier
+              <a href="#" class="ld-dl" id="ld-flowTierCsvBtn">&darr; Download client details (CSV)</a></h2>
+            <div class="table-wrap"><table class="data" id="ld-flowTierTbl"></table></div>
+            <div class="hint" id="ld-flowTierCap"></div>
+          </div>
+
+          <div class="section bar-ld">
+            <h2>By L&amp;D Employee — Plans Created / Approved and Workpoint Status
+              <a href="#" class="ld-dl" id="ld-flowEmpCsvBtn">&darr; Download client details (CSV)</a></h2>
+            <div class="table-wrap"><table class="data" id="ld-flowEmpTbl"></table></div>
+            <div class="hint" id="ld-flowEmpCap"></div>
+          </div>
+        </div>
+
+        <!-- L&D DETAILS -->
+        <div class="ld-subpanel" id="ld-sub-details">
+          <div class="ld-filterbar">
+            <label>Month <select id="ld-fMonth"><option value="">All months</option></select></label>
+            <label>Client tier <select id="ld-fTier"><option value="">All tiers</option></select></label>
+            <label>Client tenure <select id="ld-fTenure"><option value="">All tenures</option></select></label>
+            <label>Team <select id="ld-fTeam"><option value="">All teams</option></select></label>
+            <label>Platform <select id="ld-fPlatform"><option value="">All platforms</option></select></label>
+            <label>Advisor / RM <select id="ld-fAdvisor"><option value="">All advisors</option></select></label>
+            <label>Lead source <select id="ld-fSource"><option value="">All sources</option></select></label>
+            <label class="ld-grow">Search name / email <input type="search" id="ld-fSearch" placeholder="e.g. gmail.com, Sagar"></label>
+            <button class="secondary" type="button" id="ld-resetBtn">Reset filters</button>
+            <div class="ld-chiprow"><span class="ld-chiplabel">Lead status — mapped clients only (click to include / exclude)</span>
+              <div class="ld-chips" id="ld-statusChips"></div></div>
+          </div>
+
+          <div class="section bar-amber ld-master">
+            <h2>Ticket Subject — Master Filter</h2>
+            <div class="ld-mhead">
+              <div class="ld-subjdd" id="ld-subjDd" data-open="0">
+                <button type="button" class="ld-subjdd-toggle" id="ld-subjDdToggle" aria-expanded="false" aria-haspopup="true">
+                  <span id="ld-subjDdLabel">All subjects</span><span aria-hidden="true">▾</span></button>
+                <div class="ld-subjchips" id="ld-subjChips"></div>
+              </div>
+              <button class="secondary" type="button" id="ld-subjAll">Select all</button>
+              <button class="secondary" type="button" id="ld-subjNone">Clear all</button>
+              <button class="secondary" type="button" id="ld-subjFP">FP only</button>
+            </div>
+            <div class="hint" id="ld-masterNote"></div>
+          </div>
+
+          <div class="kpis" id="ld-kpis"></div>
+
+          <div class="section bar-ld">
+            <h2>Client Details <a href="#" class="ld-dl" id="ld-clientCsvBtn">&darr; Download client details (CSV)</a></h2>
+            <div class="hint" id="ld-downloadCap" style="margin-top:0"></div>
+          </div>
+
+          <div class="section bar-ld">
+            <h2>01 — Where the Client Universe Comes From</h2>
+            <div class="hint" id="ld-srcCap" style="margin:0 0 10px"></div>
+            <div class="ld-srcsplit" id="ld-srcSplit"></div>
+            <div class="table-wrap"><table class="data" id="ld-srcTbl"></table></div>
+          </div>
+
+          <div class="section bar-ld">
+            <h2>02 — Lead Status Distribution</h2>
+            <div class="hint" id="ld-distCap" style="margin:0 0 12px"></div>
+            <div class="ld-vchart" id="ld-statusChart"></div>
+            <div class="ld-vaxis" id="ld-statusAxis"></div>
+            <div class="ld-nomatch" id="ld-nomatchNote"></div>
+          </div>
+
+          <div class="section bar-ld">
+            <h2 id="ld-teamTblTitle">03 — Team-wise Status</h2>
+            <div class="table-wrap"><table class="data" id="ld-teamTbl"></table></div>
+            <div class="hint" id="ld-teamTblCap"></div>
+          </div>
+
+          <div class="section bar-ld">
+            <h2 id="ld-teamTierTitle">04 — Team-wise Client Tier Distribution</h2>
+            <div class="table-wrap"><table class="data" id="ld-teamTierTbl"></table></div>
+            <div class="hint" id="ld-teamTierCap"></div>
+          </div>
+
+          <div class="section bar-ld">
+            <h2>05 — Month-wise Lead Status Split</h2>
+            <div class="table-wrap"><table class="data" id="ld-monthMatrix"></table></div>
+            <div class="hint">Months across the top, lead status down the side. A client is counted in every month they have a row in any
+              L&amp;D tab — someone active across several months appears in each, so a row's cells can add up to more than its own Total.</div>
+          </div>
+
+          <div class="section bar-ld">
+            <h2>06 — What the Tickets Are For</h2>
+            <div class="hint" id="ld-subjCap" style="margin:0 0 12px"></div>
+            <div class="ld-hbars" id="ld-subjBars"></div>
+          </div>
+
+          <div class="ld-two">
+            <div class="section bar-amber">
+              <h2>07 — Client Tier Distribution</h2>
+              <div class="table-wrap"><table class="data" id="ld-tierTbl"></table></div>
+              <div class="hint" id="ld-tierCap"></div>
+            </div>
+            <div class="section bar-amber">
+              <h2>07 — Client Tenure Distribution</h2>
+              <div class="table-wrap"><table class="data" id="ld-tenureTbl"></table></div>
+              <div class="hint" id="ld-tenureCap"></div>
+            </div>
+          </div>
+
+          <div class="section bar-ld">
+            <h2>08 — Tier Against Tenure</h2>
+            <div class="table-wrap"><table class="data" id="ld-crossTbl"></table></div>
+            <div class="hint" id="ld-crossCap"></div>
+          </div>
+
+          <div class="section bar-ld">
+            <h2>09 — Client Distribution: Tier × Lead Status
+              <a href="#" class="ld-dl" id="ld-tierStatusCsvBtn">&darr; Download CSV</a></h2>
+            <div class="table-wrap"><table class="data" id="ld-tierStatusTbl"></table></div>
+            <div class="hint">Client counts. Percentages are of the row (tier) total.</div>
+          </div>
+
+          <div class="section bar-amber">
+            <h2>10 — Revenue Distribution: Tier × Lead Status
+              <span class="ld-h2-ctl"><label>Product <select id="ld-fProduct"></select></label></span></h2>
+            <div id="ld-revWarn"></div>
+            <div class="table-wrap"><table class="data" id="ld-revTbl"></table></div>
+            <div class="hint" id="ld-revCap"></div>
+          </div>
+
+          <div class="section bar-ld">
+            <h2>11 — Client List</h2>
+            <div class="hint" id="ld-listCap" style="margin:0 0 10px"></div>
+            <div class="table-wrap"><table class="data" id="ld-clientTbl"></table></div>
+          </div>
+        </div>
+
+        <!-- DATA FLAGS -->
+        <div class="ld-subpanel" id="ld-sub-unmapped">
+          <div class="section bar-red">
+            <h2>Unmapped Clients <a href="#" class="ld-dl" id="ld-unmappedCsvBtn">&darr; Download CSV</a></h2>
+            <div class="hint" id="ld-unmappedCap" style="margin:0 0 10px"></div>
+            <div class="table-wrap"><table class="data" id="ld-unmappedTbl"></table></div>
+          </div>
+        </div>
+        <div class="ld-subpanel" id="ld-sub-dateissues">
+          <div class="section bar-red">
+            <h2>Date Issues <a href="#" class="ld-dl" id="ld-dateIssuesCsvBtn">&darr; Download CSV</a></h2>
+            <div class="hint" id="ld-dateIssuesCap" style="margin:0 0 10px"></div>
+            <div class="table-wrap"><table class="data" id="ld-dateIssuesTbl"></table></div>
+          </div>
+        </div>
+        <div class="ld-subpanel" id="ld-sub-noemail">
+          <div class="section bar-red">
+            <h2>Rows Missing a Client Email <a href="#" class="ld-dl" id="ld-noEmailCsvBtn">&darr; Download CSV</a></h2>
+            <div class="hint" id="ld-noEmailCap" style="margin:0 0 10px"></div>
+            <div class="table-wrap"><table class="data" id="ld-noEmailTbl"></table></div>
+          </div>
+        </div>
+
+        <p class="ld-foot" id="ld-foot"></p>
+      </div>
+    </div>
+    <div class="ld-tip" id="ld-tip" role="tooltip"></div>
+  </div>
+
   <!-- ===== CATEGORIZED LEADS ===== -->
   <div class="tab-panel" id="tab-categorized">
     <div class="section bar-pink">
@@ -1772,7 +2128,7 @@ table.data.editable td input:focus{outline:2px solid var(--orange);background:va
     // Nothing below is requested until sign-in succeeds.
     MISAuth.ready(function(){
       var t = Date.now();
-      ['data.js','snapshot.js','categorized_leads_data.js','app-config.js','app-dateutils.js','app-state.js','app-dataload.js','app-filters.js','app-aggregators.js','app-rmperf.js','app-bd2.js','app-bd2-health.js','app-categorized.js','app-tables.js','app-renderers.js','app-ui.js','app-health.js','app-bootstrap.js'].forEach(function(src){
+      ['data.js','snapshot.js','categorized_leads_data.js','app-config.js','app-dateutils.js','app-state.js','app-dataload.js','app-filters.js','app-aggregators.js','app-rmperf.js','app-bd2.js','app-bd2-health.js','ld_leads_snapshot.js','app-ld.js','app-categorized.js','app-tables.js','app-renderers.js','app-ui.js','app-health.js','app-bootstrap.js'].forEach(function(src){
         var s = document.createElement('script');
         s.src = src + '?t=' + t;
         s.async = false;

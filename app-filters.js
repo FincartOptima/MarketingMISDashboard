@@ -273,7 +273,7 @@ function initPremiumLock(){
   updatePremiumLockUI();
 }
 
-// Dashboard, MTD Performance, BD Performance and Categorized Leads stay in the bar; every other
+// Dashboard, MTD Performance, BD Performance, Categorized Leads and L&D Dashboard stay in the bar; every other
 // tab (menu: true) opens from the "More" dropdown at the end of it.
 function tabBar(){
   const tabs = [
@@ -281,6 +281,7 @@ function tabBar(){
     {id:'mtd',       label:'MTD Performance',  primary:true},
     {id:'bdperf',    label:'BD Performance',   primary:true},
     {id:'categorized', label:'Categorized Leads', primary:true},
+    {id:'ld',        label:'L&D Dashboard',    primary:true},
     {id:'rmperf',    label:'RM Performance',   menu:true},
     {id:'rmrev',     label:'RM Revenue',       menu:true},
     {id:'cpc',       label:'Cost Per Campaign', menu:true},
@@ -375,6 +376,7 @@ function activateTab(id){
   if(id==='rmperf') renderRMPerformance();
   if(id==='bdperf') renderBD2();
   if(id==='categorized') renderCategorizedLeads();
+  if(id==='ld') renderLD();
   requestAnimationFrame(() => {
     const panel = $('#tab-'+id);
     if(panel) panel.querySelectorAll('.table-wrap').forEach(attachMirrorScroll);
