@@ -69,6 +69,7 @@
   // A reload drops every loaded script and all app state, so it is the cleanest way to sign out.
   function signOut(){
     try{ sessionStorage.removeItem(SESSION_KEY); }catch(e){}
+    try{ sessionStorage.removeItem('ld_auth'); }catch(e){}   // the L&D Dashboard tab's own unlock (app-ld.js LD_LOCK)
     location.reload();
   }
 

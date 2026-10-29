@@ -683,6 +683,16 @@ table.data.editable td input:focus{outline:2px solid var(--orange);background:va
   --s-converted:#2563eb; --s-inprocess:#ea580c; --s-reassigned:#0d9488; --s-onhold:#ca8a04;
   --s-followup:#db2777; --s-assigned:#16a34a; --s-dead:#6d28d9; --s-other:#e11d48; --s-none:#94a3b8;
 }
+/* tab lock: while locked only the sign-in box shows (nothing else is built until it is unlocked) */
+#tab-ld.ld-locked > :not(.ld-lock){display:none}
+#tab-ld:not(.ld-locked) > .ld-lock{display:none}
+#tab-ld .ld-lock{display:flex;align-items:center;justify-content:center;min-height:420px}
+#tab-ld .lock-box{border-color:var(--ld-ink)}
+#tab-ld .lock-box input{width:100%;margin-bottom:10px;text-align:center;box-sizing:border-box}
+#tab-ld .lock-box button{background:var(--orange);border-color:var(--orange);color:#fff}
+#tab-ld .ld-relock{font:600 11px/1 inherit;text-transform:none;letter-spacing:0;padding:4px 10px;cursor:pointer;
+  background:rgba(0,0,0,.18);color:#ecfdf5;border:1px solid rgba(255,255,255,.35)}
+#tab-ld .ld-relock:hover{background:rgba(0,0,0,.32)}
 #tab-ld .section.bar-ld{border-top-color:var(--orange)}
 #tab-ld .section.bar-amber{border-top-color:var(--ld-amber)}
 #tab-ld .ld-hero{background:linear-gradient(120deg,var(--ld-ink),#0f766e 70%,#14b8a6);border:0;color:#ecfdf5}
@@ -1678,9 +1688,23 @@ table.data.editable td input:focus{outline:2px solid var(--orange);background:va
   <!-- ===== L&D DASHBOARD ===== -->
   <!-- Built and rendered by app-ld.js. Every id is prefixed "ld-" (app-ld.js looks them up by the
        unprefixed name), and its styles are scoped to #tab-ld under "L&D DASHBOARD" in <style>. -->
-  <div class="tab-panel" id="tab-ld">
+  <div class="tab-panel ld-locked" id="tab-ld">
+    <!-- Own sign-in for this tab (see "tab lock" in app-ld.js); shown while #tab-ld has .ld-locked. -->
+    <div class="ld-lock">
+      <form class="lock-box" id="ld-lock-form" autocomplete="off">
+        <div class="lock-icon">🔒</div>
+        <h3>L&amp;D Dashboard is locked</h3>
+        <p>Sign in with the L&amp;D Dashboard username and password.</p>
+        <input type="text" id="ld-lock-user" placeholder="Username" autocomplete="username" spellcheck="false">
+        <input type="password" id="ld-lock-pass" placeholder="Password" autocomplete="current-password">
+        <button type="submit" id="ld-lock-submit">Unlock</button>
+        <div class="lock-error" id="ld-lock-error"></div>
+      </form>
+    </div>
+
     <div class="section ld-hero">
-      <h2>L&amp;D Dashboard — Financial Planning<span class="ld-stamp" id="ld-stamp"></span></h2>
+      <h2>L&amp;D Dashboard — Financial Planning<span class="ld-stamp" id="ld-stamp"></span>
+        <button type="button" class="ld-relock" id="ld-relock" title="Lock the L&amp;D Dashboard again">🔒 Lock</button></h2>
       <div class="meta">The L&amp;D team's plan work — plan approvals and FY planning tickets from the L&amp;D workbook — joined by
         <strong>client email</strong> to the client's Workpoint lead record. <strong>L&amp;D Flow</strong> follows leads from created to
         converted and by L&amp;D employee; <strong>L&amp;D Details</strong> is the full breakdown. Clients whose email is not in the lead

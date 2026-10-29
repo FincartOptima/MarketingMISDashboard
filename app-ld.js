@@ -366,7 +366,66 @@ const LD = (() => {
   let model = null, modelFor = null, ui = null, building = null;
   const el = id => document.getElementById('ld-' + id);
 
+  // ---------- tab lock ----------
+  // A second sign-in in front of this tab only, checked the same way as the dashboard's own
+  // (app-login.js): PBKDF2-SHA256 of "<username>:<password>" against a stored verifier, so the repo
+  // holds neither. The username ignores case and spacing; the password is case-sensitive. Unlocking
+  // lasts until the browser tab closes or the user signs out (app-login.js clears LD_LOCK.sessionKey).
+  // Like app-login.js this is a front-end gate, not access control: the L&D rows still arrive with
+  // /api/data for every signed-in visitor; it only keeps the tab itself closed. To change the login:
+  //   python -c "import hashlib;print(hashlib.pbkdf2_hmac('sha256',b'<username lower-case>:<password>',b'<salt>',200000).hex())"
+  const LD_LOCK = { salt: '919316fa753e66e3c72253782f0d370d', iterations: 200000, sessionKey: 'ld_auth',
+                    verifier: '95733532cbce0f06c0bbe9c4a20c221bb48c8d2bb3d0af4df8c4285639c21d51' };
+  const unlocked = () => { try{ return sessionStorage.getItem(LD_LOCK.sessionKey) === '1'; }catch(e){ return false; } };
+  async function lockDerive(username, password){
+    const enc = new TextEncoder();
+    const key = await crypto.subtle.importKey('raw',
+      enc.encode(username.replace(/\s+/g, ' ').trim().toLowerCase() + ':' + password), 'PBKDF2', false, ['deriveBits']);
+    const bits = await crypto.subtle.deriveBits(
+      { name: 'PBKDF2', hash: 'SHA-256', salt: enc.encode(LD_LOCK.salt), iterations: LD_LOCK.iterations }, key, 256);
+    return Array.from(new Uint8Array(bits), b => b.toString(16).padStart(2, '0')).join('');
+  }
+  let lockBound = false;
+  function bindLock(){
+    if(lockBound) return;
+    lockBound = true;
+    const tab = document.getElementById('tab-ld'), form = el('lock-form'), err = el('lock-error'), btn = el('lock-submit');
+    form.addEventListener('submit', async e => {
+      e.preventDefault();
+      const user = el('lock-user').value, pass = el('lock-pass').value;
+      if(!user.trim() || !pass){ err.textContent = 'Enter the username and password.'; return; }
+      btn.disabled = true; err.textContent = '';
+      try{
+        if(await lockDerive(user, pass) === LD_LOCK.verifier){
+          try{ sessionStorage.setItem(LD_LOCK.sessionKey, '1'); }catch(e2){}
+          el('lock-pass').value = '';
+          tab.classList.remove('ld-locked');
+          renderLD();
+        } else {
+          err.textContent = 'Incorrect username or password.';   // same message for either, so neither is confirmed
+          el('lock-pass').value = ''; el('lock-pass').focus();
+        }
+      }catch(e2){
+        err.textContent = 'Could not check the sign-in: ' + (e2 && e2.message || e2);
+      }finally{
+        btn.disabled = false;
+      }
+    });
+    el('relock').addEventListener('click', () => {
+      try{ sessionStorage.removeItem(LD_LOCK.sessionKey); }catch(e){}
+      tab.classList.add('ld-locked');
+      el('lock-user').focus();
+    });
+  }
+
   async function render(){
+    bindLock();
+    if(!unlocked()){
+      document.getElementById('tab-ld').classList.add('ld-locked');
+      el('lock-user').focus();
+      return;
+    }
+    document.getElementById('tab-ld').classList.remove('ld-locked');
     const empty = el('empty'), layout = el('layout');
     if(!(STATE.ldRows && STATE.ldRows.length)){
       empty.hidden = false; layout.hidden = true;
