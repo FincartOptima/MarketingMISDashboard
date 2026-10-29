@@ -264,6 +264,19 @@ function bd2BuildDataIssues(){
   }else{
     const logs = STATE.bdCalls;
     const num = v => v || 0;
+    const callsText = r => `Total ${n(num(r.totalCalls))} · Connected ${n(num(r.callsConnected))} · CNP ${n(num(r.cnp))}`;
+    // Calls on a row with no BD Name are in every total, under BD2_NO_BD_NAME. That is not a rep typed
+    // wrongly or a day entered twice, so the two name checks below leave it out.
+    const unnamed = logs.filter(r => r.bdName === BD2_NO_BD_NAME);
+    const named = logs.filter(r => r.bdName !== BD2_NO_BD_NAME);
+    if(unnamed.length){
+      const calls = unnamed.reduce((a, r) => a + num(r.totalCalls), 0);
+      add('warn', 'log-no-name', `${bd2Num(unnamed.length, 'BD Daily Log row')} ${bd2Has(unnamed.length)} no BD Name: ${bd2Num(calls, 'call')} ${bd2Is(calls)} not credited to any rep`,
+        `The calls are in the totals, so Total Calls Made matches the sheet, but they show on a "${BD2_NO_BD_NAME}" rep row instead of the rep who made them. ` +
+        'That rep\'s own Calls Made reads too low, and picking the rep in the Person filter misses these calls.',
+        'Write the rep\'s name in the BD Name column of each row in the download, exactly as the tracker tab is named: the part before " Q1", " Q2" and so on.',
+        unnamed.map(r => bd2LogLine('BD Daily Log row has no BD Name', r, callsText(r), 'Write the rep\'s name in the BD Name column.')));
+    }
     const off = logs.filter(r => num(r.callsConnected) + num(r.cnp) !== num(r.totalCalls));
     if(off.length){
       const impossible = off.filter(r => num(r.callsConnected) > num(r.totalCalls) || num(r.cnp) > num(r.totalCalls)).length;
@@ -273,10 +286,10 @@ function bd2BuildDataIssues(){
         'The tab shows the numbers as typed, so the Calls cards and the Connected % and CNP % carry these errors.',
         'Correct those days in the BD Daily Log sheet; the rep, date and numbers are in the download.',
         off.map(r => bd2LogLine('BD Daily Log row does not add up', r,
-          `Total ${n(num(r.totalCalls))} · Connected ${n(num(r.callsConnected))} · CNP ${n(num(r.cnp))}`, 'Correct the call numbers for this day.')));
+          callsText(r), 'Correct the call numbers for this day.')));
     }
     const days = new Map();
-    for(const r of logs){
+    for(const r of named){
       const k = `${toIsoDate(r.date)}|${String(r.bdName || '').toLowerCase()}`;
       if(!days.has(k)) days.set(k, []);
       days.get(k).push(r);
@@ -287,10 +300,10 @@ function bd2BuildDataIssues(){
         'Both rows are added together, so that day\'s calls may be counted twice.',
         'If it is a duplicate, delete one of the rows; if it is a second session, leave it.',
         twice.flatMap(g => g.map(r => bd2LogLine('Two BD Daily Log rows for one rep and day', r,
-          `Total ${n(num(r.totalCalls))} · Connected ${n(num(r.callsConnected))} · CNP ${n(num(r.cnp))}`, 'Delete the row if it is a duplicate.'))));
+          callsText(r), 'Delete the row if it is a duplicate.'))));
     }
     const reps = new Set(rows.map(r => r.person));
-    const strangers = [...new Set(logs.map(r => r.bdName).filter(nm => nm && !reps.has(nm)))];
+    const strangers = [...new Set(named.map(r => r.bdName).filter(nm => nm && !reps.has(nm)))];
     if(strangers.length){
       add('warn', 'log-names', `${bd2Num(strangers.length, 'BD Daily Log name')} ${strangers.length === 1 ? 'matches' : 'match'} no tracker tab: ${strangers.join(', ')}`,
         'Their calls show on a rep row of their own with no meetings, and picking the tracker rep in the Person filter misses them.',

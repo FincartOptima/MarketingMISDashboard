@@ -17,6 +17,9 @@
 
 const BD2_UNMATCHED = 'Unmatched';
 const BD2_NO_PLATFORM = 'No platform';
+// A Daily Log row with a date and calls but no BD Name. The backend keeps it under this name
+// (BD_NO_BD_NAME in backend/extract_lib.py: keep both in sync) rather than drop its calls.
+const BD2_NO_BD_NAME = '(no BD Name)';
 const BD2_STATUSES = ['In Process', 'Converted', 'Other', 'Unmatched'];
 const BD2_DESK_TEAM = 'BD Team';
 const BD2_BASIS_FIRST = 'First RM';

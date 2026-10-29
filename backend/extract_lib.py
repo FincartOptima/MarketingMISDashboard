@@ -322,6 +322,10 @@ BD_DAILY_LOG_COLUMNS = {
     'cnp':            {'cnp'},
 }
 
+# Stand-in name for a Daily Log row that has a date and calls but no BD Name.
+# Mirrors BD2_NO_BD_NAME in app-bd2.js exactly -- keep both in sync.
+BD_NO_BD_NAME = '(no BD Name)'
+
 # "Appointments Booked" is split across one column per quarter (Q1..Q4), but
 # only the column matching that row's own Quarter is ever populated -- verified
 # across the real file: every row has its appointment count in exactly its own
@@ -333,10 +337,20 @@ def load_bd_daily_log_rows(file_like):
     """The real header isn't reliably row 1 -- the source sheet has a stray
     near-blank row above it -- so it's located by content (must contain both
     'date' and 'bd name'), same approach as load_revenue_input_rows. Rows
-    missing Date or BD Name are skipped: the sheet also has scratch rows
-    further down (an unlabelled future-quarter placeholder, a hidden
-    grand-total row) that carry numbers but no date/name, which would
-    otherwise be mistaken for real daily entries."""
+    with no Date are skipped: the sheet also has scratch rows further down
+    (an unlabelled future-quarter placeholder, a hidden grand-total row)
+    that carry numbers but no date, which would otherwise be mistaken for
+    real daily entries.
+
+    A row WITH a date and call numbers but no BD Name is a real day of calls
+    that someone forgot to label. Skipping it silently dropped its calls from
+    every total (6-Oct-2026 lost 233 calls, so the dashboard read 233 below
+    the sheet), so it is kept under BD_NO_BD_NAME and the dashboard's
+    data-health warnings list it for fixing at the source.
+
+    Every row carries `sourceRow`, its row number in the sheet as Google
+    Sheets numbers it (the header here is not row 1), so those warnings can
+    say where to look."""
     wb = openpyxl.load_workbook(file_like, read_only=True, data_only=True)
     if 'BD Daily Log' not in wb.sheetnames:
         wb.close()
@@ -369,18 +383,25 @@ def load_bd_daily_log_rows(file_like):
         return []
 
     out = []
-    for row in all_rows[header_idx + 1:]:
+    for sheet_row, row in enumerate(all_rows[header_idx + 1:], start=header_idx + 2):
         obj = {}
         for i, canon in col_for_idx.items():
             v = row[i] if i < len(row) else None
             obj[canon] = cell_value(v)
-        if not obj.get('date') or not obj.get('bdName'):
+        if not obj.get('date'):
             continue
+        if not obj.get('bdName'):
+            has_calls = any(isinstance(obj.get(k), (int, float)) and obj[k]
+                            for k in ('totalCalls', 'callsConnected', 'cnp'))
+            if not has_calls:
+                continue    # a pre-filled date with nothing against it is not an entry
+            obj['bdName'] = BD_NO_BD_NAME
         appts = 0
         for i in appt_idx:
             v = row[i] if i < len(row) else None
             if isinstance(v, (int, float)):
                 appts += v
         obj['appointments'] = appts
+        obj['sourceRow'] = sheet_row
         out.append(obj)
     return out
