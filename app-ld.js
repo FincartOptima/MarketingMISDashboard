@@ -207,14 +207,15 @@ const LD = (() => {
         const name = g(r, 'Client Name'), ticket = g(r, 'Ticket Id', 'SR No'), email = g(r, ...cfg.email);
         const subject = cfg.kind === 'fy' ? g(r, 'Ticket Subject') : '';
         const assigned = cfg.kind === 'fy' ? ldPerson(g(r, 'Assigned to')) : '';
-        const drafted = cfg.kind === 'pa' ? ldPerson(g(r, 'Drafted By')) : '';
         const approvedBy = cfg.kind === 'pa' ? ldPerson(g(r, 'Approved By')) : '';
-        const ld = cfg.kind === 'pa' || LD_SUBJECTS.includes(subject);
-        const emps = [...new Set([assigned, drafted, approvedBy].filter(Boolean))].sort();
+        // pa: a Plan Approval row (always in the L&D Flow's scope); otherwise the flow's subject
+        // filter decides, from `subject`.
+        const pa = cfg.kind === 'pa';
+        const emps = [...new Set([assigned, approvedBy].filter(Boolean))].sort();
         const flagDate = (column, raw, parsed) => {
           const issue = raw ? dateIssue(parsed) : null;
           if(issue && name) diag.dateIssues.push({ sheet: cfg.name, row: r._row, ticket, name, email, column,
-            raw, issue, subject, mk, ld, emps });
+            raw, issue, subject, mk, pa, emps });
         };
         flagDate(cfg.date, rawDate, rowDt);
         if(cfg.kind === 'pa') flagDate('Approval Date', g(r, 'Approval Date'), parseDate(cell(r, 'Approval Date')));
@@ -222,13 +223,13 @@ const LD = (() => {
         const key = emailKey(email);
         if(!key){
           if(name){ diag.noEmail++; diag.noEmailRows.push({ sheet: cfg.name, row: r._row, ticket, name,
-            month: monthRaw, date: rawDate, subject, mk, ld, emps }); }
+            month: monthRaw, date: rawDate, subject, mk, pa, emps }); }
           continue;
         }
         const lead = leads.map.get(key);
         const rec = {
           kind: cfg.kind, sheet: cfg.name, row: r._row, q: cfg.q, mk, m: mlabel, date: fyDt || '',
-          key, email, name, subject, ticket, assigned, drafted, approvedBy,
+          key, email, name, subject, ticket, assigned, approvedBy,
           tierRaw: cfg.kind === 'fy' ? clientTier(g(r, 'Client Type')) : '',
           tenureRaw: cfg.kind === 'pa' ? clientTenure(g(r, 'Client Type')) : '',
           advisor: scrub(g(r, 'Advisor', 'RM Name')), appr: g(r, 'Approved By'),
@@ -301,7 +302,7 @@ const LD = (() => {
     for(const t of sorted){
       let c = by.get(t.key);
       if(!c){
-        c = { key: t.key, email: t.email, name: t.name, mk: t.mk, m: t.m, q: t.q, months: new Set(), paMonths: new Set(),
+        c = { key: t.key, email: t.email, name: t.name, mk: t.mk, m: t.m, q: t.q, months: new Set(), paMonths: new Set(), fyMonths: new Set(),
           ldTouches: [], inPA: false, subjects: new Set(), monthSubjects: {}, tier: '', tenure: '',
           rev: Object.fromEntries(PRODUCTS.map(p => [p.k, 0])), nTickets: 0, nPA: 0, nFY: 0,
           advisor: '', appr: '', ticket: '', status: t.status, matched: t.matched, lead: t.lead, rm: t.rm,
@@ -311,12 +312,12 @@ const LD = (() => {
       }
       c.nTickets++;
       c.months.add(t.mk);
-      // One [month, person, role] per source row: two FP tickets in a month are two plans.
+      // One [month, person, role, subject] per source row: two FP tickets in a month are two plans.
+      // Tickets of every subject are kept; the L&D Flow's subject filter picks which count.
       if(t.kind === 'pa'){
-        if(t.approvedBy) c.ldTouches.push([t.mk, t.approvedBy, 'approved']);
-        if(t.drafted) c.ldTouches.push([t.mk, t.drafted, 'drafted']);
-      } else if(t.assigned && LD_SUBJECTS.includes(t.subject)){
-        c.ldTouches.push([t.mk, t.assigned, 'created']);
+        if(t.approvedBy) c.ldTouches.push([t.mk, t.approvedBy, 'approved', '']);
+      } else if(t.assigned){
+        c.ldTouches.push([t.mk, t.assigned, 'created', t.subject]);
       }
       c.locations.push(t.sheet + ' row ' + t.row);
       if(t.kind === 'pa'){
@@ -327,6 +328,7 @@ const LD = (() => {
         if(t.ticket) c.ticket = t.ticket;
       } else {
         c.nFY++;
+        c.fyMonths.add(t.mk);
         if(t.subject){
           c.subjects.add(t.subject);
           (c.monthSubjects[t.mk] = c.monthSubjects[t.mk] || new Set()).add(t.subject);
@@ -353,6 +355,7 @@ const LD = (() => {
       c.locations = c.locations.join('; ');
       c.months = [...c.months].sort();
       c.paMonths = [...c.paMonths].sort();
+      c.fyMonths = [...c.fyMonths].sort();
       PRODUCTS.forEach(p => { c.rev[p.k] = Math.round(c.rev[p.k] * 100) / 100; });
       return c;
     });
@@ -809,31 +812,60 @@ const LD = (() => {
     }
 
     // ---------- L&D Flow ----------
-    // Leads created -> leads L&D touched -> in process / converted, with its own Month / L&D
-    // employee / Team filters. A lead is touched if it has a Plan Approval row, or an FY ticket
-    // under one of LD_SUBJECTS — in the selected month when one is picked.
-    const LD_SET = new Set(META.ldSubjects || []);
+    // Leads created -> leads L&D touched -> in process / converted, with its own Month / Ticket
+    // subjects / L&D employee / Team filters. A lead is touched if it has a Plan Approval row, or an
+    // FY ticket under one of the ticked subjects — in the selected month when one is picked. A
+    // touched lead with ANY FY ticket in that period counts as "via ticket subject", even when it is
+    // on a Plan Approval sheet too; "via plan approval only" is the rest.
+    const LD_DEFAULT_SUBJECTS = (META.ldSubjects || []).filter(x => SUBJECTS_SET.has(x));
     const LD_PEOPLE = META.ldPeople || [];
     const LEADS_CREATED = META.leadsCreated || {};
-    const flowState = { month: '', team: '', emp: '' };
+    const flowState = { month: '', team: '', emp: '', subjects: new Set(LD_DEFAULT_SUBJECTS) };
+    const subjOn = x => flowState.subjects.has(x);
     const FLOW_MONTHS = [...new Set(Object.keys(LEADS_CREATED).concat(MONTHS.map(m => m.mk)))].filter(mk => /^\d{4}-\d{2}$/.test(mk)).sort();
     const monthLabel = mk => MONTH_LABELS[mk] || (MONTHS_3[+mk.slice(5, 7) - 1] + ' ' + mk.slice(0, 4));
+    // An employee's own work: plans they approved, and tickets assigned to them under a ticked subject.
+    const empTouch = t => t[2] === 'approved' || (t[2] === 'created' && subjOn(t[3]));
     function ldTouch(c, mk){
-      let pa, sub;
+      let pa, sub, anyTicket;
       if(flowState.emp){
         const ts = c.ldTouches.filter(t => t[1] === flowState.emp && (!mk || t[0] === mk));
-        pa = ts.some(t => t[2] !== 'created'); sub = ts.some(t => t[2] === 'created');
+        pa = ts.some(t => t[2] === 'approved');
+        sub = ts.some(t => t[2] === 'created' && subjOn(t[3]));
+        anyTicket = ts.some(t => t[2] === 'created');
       } else {
         pa = mk ? c.paMonths.includes(mk) : c.inPA;
-        sub = (mk ? (c.monthSubjects[mk] || []) : c.subjects).some(x => LD_SET.has(x));
+        sub = (mk ? (c.monthSubjects[mk] || []) : c.subjects).some(subjOn);
+        anyTicket = mk ? c.fyMonths.includes(mk) : c.fyMonths.length > 0;
       }
-      return (pa || sub) ? { pa, sub } : null;
+      return (pa || sub) ? { pa, sub, via: anyTicket ? 'ticket' : 'pa' } : null;
     }
     const flowTouched = () => CLIENTS.filter(c => (!flowState.team || c.team === flowState.team) && ldTouch(c, flowState.month));
     // Team cannot apply to an unmapped client (team comes from the lead's RM).
     const flowUnmapped = () => CLIENTS.filter(c => !c.matched && ldTouch(c, flowState.month));
-    const flagRowInView = r => r.ld && (!flowState.month || r.mk === flowState.month) && (!flowState.emp || (r.emps || []).includes(flowState.emp));
-    const ldPeopleOf = (c, mk) => [...new Set(c.ldTouches.filter(t => (!mk || t[0] === mk) && LD_PEOPLE.includes(t[1])).map(t => t[1]))].sort().join('; ');
+    const flagRowInView = r => (r.pa || subjOn(r.subject)) && (!flowState.month || r.mk === flowState.month) &&
+      (!flowState.emp || (r.emps || []).includes(flowState.emp));
+    const ldPeopleOf = (c, mk) => [...new Set(c.ldTouches.filter(t => (!mk || t[0] === mk) && LD_PEOPLE.includes(t[1]) && empTouch(t))
+      .map(t => t[1]))].sort().join('; ');
+    // "the 4 L&D plan subjects" / "All 18 subjects" / the picked names, for captions and the toggle.
+    function subjectsLabel(short){
+      const n = flowState.subjects.size;
+      const isDefault = n === LD_DEFAULT_SUBJECTS.length && LD_DEFAULT_SUBJECTS.every(subjOn);
+      if(isDefault) return short ? 'L&D plan subjects (' + n + ')' : 'the L&D plan subjects (' + LD_DEFAULT_SUBJECTS.join(', ') + ')';
+      if(n === SUBJECTS.length) return 'All ' + n + ' subjects';
+      if(!n) return short ? 'No subjects' : 'no ticket subject';
+      const picked = SUBJECTS.filter(subjOn);
+      return short ? (n === 1 ? picked[0] : n + ' subjects') : (n <= 4 ? picked.join(', ') : n + ' subjects');
+    }
+    function renderFlowSubjects(){
+      const counts = {};
+      CLIENTS.forEach(c => c.subjects.forEach(x => { counts[x] = (counts[x] || 0) + 1; }));
+      $('flowSubjLabel').textContent = subjectsLabel(true);
+      $('flowSubjChips').innerHTML = '<div class="ld-subj-actions"><button type="button" data-act="ld">L&amp;D plan subjects</button>' +
+        '<button type="button" data-act="all">Select all</button><button type="button" data-act="none">Clear all</button></div>' +
+        SUBJECTS.map(x => '<button class="subjchip" type="button" data-subj="' + esc(x) + '" aria-pressed="' + subjOn(x) + '">' +
+          esc(x) + '<span class="n">' + nf(counts[x] || 0) + '</span></button>').join('');
+    }
     function createdBucket(c){
       const d = c.created || '';
       if(!d) return 'unknown';
@@ -854,14 +886,16 @@ const LD = (() => {
       const n = touched.length;
       const by = f => touched.reduce((o, c) => { const k = f(c); o[k] = (o[k] || 0) + 1; return o; }, {});
       const bucket = by(createdBucket), group = by(c => statusGroup(c.status));
-      const routes = by(c => { const t = ldTouch(c, mk); return t.pa && t.sub ? 'both' : t.pa ? 'pa' : 'sub'; });
+      const routes = by(c => ldTouch(c, mk).via);
       const inWindow = mk ? (bucket.month || 0) : (bucket.fy || 0);
 
+      renderFlowSubjects();
       $('flowCap').innerHTML = (mk ? 'Showing <b>' + esc(windowLabel) + '</b>' : 'Showing the whole of <b>' + esc(FY_LABEL) + '</b>') +
         (team ? ' for <b>' + esc(team) + '</b>' : ' across all teams') + (emp ? ', handled by <b>' + esc(emp) + '</b>' : '') +
-        '. A lead is <b>touched by L&amp;D</b> if it has a Plan Approval row, or an FY ticket under ' + [...LD_SET].map(esc).join(', ') +
-        (mk ? ', in that month' : '') + (emp ? ' — counting only plans ' + esc(emp) + ' approved or drafted, and L&amp;D tickets assigned to ' +
-          esc(emp) + '. <i>Total leads created</i> is not split by L&amp;D employee, since L&amp;D does not own leads' : '') +
+        '. A lead is <b>touched by L&amp;D</b> if it has a Plan Approval row, or an FY ticket under ' + esc(subjectsLabel(false)) +
+        (mk ? ', in that month' : '') + '. A lead that has any FY ticket is counted <i>via ticket subject</i>, even when it is on a ' +
+        'Plan Approval sheet too' + (emp ? ' — counting only plans ' + esc(emp) + ' approved, and tickets assigned to ' + esc(emp) +
+          '. <i>Total leads created</i> is not split by L&amp;D employee, since L&amp;D does not own leads' : '') +
         '. Lead status is the current status in Workpoint.' +
         (mk && !MONTHS.some(m => m.mk === mk) ? ' <b>No ticket rows are loaded for this month</b> (' + esc(META.excludedMonths.join(', ')) +
           ' is excluded by request).' : '');
@@ -880,8 +914,8 @@ const LD = (() => {
         '<div class="ld-stem" aria-hidden="true"></div>' +
         '<div class="ld-row">' + node('var(--orange)', n, 'Leads touched by L&amp;D', '<b>' + nf(inWindow) + '</b> of them were created in ' +
           esc(windowLabel) + (created ? ' — ' + pct(inWindow, created) + ' of leads created' : ''),
-          '<dl class="ld-break">' + dl(breakRows) + '<div class="sep"></div>' + dl([['Via plan approval only', routes.pa],
-            ['Via L&D ticket subject only', routes.sub], ['Via both', routes.both]]) + '</dl>', true) + '</div>' +
+          '<dl class="ld-break">' + dl(breakRows) + '<div class="sep"></div>' + dl([['Via ticket subject', routes.ticket],
+            ['Via plan approval only (no FY ticket)', routes.pa]]) + '</dl>', true) + '</div>' +
         '<div class="ld-fork"><div class="ld-split" aria-hidden="true"></div><div class="ld-pair">' +
           '<div class="ld-cell">' + node('var(--s-inprocess)', group.inprocess || 0, 'In process', '<b>' + pct(group.inprocess || 0, n) + '</b> of touched leads') + '</div>' +
           '<div class="ld-cell">' + node('var(--s-converted)', group.converted || 0, 'Converted', '<b>' + pct(group.converted || 0, n) + '</b> of touched leads') + '</div>' +
@@ -937,9 +971,9 @@ const LD = (() => {
       const mk = flowState.month, team = flowState.team;
       const pool = CLIENTS.filter(c => !team || c.team === team);
       return LD_PEOPLE.map(p => {
-        const cnt = { created: 0, drafted: 0, approved: 0 }, cl = [];
+        const cnt = { created: 0, approved: 0 }, cl = [];
         pool.forEach(c => {
-          const ts = c.ldTouches.filter(t => t[1] === p && (!mk || t[0] === mk));
+          const ts = c.ldTouches.filter(t => t[1] === p && (!mk || t[0] === mk) && empTouch(t));
           if(!ts.length) return;
           ts.forEach(t => { cnt[t[2]]++; });
           cl.push({ c, cnt: ts.reduce((o, t) => { o[t[2]] = (o[t[2]] || 0) + 1; return o; }, {}) });
@@ -957,18 +991,17 @@ const LD = (() => {
           '<td class="num muted-col">' + (clients.length - mapped.length || '–') + '</td>';
       };
       const line = (label, cnt, clients, attrs) => '<tr' + (attrs || '') + '><td>' + label + '</td><td class="num">' + nf(cnt.created) +
-        '</td><td class="num">' + nf(cnt.drafted) + '</td><td class="num">' + nf(cnt.approved) + '</td><td class="num">' + nf(clients.length) +
-        '</td>' + statusCells(clients) + '</tr>';
+        '</td><td class="num">' + nf(cnt.approved) + '</td><td class="num">' + nf(clients.length) + '</td>' + statusCells(clients) + '</tr>';
       const uniq = [...new Map(rows.flatMap(r => r.cl.map(y => [y.c.cid, y.c]))).values()];
-      const tot = rows.reduce((o, r) => { Object.keys(o).forEach(k => { o[k] += r.cnt[k]; }); return o; }, { created: 0, drafted: 0, approved: 0 });
-      $('flowEmpCap').innerHTML = '<b>Plans created</b> = FY tickets under ' + [...LD_SET].map(esc).join(', ') + ' assigned to that person. ' +
-        '<b>Drafted</b> / <b>Approved</b> = Plan Approval rows with that person in <i>Drafted By</i> / <i>Approved By</i> (most plans are ' +
-        'drafted by the RM). Status columns are the current Workpoint lead status of the clients behind those plans; percentages are of ' +
-        'the row\'s mapped clients. A client handled by two people appears in both rows, so the Total row counts each client once. ' +
-        'Follows the Month and Team filters; click a row to filter the whole flow by that employee.';
-      $('flowEmpTbl').innerHTML = '<thead><tr><th class="grp"></th><th class="grp" colspan="3">Plans</th><th class="grp" colspan="' +
+      const tot = rows.reduce((o, r) => { Object.keys(o).forEach(k => { o[k] += r.cnt[k]; }); return o; }, { created: 0, approved: 0 });
+      $('flowEmpCap').innerHTML = '<b>Plans created</b> = FY tickets under ' + esc(subjectsLabel(false)) + ' assigned to that person. ' +
+        '<b>Approved</b> = Plan Approval rows with that person in <i>Approved By</i>. Status columns are the current Workpoint lead ' +
+        'status of the clients behind those plans; percentages are of the row\'s mapped clients. A client handled by two people appears ' +
+        'in both rows, so the Total row counts each client once. Follows the Month, Ticket subjects and Team filters; click a row to ' +
+        'filter the whole flow by that employee.';
+      $('flowEmpTbl').innerHTML = '<thead><tr><th class="grp"></th><th class="grp" colspan="2">Plans</th><th class="grp" colspan="' +
         (present.length + 2) + '">Clients — Workpoint status</th></tr><tr><th>L&amp;D employee</th><th class="num">Created</th>' +
-        '<th class="num">Drafted</th><th class="num">Approved</th><th class="num">Clients</th>' +
+        '<th class="num">Approved</th><th class="num">Clients</th>' +
         present.map(x => '<th class="num">' + esc(x.label) + '</th>').join('') + '<th class="num muted-col">Not in lead data</th></tr></thead><tbody>' +
         rows.map(r => line(esc(r.p), r.cnt, r.cl.map(y => y.c), ' data-emp="' + esc(r.p) + '" data-on="' + (r.p === flowState.emp ? 1 : 0) + '"')).join('') +
         line('Total (distinct clients)', tot, uniq, ' class="totrow"') + '</tbody>';
@@ -1023,19 +1056,19 @@ const LD = (() => {
           ['Tier', 'Tier Source', 'Status Group', 'Lead Status', 'Touched Via', 'L&D Employees', 'Lead Created', 'Created When', 'Client Name',
            'Email Id', 'Team', 'RM', 'Advisor', 'Platform', 'Lead Source', 'Lead Data From', 'L&D Ticket Subjects', 'Converted On', 'Sheet / Row'],
           rows.map(c => { const t = ldTouch(c, mk);
-            const subs = (mk ? (c.monthSubjects[mk] || []) : c.subjects).filter(x => LD_SET.has(x));
+            const subs = (mk ? (c.monthSubjects[mk] || []) : c.subjects).filter(subjOn);
             return [c.tier, c.tierSrc, groupLabel[statusGroup(c.status)], c.status,
-              t.pa && t.sub ? 'Plan approval + ticket subject' : t.pa ? 'Plan approval' : 'Ticket subject', ldPeopleOf(c, mk), c.created,
+              t.via === 'ticket' ? 'Ticket subject' : 'Plan approval only', ldPeopleOf(c, mk), c.created,
               bucketLabel[createdBucket(c)], c.name, c.email, c.team, c.rm, c.advisor, c.platform, c.src, c.leadSrc, subs.join('; '),
               c.converted, c.locations]; }));
       },
       flowEmpCsvBtn: () => {
         const out = [];
         empRows().forEach(r => r.cl.forEach(y => { const c = y.c;
-          out.push([r.p, y.cnt.created || 0, y.cnt.drafted || 0, y.cnt.approved || 0, c.name, c.email, c.status, c.tier, c.tierSrc, c.team,
+          out.push([r.p, y.cnt.created || 0, y.cnt.approved || 0, c.name, c.email, c.status, c.tier, c.tierSrc, c.team,
             c.rm, c.advisor, c.created, c.converted, c.matched ? 'Yes' : 'No', c.locations]); }));
         downloadCsv('ld-employee-plans' + (flowState.month ? '-' + flowState.month : '') + '.csv',
-          ['L&D Employee', 'Plans Created', 'Plans Drafted', 'Plans Approved', 'Client Name', 'Email Id', 'Workpoint Lead Status', 'Tier',
+          ['L&D Employee', 'Plans Created', 'Plans Approved', 'Client Name', 'Email Id', 'Workpoint Lead Status', 'Tier',
            'Tier Source', 'Team', 'RM', 'Advisor', 'Lead Created', 'Converted On', 'Matched to Lead Data', 'Sheet / Row'], out);
       },
     };
@@ -1112,8 +1145,22 @@ const LD = (() => {
     const subjDd = $('subjDd');
     on('subjDdToggle', 'click', e => { e.stopPropagation(); const open = subjDd.dataset.open !== '1';
       subjDd.dataset.open = open ? '1' : '0'; $('subjDdToggle').setAttribute('aria-expanded', String(open)); });
+    const flowSubjDd = $('flowSubjDd');
+    on('flowSubjToggle', 'click', e => { e.stopPropagation(); const open = flowSubjDd.dataset.open !== '1';
+      flowSubjDd.dataset.open = open ? '1' : '0'; $('flowSubjToggle').setAttribute('aria-expanded', String(open)); });
+    // Picking subjects keeps the panel open, so several can be toggled in one go.
+    on('flowSubjChips', 'click', e => {
+      const act = e.target.closest('[data-act]'), chip = e.target.closest('.subjchip');
+      if(act) flowState.subjects = new Set(act.dataset.act === 'ld' ? LD_DEFAULT_SUBJECTS : act.dataset.act === 'all' ? SUBJECTS : []);
+      else if(chip){ const x = chip.dataset.subj; flowState.subjects.has(x) ? flowState.subjects.delete(x) : flowState.subjects.add(x); }
+      else return;
+      renderFlow();
+    });
+    // A click anywhere outside an open subject dropdown closes it.
     document.addEventListener('click', e => {
-      if(subjDd.dataset.open === '1' && !subjDd.contains(e.target)){ subjDd.dataset.open = '0'; $('subjDdToggle').setAttribute('aria-expanded', 'false'); }
+      [[subjDd, 'subjDdToggle'], [flowSubjDd, 'flowSubjToggle']].forEach(([dd, toggle]) => {
+        if(dd.dataset.open === '1' && !dd.contains(e.target)){ dd.dataset.open = '0'; $(toggle).setAttribute('aria-expanded', 'false'); }
+      });
     }, { signal: wiring.signal });
     Object.keys(csvHandlers).forEach(id => on(id, 'click', e => { e.preventDefault(); csvHandlers[id](); }));
 
@@ -1121,6 +1168,7 @@ const LD = (() => {
     on('fFlowTeam', 'change', e => { flowState.team = e.target.value; renderFlow(); });
     on('fFlowEmp', 'change', e => { flowState.emp = e.target.value; renderFlow(); });
     on('flowResetBtn', 'click', () => { flowState.month = flowState.team = flowState.emp = '';
+      flowState.subjects = new Set(LD_DEFAULT_SUBJECTS);
       $('fFlowMonth').value = $('fFlowTeam').value = $('fFlowEmp').value = ''; renderFlow(); });
     on('flowEmpTbl', 'click', e => { const tr = e.target.closest('tr[data-emp]'); if(!tr) return;
       flowState.emp = flowState.emp === tr.dataset.emp ? '' : tr.dataset.emp; $('fFlowEmp').value = flowState.emp; renderFlow(); });

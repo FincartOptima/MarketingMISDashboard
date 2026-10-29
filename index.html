@@ -710,7 +710,7 @@ table.data.editable td input:focus{outline:2px solid var(--orange);background:va
 #tab-ld .ld-subpanel{display:none}
 #tab-ld .ld-subpanel.active{display:block}
 #tab-ld .ld-filterbar{display:flex;flex-wrap:wrap;align-items:flex-end;gap:10px 14px;background:#fff;border:2px solid var(--line);border-left:5px solid var(--orange);padding:12px 14px;margin-bottom:16px}
-#tab-ld .ld-filterbar label{display:flex;flex-direction:column;gap:4px;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:var(--muted)}
+#tab-ld .ld-filterbar label,#tab-ld .ld-filterbar .ld-fg{display:flex;flex-direction:column;gap:4px;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:var(--muted)}
 #tab-ld .ld-filterbar select,#tab-ld .ld-filterbar input[type=search]{font-size:12.5px;text-transform:none;letter-spacing:0;font-weight:400;color:var(--text);min-width:150px}
 #tab-ld .ld-filterbar input[type=search]{padding:6px 8px;border:1px solid var(--border-strong)}
 #tab-ld .ld-grow{flex:1 1 200px}
@@ -797,6 +797,12 @@ table.data.editable td input:focus{outline:2px solid var(--orange);background:va
 #tab-ld .ld-subjdd-toggle{display:inline-flex;gap:10px;justify-content:space-between;min-width:260px;background:#fff;border:1px solid var(--border-strong);padding:7px 12px;font:600 12.5px/1.2 inherit;cursor:pointer;color:var(--text)}
 #tab-ld .ld-subjchips{display:none;flex-wrap:wrap;gap:6px;position:absolute;top:calc(100% + 4px);left:0;z-index:40;background:#fff;border:2px solid var(--ld-ink);padding:10px;width:min(600px,90vw);max-height:320px;overflow:auto;box-shadow:0 8px 20px rgba(15,23,42,.15)}
 #tab-ld .ld-subjdd[data-open="1"] .ld-subjchips{display:flex}
+/* the flow's subject dropdown sits in the filter bar, so it matches the selects beside it */
+#tab-ld .ld-subjdd-toggle.ld-subjdd-sm{min-width:210px;padding:6px 10px;font:400 12.5px/1.2 inherit;text-transform:none;letter-spacing:0}
+#tab-ld .ld-subj-actions{flex:1 1 100%;display:flex;gap:6px;padding-bottom:8px;margin-bottom:2px;border-bottom:1px solid var(--line)}
+#tab-ld .ld-subj-actions button{font:600 11px/1 inherit;padding:5px 9px;cursor:pointer;background:var(--orange-tint);color:var(--ld-ink);border:1px solid var(--orange)}
+#tab-ld .ld-subj-actions button:hover{background:var(--orange);color:#fff}
+#tab-ld .ld-filterbar .subjchip{text-transform:none;letter-spacing:0;font-weight:400}
 #tab-ld .subjchip{display:inline-flex;gap:8px;align-items:center;background:#fff;border:1px solid var(--line);padding:5px 10px;font-size:12px;cursor:pointer;color:var(--muted)}
 #tab-ld .subjchip[aria-pressed="true"]{border-color:var(--orange);background:var(--orange-tint);color:var(--ld-ink);font-weight:700}
 #tab-ld .subjchip .n{font-variant-numeric:tabular-nums;color:var(--ld-amber)}
@@ -1728,6 +1734,14 @@ table.data.editable td input:focus{outline:2px solid var(--orange);background:va
         <div class="ld-subpanel active" id="ld-sub-flow">
           <div class="ld-filterbar">
             <label>Month <select id="ld-fFlowMonth"><option value="">Whole financial year</option></select></label>
+            <!-- a div, not a <label>: a label would forward clicks on its text to the first button inside -->
+            <div class="ld-fg">Ticket subjects
+              <div class="ld-subjdd" id="ld-flowSubjDd" data-open="0">
+                <button type="button" class="ld-subjdd-toggle ld-subjdd-sm" id="ld-flowSubjToggle" aria-expanded="false" aria-haspopup="true">
+                  <span id="ld-flowSubjLabel">L&amp;D plan subjects</span><span aria-hidden="true">▾</span></button>
+                <div class="ld-subjchips" id="ld-flowSubjChips"></div>
+              </div>
+            </div>
             <label>L&amp;D employee <select id="ld-fFlowEmp"><option value="">All L&amp;D employees</option></select></label>
             <label>Team <select id="ld-fFlowTeam"><option value="">All teams</option></select></label>
             <button class="secondary" type="button" id="ld-flowResetBtn">Reset filters</button>
