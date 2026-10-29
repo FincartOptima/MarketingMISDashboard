@@ -443,8 +443,9 @@ const LD = (() => {
     const key = [STATE.ldRows, STATE.raw, STATE.teamMap, STATE.rmMasterLookup];
     if(!model || !modelFor || key.some((x, i) => x !== modelFor[i])){
       if(!building){
-        el('flowCap').textContent = 'Preparing the L&D data…';
-        building = build().then(m => { model = m; modelFor = key; ui = null; }).finally(() => { building = null; });
+        el('loading').hidden = false;
+        building = build().then(m => { model = m; modelFor = key; ui = null; })
+          .finally(() => { building = null; el('loading').hidden = true; });
       }
       await building;
     }
@@ -584,21 +585,35 @@ const LD = (() => {
       $('subjDdLabel').textContent = state.subjects.size === SUBJECTS.length ? 'All subjects selected'
         : state.subjects.size === 0 ? 'No subjects selected' : state.subjects.size + ' of ' + SUBJECTS.length + ' subjects';
       const paBase = CLIENTS.filter(c => c.inPA).length;
-      $('masterNote').innerHTML = '<b>' + nf(sel.length) + '</b> clients in view. The ' + nf(paBase) +
-        ' on the Plan Approval sheets always count; the subjects ticked below decide how many FY-sheet clients are ' +
-        'added on top. ' + state.subjects.size + ' of ' + SUBJECTS.length + ' subjects selected.';
+      // Active-filter context, kept above the section tabs so it stays visible on every Details section.
+      const optLabel = id => { const s = $(id); return s.value ? s.options[s.selectedIndex].text : ''; };
+      const active = [['fMonth', 'Month'], ['fTier', 'Tier'], ['fTenure', 'Tenure'], ['fTeam', 'Team'], ['fPlatform', 'Platform'],
+        ['fAdvisor', 'Advisor / RM'], ['fSource', 'Lead source']].filter(([id]) => $(id).value).map(([id, l]) => l + ': ' + optLabel(id));
+      if(state.q.trim()) active.push('Search: “' + state.q.trim() + '”');
+      if(state.off.size) active.push('Statuses hidden: ' + [...state.off].map(k => sInfo(k).label).join(', '));
+      $('masterNote').innerHTML = '<b>' + nf(sel.length) + '</b> clients in view · ' +
+        (active.length ? esc(active.join(' · ')) : 'no filters applied') + ' · ' + state.subjects.size + ' of ' + SUBJECTS.length +
+        ' ticket subjects. The ' + nf(paBase) + ' clients on the Plan Approval sheets always count; the ticked subjects decide which ' +
+        'FY-sheet clients are added on top.';
+      const flowN = flowTouched().filter(c => c.matched).length;
+      $('detailsScope').innerHTML = '<b>L&amp;D Details covers more than the Flow.</b> It counts every client on any L&amp;D tab — FY tickets ' +
+        'of every ticked subject, and clients not found in Workpoint — so it shows <b>' + nf(sel.length) + '</b> clients here, against ' +
+        '<b>' + nf(flowN) + '</b> touched leads in the current L&amp;D Flow (Plan Approval or the Flow\'s ticked subjects, matched to Workpoint only).';
+      $('scopeDiff').innerHTML = '<b>Flow vs Details.</b> L&amp;D Flow counts leads <i>touched</i> by L&amp;D — a Plan Approval row or an FY ' +
+        'ticket under the Flow\'s ticked subjects — and only those found in Workpoint. L&amp;D Details lists every client on any L&amp;D tab ' +
+        'that passes its own filters, including clients not in Workpoint, so its totals are larger. The two views have separate filters.';
 
       const cnt = k => rows.filter(r => r.status === k).length;
       const fromPA = sel.filter(c => c.inPA).length, fyOnly = sel.length - fromPA;
       $('kpis').innerHTML = [
-        { k: 'Clients in view', v: sel.length, n: 'de-duplicated across every L&amp;D tab', a: 'var(--ld-ink)' },
-        { k: 'Plan approvals', v: fromPA, n: '<b>' + pct(fromPA, sel.length) + '</b> have an approved plan', a: 'var(--orange)' },
-        { k: 'FY tickets only', v: fyOnly, n: 'no plan approval yet', a: 'var(--muted)' },
-        { k: 'Mapped to lead data', v: mapped.length, n: '<b>' + pct(mapped.length, sel.length) + '</b> matched by email', a: 'var(--s-none)' },
-        { k: 'Converted', v: cnt('CONVERTED'), n: '<b>' + pct(cnt('CONVERTED'), total) + '</b> of mapped', a: 'var(--s-converted)' },
-        { k: 'In process', v: cnt('IN PROCESS'), n: '<b>' + pct(cnt('IN PROCESS'), total) + '</b> of mapped', a: 'var(--s-inprocess)' }
-      ].map(t => '<div class="kpi" style="border-left-color:' + t.a + '"><div class="kpi-value" style="color:' + t.a + '">' +
-        nf(t.v) + '</div><div class="kpi-label">' + t.k + '</div><div class="ld-kpi-note">' + t.n + '</div></div>').join('');
+        { k: 'Clients in view', v: sel.length, n: 'de-duplicated across every L&amp;D tab', primary: true },
+        { k: 'Plan approvals', v: fromPA, n: '<b>' + pct(fromPA, sel.length) + '</b> have an approved plan' },
+        { k: 'FY tickets only', v: fyOnly, n: 'no plan approval yet' },
+        { k: 'Mapped to lead data', v: mapped.length, n: '<b>' + pct(mapped.length, sel.length) + '</b> matched by email' },
+        { k: 'Converted', v: cnt('CONVERTED'), n: '<b>' + pct(cnt('CONVERTED'), total) + '</b> of mapped' },
+        { k: 'In process', v: cnt('IN PROCESS'), n: '<b>' + pct(cnt('IN PROCESS'), total) + '</b> of mapped' }
+      ].map(t => '<div class="ld-kpi' + (t.primary ? ' ld-kpi-primary' : '') + '"><div class="ld-kpi-label">' + t.k + '</div>' +
+        '<div class="ld-kpi-value">' + nf(t.v) + '</div><div class="ld-kpi-note">' + t.n + '</div></div>').join('');
 
       // 01 composition
       const bothCount = sel.filter(c => c.inPA && c.subjects.length).length;
@@ -728,7 +743,7 @@ const LD = (() => {
       const prodLabel = state.product === 'all' ? 'All products (sum)' : (PRODUCTS.find(p => p.k === state.product) || {}).label;
       $('revCap').innerHTML = 'Showing <b>' + esc(prodLabel) + '</b> across <b>' + nf(revCells.length) + '</b> plan approvals. Grand total ' +
         moneyFull(revCells.reduce((a, r) => a + revOf(r), 0)) + '.';
-      $('revWarn').innerHTML = fyOnly ? '<div class="filter-note">Revenue exists only on the Plan Approval sheets. The <b>' + nf(fyOnly) +
+      $('revWarn').innerHTML = fyOnly ? '<div class="ld-warn">Revenue exists only on the Plan Approval sheets. The <b>' + nf(fyOnly) +
         '</b> FY-only clients in view have no revenue figures, so this table covers the ' + nf(fromPA) + ' with an approved plan.</div>' : '';
       const revSum = arr => arr.reduce((a, r) => a + revOf(r), 0);
       const mcell = v => '<td class="num" title="' + moneyFull(v) + '">' + money(v) + '</td>';
@@ -765,6 +780,7 @@ const LD = (() => {
         '<button class="ld-chip" type="button" data-status="' + esc(x.k) + '" data-off="' + (state.off.has(x.k) ? 1 : 0) +
         '" aria-pressed="' + (!state.off.has(x.k)) + '" style="--c:' + x.c + '"><i class="dot"></i>' + esc(x.label) + '</button>').join('');
       renderLists();
+      updateHead();
     }
 
     // ---------- data-flag lists (Unmapped / Date issues / Missing emails) ----------
@@ -809,6 +825,17 @@ const LD = (() => {
         'add the email at the row shown to bring them in. The ticket-subject filter applies; a Plan Approval row always shows.'
         : 'No rows are missing a client email in the current subject selection.';
       listTable('noEmailTbl', NCOLS, ne, 'Nothing to show.');
+
+      // Summary cards: the all-sheets count is the headline, with how many the list shows after the
+      // Details filters; each count keeps its own unit (clients vs rows) and is never added to another.
+      const cur = (root.querySelector('[data-dq][aria-selected="true"]') || {}).dataset;
+      const card = (tab, k, total, unit, listed) => '<button type="button" class="ld-dq-card' + (cur && cur.dq === tab ? ' active' : '') +
+        '" data-tab="' + tab + '"><div class="k">' + k + '</div><div class="v">' + nf(total) + '</div><div class="s">' + unit +
+        ' across all sheets · ' + nf(listed) + ' listed below after the L&amp;D Details filters</div></button>';
+      $('dqSummary').innerHTML =
+        card('unmapped', 'Unmapped clients', (DATA.unmapped || []).length, 'clients', un.length) +
+        card('dateissues', 'Date issues', (DATA.dateIssues || []).length, 'date cells', di.length) +
+        card('noemail', 'Missing emails', (DATA.noEmailRows || []).length, 'rows', ne.length);
     }
 
     // ---------- L&D Flow ----------
@@ -821,6 +848,7 @@ const LD = (() => {
     const LD_PEOPLE = META.ldPeople || [];
     const LEADS_CREATED = META.leadsCreated || {};
     const flowState = { month: '', team: '', emp: '', subjects: new Set(LD_DEFAULT_SUBJECTS) };
+    let flowPeriod = FY_LABEL;   // the page heading's period indicator on Flow / Employee View
     const subjOn = x => flowState.subjects.has(x);
     const FLOW_MONTHS = [...new Set(Object.keys(LEADS_CREATED).concat(MONTHS.map(m => m.mk)))].filter(mk => /^\d{4}-\d{2}$/.test(mk)).sort();
     const monthLabel = mk => MONTH_LABELS[mk] || (MONTHS_3[+mk.slice(5, 7) - 1] + ' ' + mk.slice(0, 4));
@@ -889,40 +917,64 @@ const LD = (() => {
       const routes = by(c => ldTouch(c, mk).via);
       const inWindow = mk ? (bucket.month || 0) : (bucket.fy || 0);
 
+      // Period indicator in the page heading (Flow / Employee View).
+      flowPeriod = windowLabel + (team ? ' · ' + team : '') + (emp ? ' · ' + emp : '');
+
+      // KPI cards: touched, then its three Workpoint status groups (which add up to it).
+      const ip = group.inprocess || 0, cv = group.converted || 0, ot = group.other || 0;
+      const kpi = (label, v, note, primary) => '<div class="ld-kpi' + (primary ? ' ld-kpi-primary' : '') + '"><div class="ld-kpi-label">' +
+        label + '</div><div class="ld-kpi-value">' + nf(v) + '</div><div class="ld-kpi-note">' + note + '</div></div>';
+      $('flowKpis').innerHTML =
+        kpi('Leads touched by L&amp;D', n, 'Matched to Workpoint · ' + esc(windowLabel), true) +
+        kpi('In process', ip, '<b>' + pct(ip, n) + '</b> of touched leads') +
+        kpi('Converted', cv, '<b>' + pct(cv, n) + '</b> of touched leads') +
+        kpi('Other statuses', ot, '<b>' + pct(ot, n) + '</b> of touched leads');
+
+      // Current lead status: a labelled bar per group, count and share beside each label.
+      $('statusSub').textContent = 'Current Workpoint status of the ' + nf(n) + ' touched leads. Shares are of touched leads.';
+      $('statusBars').innerHTML = [['In process', ip, 'var(--ld-primary)'], ['Converted', cv, 'var(--ld-success)'],
+        ['Other statuses', ot, 'var(--ld-other)']].map(([label, v, c]) =>
+        '<div class="ld-bar"><div class="ld-bar-top"><span>' + label + '</span><span><span class="v">' + nf(v) + '</span><span class="p">' +
+        pct(v, n) + '</span></span></div><div class="ld-bar-track" aria-hidden="true"><div class="ld-bar-fill" style="--c:' + c +
+        ';width:' + (n ? v / n * 100 : 0) + '%"></div></div></div>').join('');
+
+      // How L&D reached them: two independent breakdowns of the same leads, kept visually apart.
+      const kv = rs => '<dl class="ld-kv">' + rs.map(r => '<dt>' + esc(r[0]) + '</dt><dd>' + nf(r[1] || 0) + '</dd><dd class="p">' +
+        pct(r[1] || 0, n) + '</dd>').join('') + '</dl>';
+      const cohort = mk
+        ? [['Created in ' + windowLabel, bucket.month], ['Created in other months of ' + FY_LABEL, bucket.fy], ['Created before ' + FY_LABEL, bucket.prev]]
+        : [['Created in ' + FY_LABEL, bucket.fy], ['Created in previous financial years', bucket.prev]];
+      if(bucket.unknown) cohort.push(['No created date in lead data', bucket.unknown]);
+      $('reach').innerHTML =
+        '<div class="ld-group"><h3 class="ld-group-title">Entry route</h3><p class="ld-group-note">A lead with any FY ticket counts under ' +
+          'ticket subject, even when it is on a Plan Approval sheet too.</p>' +
+          kv([['Via ticket subject', routes.ticket], ['Via plan approval only (no FY ticket)', routes.pa]]) + '</div>' +
+        '<div class="ld-group"><h3 class="ld-group-title">Lead creation cohort</h3><p class="ld-group-note">When the lead was created ' +
+          'in Workpoint.</p>' + kv(cohort) + '</div>';
+
+      // Lead-creation context — a share, not a funnel: touched leads also include older leads.
+      const prevTouched = n - inWindow - (bucket.unknown || 0);
+      $('flowContext').innerHTML = created
+        ? 'Of the <b>' + nf(created) + '</b> leads created in ' + esc(windowLabel) + (team ? ' for ' + esc(team) : '') + ', <b>' + nf(inWindow) +
+          '</b> (' + pct(inWindow, created) + ') were touched by L&amp;D' + (mk ? ' in that month' : '') + '.' +
+          '<span class="ld-context-note">The ' + nf(n) + ' touched leads also include ' + nf(prevTouched) + ' created ' +
+          (mk ? 'outside ' + esc(windowLabel) : 'in earlier financial years') + ', so this is a share of new leads, not a funnel.' +
+          (emp ? ' Leads created is not split by L&amp;D employee.' : '') + '</span>'
+        : 'No leads were created in ' + esc(windowLabel) + (team ? ' for ' + esc(team) : '') + ' in the lead data.';
+
+      // The full scope sentence lives in "Definitions & source notes".
       renderFlowSubjects();
-      $('flowCap').innerHTML = (mk ? 'Showing <b>' + esc(windowLabel) + '</b>' : 'Showing the whole of <b>' + esc(FY_LABEL) + '</b>') +
+      $('flowCap').innerHTML = '<b>Current L&amp;D Flow view.</b> ' +
+        (mk ? 'Showing <b>' + esc(windowLabel) + '</b>' : 'Showing the whole of <b>' + esc(FY_LABEL) + '</b>') +
         (team ? ' for <b>' + esc(team) + '</b>' : ' across all teams') + (emp ? ', handled by <b>' + esc(emp) + '</b>' : '') +
         '. A lead is <b>touched by L&amp;D</b> if it has a Plan Approval row, or an FY ticket under ' + esc(subjectsLabel(false)) +
-        (mk ? ', in that month' : '') + '. A lead that has any FY ticket is counted <i>via ticket subject</i>, even when it is on a ' +
-        'Plan Approval sheet too' + (emp ? ' — counting only plans ' + esc(emp) + ' approved, and tickets assigned to ' + esc(emp) +
-          '. <i>Total leads created</i> is not split by L&amp;D employee, since L&amp;D does not own leads' : '') +
-        '. Lead status is the current status in Workpoint.' +
+        (mk ? ', in that month' : '') + ', and is found in Workpoint. A lead that has any FY ticket is counted <i>via ticket subject</i>, even ' +
+        'when it is on a Plan Approval sheet too' + (emp ? ' — counting only plans ' + esc(emp) + ' approved, and tickets assigned to ' + esc(emp) +
+          '. <i>Leads created</i> is not split by L&amp;D employee, since L&amp;D does not own leads' : '') + '.' +
+        (unmapped.length ? ' <b>' + nf(unmapped.length) + '</b> more clients L&amp;D worked with' + (team ? ' (any team)' : '') +
+          ' are not in the lead data and are left out (Data Quality → Unmapped clients).' : '') +
         (mk && !MONTHS.some(m => m.mk === mk) ? ' <b>No ticket rows are loaded for this month</b> (' + esc(META.excludedMonths.join(', ')) +
           ' is excluded by request).' : '');
-
-      const breakRows = mk
-        ? [['Created in ' + windowLabel, bucket.month], ['Created in other months of ' + FY_LABEL, bucket.fy], ['Created before ' + FY_LABEL, bucket.prev]]
-        : [['Created in ' + FY_LABEL, bucket.fy], ['Created before ' + FY_LABEL + ' (previous FYs)', bucket.prev]];
-      if(bucket.unknown) breakRows.push(['No created date in lead data', bucket.unknown]);
-      const dl = rs => rs.map(r => '<dt>' + esc(r[0]) + '</dt><dd>' + nf(r[1] || 0) + '</dd>').join('');
-      const node = (c, v, label, sub, extra, wide) => '<div class="cf-node' + (wide ? ' ld-wide' : '') + '" style="--c:' + c + '">' +
-        '<div class="cf-value">' + nf(v) + '</div><div class="cf-label">' + label + '</div>' + (sub ? '<div class="cf-sub">' + sub + '</div>' : '') +
-        (extra || '') + '</div>';
-      $('flow').innerHTML =
-        '<div class="ld-row">' + node('var(--ld-ink)', created, 'Total leads created', 'created in ' + esc(windowLabel) +
-          (emp ? ' (all leads, not split by L&amp;D employee)' : '')) + '</div>' +
-        '<div class="ld-stem" aria-hidden="true"></div>' +
-        '<div class="ld-row">' + node('var(--orange)', n, 'Leads touched by L&amp;D', '<b>' + nf(inWindow) + '</b> of them were created in ' +
-          esc(windowLabel) + (created ? ' — ' + pct(inWindow, created) + ' of leads created' : ''),
-          '<dl class="ld-break">' + dl(breakRows) + '<div class="sep"></div>' + dl([['Via ticket subject', routes.ticket],
-            ['Via plan approval only (no FY ticket)', routes.pa]]) + '</dl>', true) + '</div>' +
-        '<div class="ld-fork"><div class="ld-split" aria-hidden="true"></div><div class="ld-pair">' +
-          '<div class="ld-cell">' + node('var(--s-inprocess)', group.inprocess || 0, 'In process', '<b>' + pct(group.inprocess || 0, n) + '</b> of touched leads') + '</div>' +
-          '<div class="ld-cell">' + node('var(--s-converted)', group.converted || 0, 'Converted', '<b>' + pct(group.converted || 0, n) + '</b> of touched leads') + '</div>' +
-        '</div></div>' +
-        '<p class="ld-caption">The other <b>' + nf(group.other || 0) + '</b> touched leads are in other statuses (on hold, re-assigned, follow up…) — ' +
-          'broken down by tier below.' + (unmapped.length ? ' <b>' + nf(unmapped.length) + '</b> more clients L&amp;D worked with' + (team ? ' (any team)' : '') +
-          ' are not in the lead data and are left out — see the Unmapped clients flag above.' : '') + '</p>';
 
       // status by client tier
       const tierRows = TIERS.map(t => {
@@ -937,9 +989,11 @@ const LD = (() => {
       const sum = k => tierRows.reduce((a, r) => a + r[k], 0);
       const allOther = {};
       tierRows.forEach(r => Object.keys(r.other).forEach(k => { allOther[k] = (allOther[k] || 0) + r.other[k]; }));
-      $('flowTierCap').innerHTML = 'The <b>' + nf(n) + '</b> touched leads above, split by client tier. ' + TIER_SOURCE_NOTE +
-        ' Percentages are of the row total. Hover an <i>Other statuses</i> cell for its breakdown.' +
-        (tierRows.some(r => r.t === BLANK) ? ' <b>' + esc(BLANK) + '</b> means neither source has a grade for the client.' : '');
+      $('flowTierCap').innerHTML = 'The <b>' + nf(n) + '</b> touched leads, split by client tier. Percentages are of the row total. ' +
+        TIER_SOURCE_NOTE + (tierRows.some(r => r.t === BLANK) ? ' <b>' + esc(BLANK) + '</b> means neither source has a grade for the client.' : '');
+      // "Other statuses" spelled out per tier, so the breakdown doesn't depend on hovering.
+      const otherList = (label, o) => '<li><b>' + esc(label) + '</b> — ' + (Object.keys(o).length ? esc(otherTip(o)) : 'none') + '</li>';
+      $('otherBreakdown').innerHTML = tierRows.map(r => otherList(r.t, r.other)).join('') + otherList('All tiers', allOther);
       $('flowTierTbl').innerHTML = '<thead><tr><th>Client tier</th><th class="num">In process</th><th class="num">Converted</th>' +
         '<th class="num">Other statuses</th><th class="num">Total</th></tr></thead><tbody>' +
         tierRows.map(r => '<tr><td>' + esc(r.t) + '</td>' + cell(r.ip, r.total) + cell(r.cv, r.total) + '<td class="num" title="' +
@@ -949,21 +1003,22 @@ const LD = (() => {
 
       renderFlags(unmapped);
       renderEmpTable();
+      updateHead();
     }
 
+    // Compact strip on the Flow: the three checks for the CURRENT Flow view, each opening its report.
+    // (All-sheet totals are on the Data Quality view, labelled as such — the two scopes are never mixed.)
     function renderFlags(unmapped){
       const di = DATA.dateIssues || [], ne = DATA.noEmailRows || [];
-      const flags = [
-        { k: 'Unmapped clients', tab: 'unmapped', v: unmapped.length, total: (DATA.unmapped || []).length,
-          n: 'L&D clients whose email has no lead record, so they are left out of the flow' },
-        { k: 'Date issues', tab: 'dateissues', v: di.filter(flagRowInView).length, total: di.length,
-          n: 'L&D rows with a date that can\'t be read, or falls outside ' + FY_LABEL },
-        { k: 'Missing emails', tab: 'noemail', v: ne.filter(flagRowInView).length, total: ne.length,
-          n: 'L&D rows with a client name but no email, so they can\'t be matched or counted' }
+      const items = [
+        { tab: 'unmapped', v: unmapped.length, k: 'unmapped clients', t: 'L&D clients whose email has no lead record, left out of the flow' },
+        { tab: 'dateissues', v: di.filter(flagRowInView).length, k: 'date issues', t: 'Rows with a date that cannot be read, or falls outside ' + FY_LABEL },
+        { tab: 'noemail', v: ne.filter(flagRowInView).length, k: 'missing-email rows', t: 'Rows with a client name but no email, so they cannot be counted' }
       ];
-      $('flowFlags').innerHTML = flags.map(f => '<button type="button" class="ld-flag" data-tab="' + f.tab + '" data-zero="' + (f.v ? 0 : 1) + '">' +
-        '<div class="fk">' + f.k + '</div><div class="fv">' + nf(f.v) + '</div><div class="fn">' + esc(f.n) + ' (in this view)</div>' +
-        '<div class="fgo">' + nf(f.total) + ' across all sheets · open the list →</div></button>').join('');
+      $('flowFlags').innerHTML = '<span class="ld-dq-title">Data quality in this view:</span>' + items.map(f =>
+        '<button type="button" class="ld-dq-item" data-tab="' + f.tab + '" title="' + esc(f.t) + '" aria-label="' + nf(f.v) + ' ' + f.k +
+        ' in the current view — open the report"><b>' + nf(f.v) + '</b> ' + f.k + '</button>').join('') +
+        '<span class="ld-dq-hint">Click one to open its report under Data Quality.</span>';
     }
 
     // Plans per source row; clients once per employee (so the Total row counts distinct clients).
@@ -990,20 +1045,20 @@ const LD = (() => {
           return '<td class="num">' + (v ? nf(v) + ' <span class="sub-pct">' + pct(v, mapped.length) + '</span>' : '–') + '</td>'; }).join('') +
           '<td class="num muted-col">' + (clients.length - mapped.length || '–') + '</td>';
       };
-      const line = (label, cnt, clients, attrs) => '<tr' + (attrs || '') + '><td>' + label + '</td><td class="num">' + nf(cnt.created) +
-        '</td><td class="num">' + nf(cnt.approved) + '</td><td class="num">' + nf(clients.length) + '</td>' + statusCells(clients) + '</tr>';
+      const line = (label, cnt, clients, attrs) => '<tr' + (attrs || '') + '><td>' + label + '</td><td class="num grp-edge">' + nf(cnt.created) +
+        '</td><td class="num">' + nf(cnt.approved) + '</td><td class="num grp-edge">' + nf(clients.length) + '</td>' + statusCells(clients) + '</tr>';
       const uniq = [...new Map(rows.flatMap(r => r.cl.map(y => [y.c.cid, y.c]))).values()];
       const tot = rows.reduce((o, r) => { Object.keys(o).forEach(k => { o[k] += r.cnt[k]; }); return o; }, { created: 0, approved: 0 });
-      $('flowEmpCap').innerHTML = '<b>Plans created</b> = FY tickets under ' + esc(subjectsLabel(false)) + ' assigned to that person. ' +
-        '<b>Approved</b> = Plan Approval rows with that person in <i>Approved By</i>. Status columns are the current Workpoint lead ' +
-        'status of the clients behind those plans; percentages are of the row\'s mapped clients. A client handled by two people appears ' +
-        'in both rows, so the Total row counts each client once. Follows the Month, Ticket subjects and Team filters; click a row to ' +
-        'filter the whole flow by that employee.';
-      $('flowEmpTbl').innerHTML = '<thead><tr><th class="grp"></th><th class="grp" colspan="2">Plans</th><th class="grp" colspan="' +
-        (present.length + 2) + '">Clients — Workpoint status</th></tr><tr><th>L&amp;D employee</th><th class="num">Created</th>' +
-        '<th class="num">Approved</th><th class="num">Clients</th>' +
+      $('flowEmpCap').innerHTML = '<b>Created</b> = FY tickets under ' + esc(subjectsLabel(false)) + ' assigned to that person. ' +
+        '<b>Approved</b> = Plan Approval rows with that person in <i>Approved By</i>. Client outcome columns are the current Workpoint lead ' +
+        'status of the clients behind those plans; percentages are of the row\'s clients found in Workpoint. Follows the Month, Ticket ' +
+        'subjects and Team filters. Select a row (click, or Enter) to filter L&amp;D Flow and this view by that employee; select it again to clear.';
+      $('flowEmpTbl').innerHTML = '<thead><tr><th class="grp"></th><th class="grp grp-edge" colspan="2">Plan activity</th>' +
+        '<th class="grp grp-edge" colspan="' + (present.length + 2) + '">Client outcomes (current Workpoint status)</th></tr>' +
+        '<tr><th>L&amp;D employee</th><th class="num grp-edge">Created</th><th class="num">Approved</th><th class="num grp-edge">Clients</th>' +
         present.map(x => '<th class="num">' + esc(x.label) + '</th>').join('') + '<th class="num muted-col">Not in lead data</th></tr></thead><tbody>' +
-        rows.map(r => line(esc(r.p), r.cnt, r.cl.map(y => y.c), ' data-emp="' + esc(r.p) + '" data-on="' + (r.p === flowState.emp ? 1 : 0) + '"')).join('') +
+        rows.map(r => line(esc(r.p), r.cnt, r.cl.map(y => y.c), ' data-emp="' + esc(r.p) + '" data-on="' + (r.p === flowState.emp ? 1 : 0) +
+          '" tabindex="0" aria-selected="' + (r.p === flowState.emp) + '"')).join('') +
         line('Total (distinct clients)', tot, uniq, ' class="totrow"') + '</tbody>';
     }
 
@@ -1091,13 +1146,67 @@ const LD = (() => {
     if(LD._wiring) LD._wiring.abort();
     const wiring = LD._wiring = new AbortController();
     const root = document.getElementById('tab-ld');
-    function activateSub(id){
-      root.querySelectorAll('[data-ldsub]').forEach(b => b.classList.toggle('active', b.dataset.ldsub === id));
-      root.querySelectorAll('.ld-subpanel').forEach(p => p.classList.toggle('active', p.id === 'ld-sub-' + id));
-      root.querySelectorAll('#ld-sub-' + id + ' .table-wrap').forEach(w => { if(typeof attachMirrorScroll === 'function') attachMirrorScroll(w); });
+    // The four views. Flow and Employee View share one filter bar (and its state); Details and
+    // Data Quality have their own, so the shared bar is hidden there.
+    const VIEWS = {
+      flow:     { title: 'L&D at a glance', filters: true,
+                  sub: 'How many leads L&D reached, where they stand in Workpoint now, and who worked on them.' },
+      employee: { title: 'Employee view', filters: true,
+                  sub: 'Plans each L&D employee created and approved, and where those clients stand in Workpoint now.' },
+      details:  { title: 'L&D details', filters: false,
+                  sub: 'Every client on the L&D tabs, with its own filters — a broader scope than the Flow.' },
+      quality:  { title: 'Data quality', filters: false,
+                  sub: 'Rows the dashboard cannot count, and where to fix them in the L&D workbook.' },
+    };
+    let currentView = 'flow';
+    const mirror = sel => root.querySelectorAll(sel + ' .table-wrap').forEach(w => { if(typeof attachMirrorScroll === 'function') attachMirrorScroll(w); });
+    function updateHead(){
+      const v = VIEWS[currentView];
+      el('viewTitle').textContent = v.title;
+      el('viewSub').textContent = v.sub;
+      el('period').textContent = v.filters ? flowPeriod
+        : currentView === 'details' ? (state.month ? monthLabel(state.month) : 'All months') + ' · Details filters' : 'All L&D tabs';
+    }
+    function activateSub(id, report){
+      currentView = VIEWS[id] ? id : 'flow';
+      root.querySelectorAll('[data-ldsub]').forEach(b => {
+        const isOn = b.dataset.ldsub === currentView;
+        b.classList.toggle('active', isOn);
+        if(isOn) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current');
+      });
+      root.querySelectorAll('.ld-subpanel').forEach(p => p.classList.toggle('active', p.id === 'ld-sub-' + currentView));
+      $('flowFilters').hidden = !VIEWS[currentView].filters;
+      if(report) activateDq(report);
+      updateHead();
+      mirror('#ld-sub-' + currentView);
+    }
+    // Local tabs: Details sections and Data Quality reports.
+    function selectTab(attr, id, panelPrefix, panelClass){
+      root.querySelectorAll('[data-' + attr + ']').forEach(b => {
+        if(b.classList.contains('ld-localtab')) b.setAttribute('aria-selected', String(b.dataset[attr] === id));
+      });
+      root.querySelectorAll('.' + panelClass).forEach(p => p.classList.toggle('active', p.id === panelPrefix + id));
+      mirror('#' + panelPrefix + id);
+    }
+    const activateDsec = id => selectTab('dsec', id, 'ld-dsec-', 'ld-dsec');
+    function activateDq(id){
+      selectTab('dq', id, 'ld-dq-', 'ld-dqsec');
+      root.querySelectorAll('.ld-dq-card').forEach(c => c.classList.toggle('active', c.dataset.tab === id));
     }
     root.querySelectorAll('[data-ldsub]').forEach(b =>
       b.addEventListener('click', () => activateSub(b.dataset.ldsub), { signal: wiring.signal }));
+    root.querySelectorAll('.ld-localtab[data-dsec]').forEach(b =>
+      b.addEventListener('click', () => activateDsec(b.dataset.dsec), { signal: wiring.signal }));
+    root.querySelectorAll('.ld-localtab[data-dq]').forEach(b =>
+      b.addEventListener('click', () => activateDq(b.dataset.dq), { signal: wiring.signal }));
+    // Arrow keys move between tabs in a tab strip, as in any tablist.
+    root.querySelectorAll('.ld-localtabs').forEach(list => list.addEventListener('keydown', e => {
+      if(e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
+      const tabs = [...list.querySelectorAll('.ld-localtab')], at = tabs.indexOf(document.activeElement);
+      if(at < 0) return;
+      const next = tabs[(at + (e.key === 'ArrowRight' ? 1 : tabs.length - 1)) % tabs.length];
+      next.focus(); next.click(); e.preventDefault();
+    }, { signal: wiring.signal }));
     const on = (id, ev, fn) => $(id).addEventListener(ev, fn, { signal: wiring.signal });
 
     const FILTER_IDS = { fMonth: 'month', fTier: 'tier', fTenure: 'tenure', fTeam: 'team', fPlatform: 'platform', fAdvisor: 'advisor', fSource: 'source' };
@@ -1156,10 +1265,17 @@ const LD = (() => {
       else return;
       renderFlow();
     });
-    // A click anywhere outside an open subject dropdown closes it.
+    // A click outside an open subject dropdown closes it; so does Escape (focus returns to its toggle).
+    const DROPDOWNS = [[subjDd, 'subjDdToggle'], [flowSubjDd, 'flowSubjToggle']];
     document.addEventListener('click', e => {
-      [[subjDd, 'subjDdToggle'], [flowSubjDd, 'flowSubjToggle']].forEach(([dd, toggle]) => {
+      DROPDOWNS.forEach(([dd, toggle]) => {
         if(dd.dataset.open === '1' && !dd.contains(e.target)){ dd.dataset.open = '0'; $(toggle).setAttribute('aria-expanded', 'false'); }
+      });
+    }, { signal: wiring.signal });
+    root.addEventListener('keydown', e => {
+      if(e.key !== 'Escape') return;
+      DROPDOWNS.forEach(([dd, toggle]) => {
+        if(dd.dataset.open === '1'){ dd.dataset.open = '0'; $(toggle).setAttribute('aria-expanded', 'false'); $(toggle).focus(); }
       });
     }, { signal: wiring.signal });
     Object.keys(csvHandlers).forEach(id => on(id, 'click', e => { e.preventDefault(); csvHandlers[id](); }));
@@ -1170,16 +1286,27 @@ const LD = (() => {
     on('flowResetBtn', 'click', () => { flowState.month = flowState.team = flowState.emp = '';
       flowState.subjects = new Set(LD_DEFAULT_SUBJECTS);
       $('fFlowMonth').value = $('fFlowTeam').value = $('fFlowEmp').value = ''; renderFlow(); });
-    on('flowEmpTbl', 'click', e => { const tr = e.target.closest('tr[data-emp]'); if(!tr) return;
-      flowState.emp = flowState.emp === tr.dataset.emp ? '' : tr.dataset.emp; $('fFlowEmp').value = flowState.emp; renderFlow(); });
-    on('flowFlags', 'click', e => { const f = e.target.closest('.ld-flag'); if(!f) return; activateSub(f.dataset.tab);
-      root.scrollIntoView({ behavior: 'smooth', block: 'start' }); });
+    // Selecting an employee row (click, Enter or Space) filters Flow + Employee View by that person.
+    const pickEmp = tr => {
+      flowState.emp = flowState.emp === tr.dataset.emp ? '' : tr.dataset.emp; $('fFlowEmp').value = flowState.emp; renderFlow();
+      const again = $('flowEmpTbl').querySelector('tr[data-emp="' + CSS.escape(tr.dataset.emp) + '"]');
+      if(again) again.focus();
+    };
+    on('flowEmpTbl', 'click', e => { const tr = e.target.closest('tr[data-emp]'); if(tr) pickEmp(tr); });
+    on('flowEmpTbl', 'keydown', e => {
+      const tr = e.target.closest('tr[data-emp]');
+      if(tr && (e.key === 'Enter' || e.key === ' ')){ e.preventDefault(); pickEmp(tr); }
+    });
+    // Data-quality strip (Flow) and summary cards (Data Quality) open their report.
+    on('flowFlags', 'click', e => { const f = e.target.closest('.ld-dq-item'); if(!f) return;
+      activateSub('quality', f.dataset.tab); root.scrollIntoView({ behavior: 'smooth', block: 'start' }); });
+    on('dqSummary', 'click', e => { const c = e.target.closest('.ld-dq-card'); if(c) activateDq(c.dataset.tab); });
 
     return {
       renderAll(){
         renderFlow(); renderDetails(); renderFoot();
-        el('stamp').textContent = 'L&D workbook: ' + nf(META.ldRows) + ' rows · ' + nf(CLIENTS.length) + ' clients · lead data ' +
-          (META.dataGenerated ? 'updated ' + META.dataGenerated : 'loaded');
+        el('stamp').textContent = (META.dataGenerated ? 'Data last updated ' + META.dataGenerated : 'Data loaded') + ' · L&D workbook ' +
+          nf(META.ldRows) + ' rows';
         const cur = root.querySelector('[data-ldsub].active');
         activateSub(cur ? cur.dataset.ldsub : 'flow');
       }
