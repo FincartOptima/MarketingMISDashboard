@@ -130,66 +130,80 @@ const TABLE_INFO = {
   },
   'activity-change': {
     title: 'Activity Change Days',
-    desc: 'Of the leads that entered a <strong>From</strong> activity in the selected month(s), how many went on to a <strong>To</strong> activity, and how long it took.<br><br><strong>The one thing to know about this measure:</strong> the FIN23 export carries a single timestamp per activity — <code>createdDate</code>, <code>leadFollowUpDate</code>, <code>leadOnHoldDate</code>, <code>leadInProcessDate</code>, <code>convertedDate</code>, <code>leadDeadDate</code> — and the CRM overwrites each one with the <strong>last</strong> time the lead entered that activity. There is no per-event history in the file. So a lead that went On Hold → In Process → On Hold again shows only its final On Hold stamp and its final In Process stamp, and this section cannot see the round trip.<br><br>Given that, a lead counts as <strong>moved</strong> when it has a To stamp dated <strong>on or after</strong> its From stamp. A lead whose To stamp <em>predates</em> its From stamp did not make this move as far as the file can tell: it stays in the cohort (it really did enter the From activity) but is not counted as moved, and the note under the filters says how many such leads there are rather than dropping them silently.<br><br><strong>Cohort</strong> is fixed by the <strong>Month</strong> filter, which is the month of the <em>From</em> activity — never the To activity — so the denominator is settled before any move is counted. ASSIGNED and RE-ASSIGNED have no stamp of their own; <strong>Created / Assigned</strong> uses <code>createdDate</code>, the moment the lead first landed with an RM.',
-    cols: 'createdDate · leadFollowUpDate · leadOnHoldDate · leadInProcessDate · convertedDate · leadDeadDate (the From/To stamps) · currentRmName → Team (via STATE.teamMap, then RM Master Mapping) · leadHead (the header filter) · clientName, leadStatus, platformName, Campaign Name (lead detail only)',
+    desc: 'Pick an activity and a month, and this section shows <strong>where that cohort of leads went next</strong>, how long each move took, and how much of the cohort never moved again.<br><br><strong>The one thing to know about this measure:</strong> the FIN23 export carries a single timestamp per activity — <code>createdDate</code>, <code>leadFollowUpDate</code>, <code>leadOnHoldDate</code>, <code>leadInProcessDate</code>, <code>convertedDate</code>, <code>leadDeadDate</code> — and the CRM overwrites each one with the <strong>last</strong> time the lead entered that activity. There is no per-event history, so a lead that went On Hold → In Process → On Hold again shows only its final On Hold stamp and its final In Process stamp, and nothing here can see the round trip.<br><br>Given that, the page shows two different readings. <strong>Went Here Next</strong> (the flow) assigns each lead to the destination whose stamp is the <em>earliest one on or after</em> the From stamp, so every lead lands in exactly one card and the cards sum to the cohort exactly. <strong>Ever Reached</strong> (the second table, and the transition matrix) counts a lead under <em>every</em> destination it reached, so those columns overlap and do not sum to the cohort. A stamp dated <em>before</em> the From stamp is not treated as a move either way, and the count of those is stated under the flow.<br><br><strong>Month</strong> is the month of the <em>From</em> activity, never the destination, so the denominator is settled before any move is counted. ASSIGNED and RE-ASSIGNED have no stamp of their own; <strong>Created / Assigned</strong> uses <code>createdDate</code>, the moment the lead first landed with an RM, and is offered as a From only — nothing moves <em>into</em> "created".',
+    cols: 'createdDate · leadFollowUpDate · leadOnHoldDate · leadInProcessDate · convertedDate · leadDeadDate · currentRmName → Team (via STATE.teamMap, then RM Master Mapping) · leadHead (the header filter) · clientName, leadStatus, platformName, Campaign Name (lead detail only)',
     source: 'RAW_DATA sheet (B2C export dated 2nd Nov 2026 or later), EMPLOYEE_REF sheet',
-    note: 'Team and RM are the lead\'s <strong>current</strong> owner. The activity stamps record when the lead last entered each state, not who moved it, so current ownership is the only attribution the file supports — same basis as Stagnant In-Process. This section applies its own Month filter and the header\'s Lead Head filter; the header\'s <strong>Month, Ref+Cold and Status do not apply here</strong> (From/To Activity and this section\'s Month supersede them). An export downloaded before 2nd Nov 2026 has no leadOnHoldDate / leadFollowUpDate / leadDeadDate columns, and the section says so instead of showing zeros.'
+    note: 'Team and RM are the lead\'s <strong>current</strong> owner. The activity stamps record when the lead last entered each state, not who moved it, so current ownership is the only attribution the file supports — same basis as Stagnant In-Process. Dates carry no time (they are truncated when the data is built), so a move within the same calendar day reads as 0 days, and two destinations stamped the same day are ordered <strong>Follow Up, On Hold, In Process, Converted, Dead</strong>. This section applies its own Month filter and the header\'s Lead Head filter; the header\'s <strong>Month, Ref+Cold and Status do not apply here</strong>. An export downloaded before 2nd Nov 2026 has no leadOnHoldDate / leadFollowUpDate / leadDeadDate columns, and the section says so instead of showing zeros.'
+  },
+  'activity-flow': {
+    title: 'Where They Went Next',
+    desc: 'The cohort fanned out across its destinations. Each lead is counted <strong>once</strong>, under the activity whose stamp is the earliest one on or after the From stamp — so the destination cards plus <strong>No further activity</strong> add up to the cohort exactly. Each card shows the count, its share of the cohort, and the median days that move took. <strong>No further activity</strong> shows the median days those leads have been sitting, measured against today.<br><br>Every card is a control: click it to narrow the chart, the By Team table and the lead list below to just those leads. Click the highlighted card again to clear. Destinations no lead went to next are named in the caption rather than drawn as empty cards.',
+    cols: 'All six activity stamps, compared against the From activity\'s stamp · today\'s date (for the sitting figure)',
+    source: 'RAW_DATA sheet',
+    note: 'A card being small does not mean few leads ever got there — only that few went there <em>first</em>. Created / Assigned → Converted is the clearest example: most converted leads pass through On Hold or Follow Up on the way, so they land on those cards instead. The <strong>Next Step vs Ever Reached</strong> table below shows both numbers side by side.'
   },
   'activity-buckets': {
     title: 'How Long the Move Took',
-    desc: 'Every lead that made the selected From → To move, grouped by how many days it took: same day, 1–7, 8–15, 16–30, 31–60, 61–90, 90+. One series (lead counts); the bars darken with the day band to reinforce the order, not to encode a second number. Leads that have not moved are not in this chart — the <strong>Still Not in…</strong> tile above counts them.',
-    cols: 'The From and To activity stamps (days = To date − From date, whole days)',
+    desc: 'Every lead that moved on, grouped by how many days it took to reach its next activity: same day, 1–7, 8–15, 16–30, 31–60, 61–90, 90+. One series (lead counts); the bars darken with the day band to reinforce the order, not to encode a second number. Leads that never moved are not in this chart — the <strong>Never Moved Again</strong> tile counts them. Drilling into a card in the flow above narrows this chart to that destination.',
+    cols: 'The From activity stamp and the next-activity stamp (days = next date − From date, whole days)',
     source: 'RAW_DATA sheet',
-    note: 'Days are whole calendar days between the two stamps. The export gives dates only (times are dropped when the data is built), so a move within the same calendar day reads as 0 days, not as hours.'
+    note: 'Days are whole calendar days. The export gives dates only, so a move within the same calendar day reads as 0 days, not as hours — which is why the <strong>Same day</strong> bar is often large.'
+  },
+  'activity-dest': {
+    title: 'Next Step vs Ever Reached',
+    desc: 'The same cohort counted two ways, so the difference is visible rather than implied.<br><br><strong>Went Here Next</strong> — each lead once, under its earliest stamp on or after the From stamp. This column sums to the cohort; it is the flow above in tabular form.<br><br><strong>Ever Reached</strong> — every lead with a stamp for that destination on or after the From stamp, whether or not it went there first. A lead that went Follow Up then On Hold then Converted appears under all three, so this column <strong>overlaps and does not sum to the cohort</strong>.<br><br>Use the first to understand flow and stalling, the second to answer "how many of this cohort eventually converted".',
+    cols: 'All destination stamps compared against the From activity stamp',
+    source: 'RAW_DATA sheet',
+    note: 'The median-days figures differ between the two columns for the same reason: the next-step median covers only leads for which this was the <em>first</em> move, the ever-reached median covers every lead that got there at any point, so it is usually longer.'
   },
   'activity-volume': {
-    title: 'Cohort vs Moved, by Month',
-    desc: 'Per month of the <strong>From</strong> activity: how many leads entered it (cohort), and how many of those went on to the To activity. Both series are lead counts on one axis, so the gap between the bars is the leads that have not moved.',
-    cols: 'The From activity stamp (month) · the To activity stamp (presence, on/after the From stamp)',
+    title: 'Entered vs Moved On, by Month',
+    desc: 'Per month of the <strong>From</strong> activity: how many leads entered it, and how many of those went on to any other activity. Both series are lead counts on one axis, so the gap between the bars is the leads that have not moved.',
+    cols: 'The From activity stamp (month) · whether any later destination stamp exists',
     source: 'RAW_DATA sheet',
-    note: 'The most recent month is always the least complete: its leads have had the least time to move, so a falling "Moved" bar at the right-hand end is usually recency, not a drop in performance.'
+    note: 'The most recent month is always the least complete: its leads have had the least time to move, so a falling "Moved on" bar at the right-hand end is usually recency, not a drop in performance.'
   },
   'activity-trend': {
-    title: 'Average Days to Move, by Month',
-    desc: 'Average days from the From activity to the To activity, for each month of the <strong>From</strong> activity. A month with no lead that moved is left as a gap rather than drawn as zero.',
-    cols: 'The From activity stamp (month) · days between the From and To stamps',
+    title: 'Median Days to the Next Activity',
+    desc: 'Median days from the From activity to whatever came next, for each month of the <strong>From</strong> activity. A month in which no lead moved on is left as a gap rather than drawn as zero.',
+    cols: 'The From activity stamp (month) · days to the next activity stamp',
     source: 'RAW_DATA sheet',
-    note: 'Averaged only over the leads that actually moved, so a month where two leads moved fast will read better than one where twenty moved at a steady pace. Read it next to the Cohort vs Moved chart, and use <strong>Median Days</strong> in the tables when a few very slow leads are pulling the average.'
+    note: 'Median, not mean, because a handful of leads revived after two years would otherwise swamp the line. The By Month table carries the mean alongside it if you want both.'
   },
   'activity-team': {
     title: 'Activity Change Days — By Team',
-    desc: 'The same cohort split by the lead\'s <strong>current RM\'s</strong> team. <strong>In From Activity</strong> is that team\'s cohort; <strong>Moved</strong> is how many reached the To activity; <strong>% Moved</strong> is Moved ÷ In From Activity. Avg / Median / 90th Pct / Fastest / Slowest days cover only the leads that moved. Team rows sum exactly to the Grand Total for the two count columns; the day statistics are recomputed over the whole cohort for the total row, so they are not an average of the team averages.',
-    cols: 'currentRmName → Team (via STATE.teamMap, then RM Master Mapping) · the From and To activity stamps',
+    desc: 'The same cohort split by the lead\'s <strong>current RM\'s</strong> team, sorted by <strong>Never Moved</strong> so the biggest stalled books are at the top. <strong>Entered</strong> is that team\'s cohort; <strong>Moved On</strong> is how many reached any next activity; <strong>Never Moved</strong> is the rest, with <strong>Median Days Sitting</strong> telling you how long they have been there. Team rows sum exactly to the Grand Total for the three count columns; the day figures are recomputed over the whole cohort for the total row, so they are not an average of the team averages.',
+    cols: 'currentRmName → Team (via STATE.teamMap, then RM Master Mapping) · the From activity stamp and all destination stamps',
     source: 'RAW_DATA sheet, EMPLOYEE_REF sheet',
-    note: 'A lead whose current RM is not in EMPLOYEE_REF or the RM Master Mapping counts under <strong>SV</strong>, same as everywhere else on the dashboard.'
+    note: 'A lead whose current RM is not in EMPLOYEE_REF or the RM Master Mapping counts under <strong>SV</strong>, same as everywhere else on the dashboard — which is why SV is usually the largest row. Row heat is by Never Moved, so the darkest rows are the ones to look at first.'
   },
   'activity-rm': {
     title: 'Activity Change Days — By RM',
-    desc: 'The same figures as By Team, one row per <strong>current RM</strong>, with that RM\'s team beside the name. Sortable on every column — sort by % Moved to see who is moving leads on, or by Avg Days to see who is slowest.',
-    cols: 'currentRmName · currentRmName → Team · the From and To activity stamps',
+    desc: 'The same figures as By Team, one row per <strong>current RM</strong>, with that RM\'s team beside the name, sorted by <strong>Never Moved</strong>. Sortable on every column — sort by <strong>% Never Moved</strong> to find who is parking leads, or by <strong>Median Days Sitting</strong> to find whose stalled leads are oldest.',
+    cols: 'currentRmName · currentRmName → Team · the From activity stamp and all destination stamps',
     source: 'RAW_DATA sheet, EMPLOYEE_REF sheet',
-    note: 'RM names are the CRM\'s own spelling of currentRmName, not normalised through RM Master Mapping (which is used for the team lookup). An RM with a tiny cohort can show a 100% move rate off two leads, so read % Moved next to In From Activity.'
+    note: 'RM names are the CRM\'s own spelling of currentRmName, not normalised through RM Master Mapping (which is used for the team lookup). An RM with a tiny cohort can show 100% moved off two leads, so read the percentages next to <strong>Entered</strong>.'
   },
   'activity-month': {
-    title: 'Activity Change Days — By Month of the From Activity',
-    desc: 'The cohort split by the month in which each lead entered the <strong>From</strong> activity — the tabular form of the two month charts, with the median and spread the charts leave out.',
-    cols: 'The From activity stamp (month) · the To activity stamp · days between them',
+    title: 'Activity Change Days — By Month Entered',
+    desc: 'The cohort split by the month in which each lead entered the <strong>From</strong> activity — the tabular form of the two month charts, with the mean and the sitting figures the charts leave out.',
+    cols: 'The From activity stamp (month) · all destination stamps · today\'s date (for Median Days Sitting)',
     source: 'RAW_DATA sheet',
     note: 'Rows only appear for months the Month filter allows. The newest month is the least complete, as in the chart.'
   },
   'activity-matrix': {
-    title: 'Every Transition — Average Days',
-    desc: 'All six activities against each other at once, under the current Team / RM / Month selection, so the one pair chosen above can be read in context. Rows are the From activity, columns the To activity. Each cell shows the average days for that move, then how many of that row\'s cohort made it and what share that is.',
+    title: 'Every Transition — Median Days',
+    desc: 'All six activities against each other at once, under the current Team / RM / Month selection, so the From activity chosen above can be read in context. Rows are the From activity, columns the destination. Each cell shows the median days for that move, then how many of that row\'s cohort got there and what share that is.<br><br>This matrix is <strong>ever reached</strong>, not next-step — a lead counts in every column it reached — so a row does not sum to its Entered figure.',
     cols: 'All six activity stamps (createdDate, leadFollowUpDate, leadOnHoldDate, leadInProcessDate, convertedDate, leadDeadDate) · currentRmName → Team',
     source: 'RAW_DATA sheet, EMPLOYEE_REF sheet',
-    note: 'The Month filter applies to each row\'s <strong>own</strong> From activity, so every row is "leads that entered this activity in the selected month(s)" and the <strong>In From Activity</strong> column differs row to row. The matrix is not symmetric and is not meant to be: A → B and B → A are different counts because each only counts leads whose second stamp is on/after the first. A cell reading 0 means no lead in that row\'s cohort has a later stamp for that column.'
+    note: 'The Month filter applies to each row\'s <strong>own</strong> From activity, so every row is "leads that entered this activity in the selected month(s)" and the <strong>Entered</strong> column differs row to row. The matrix is not symmetric and is not meant to be: A → B and B → A are different counts because each only counts leads whose second stamp is on/after the first. A cell reading 0 means no lead in that row\'s cohort has a later stamp for that column.'
   },
   'activity-detail': {
     title: 'Activity Change Days — Lead by Lead',
-    desc: 'Every lead in the cohort, 15 per page: the fastest movers first, then the leads still sitting in the From activity (shown as <strong>Not moved</strong>). <strong>Download Excel</strong> gives the complete list regardless of which page is open, plus the By Team / By RM / By Month summaries and a Selection sheet recording the filters, as raw numbers rather than the page\'s display text.',
-    cols: 'clientName · currentRmName · Team · leadStatus · platformName · Campaign Name · the From and To activity stamps · days between them',
+    desc: 'Every lead in the cohort, 15 per page. Leads that moved come first, fastest first; leads that never moved come last, longest-sitting first, with <strong>Days</strong> showing how long they have been sitting. Clicking a card in the flow above narrows this list — drill into <strong>No further activity</strong> and you have the stalled follow-up sheet on its own.<br><br><strong>Download Excel</strong> gives the complete list for whatever is currently selected, regardless of page, plus the destination split and the By Team / By RM / By Month summaries and a Selection sheet recording the filters — as raw numbers rather than the page\'s display text.',
+    cols: 'clientName · currentRmName · Team · leadStatus · platformName · Campaign Name · the From activity stamp · the next activity and its stamp · days between them (or days since, for a stalled lead)',
     source: 'RAW_DATA sheet, EMPLOYEE_REF sheet',
-    note: '<strong>Current Status</strong> is the lead\'s status now, which need not match either activity: a lead that moved On Hold → In Process in March can be CONVERTED today. A lead shown as <strong>Not moved</strong> either has no To stamp at all, or has one dated before its From stamp (see the note under the filters).'
+    note: '<strong>Current Status</strong> is the lead\'s status now, which need not match either activity: a lead that moved On Hold → In Process in March can be CONVERTED today. <strong>Next Activity</strong> reads "none yet" when the lead has no stamp after the From stamp — either none at all, or only ones dated before it.'
   },
   'b2b': {
     title: 'B2B Corp Leads — RM × Status',

@@ -42,7 +42,7 @@ function buildRawData(finRows){
     // Per-activity timestamps added to the FIN23 export on 2026-11-02 — the
     // CRM stamps the LAST time a lead entered each activity, so they are a
     // set of "latest seen in this state" marks, not an ordered history (see
-    // activityChangeRows in app-activity.js, which only counts a pair as a
+    // activityFanOut in app-activity.js, which only counts a move as a
     // move when the To date is on/after the From date). Normalised to '' when
     // absent so an older export without these columns reads as "no stamp"
     // rather than the literal string 'N/A'.

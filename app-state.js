@@ -59,9 +59,10 @@ const STATE = {
   categorizedFromMonth: '',
   categorizedToMonth: '',
   // Activity Change Days (Dashboard subtab) — its own filters, independent of
-  // the header Month/Ref+Cold/Status (From/To Activity and the month below
-  // supersede them). `from`/`to` are CONFIG.ACTIVITIES keys.
-  activity: { team: 'All', rm: 'All', month: 'All', from: 'created', to: 'inprocess', page: 1 },
+  // the header Month/Ref+Cold/Status (From Activity and the month below
+  // supersede them). `from` is a CONFIG.ACTIVITIES key. `focus` is the
+  // flow drill-down: null, a destination key, or 'stuck'.
+  activity: { team: 'All', rm: 'All', month: 'All', from: 'created', focus: null, page: 1 },
   activityBucketChart: null,
   activityVolumeChart: null,
   activityTrendChart: null,

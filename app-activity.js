@@ -1,23 +1,34 @@
 // app-activity.js — "Activity Change Days" (Dashboard subsection).
 // Part of the app.js split (classic script, shares global scope with the other app-*.js files).
 //
-// Answers one question: of the leads that entered activity A in a given month,
-// how many went on to activity B, and how long did it take?
+// Answers one question: of the leads that entered an activity in a given
+// month, WHERE DID THEY GO NEXT, how many went nowhere, and how long each
+// move took.
 //
-// WHAT THE SOURCE ACTUALLY GIVES US, and why that shapes everything here:
-// the FIN23 export carries ONE timestamp per activity (createdDate,
-// leadFollowUpDate, leadOnHoldDate, leadInProcessDate, convertedDate,
-// leadDeadDate) and the CRM overwrites each with the LAST time the lead
-// entered that activity. There is no per-event history, so we cannot see a
-// lead that went On Hold → In Process → On Hold again; we only see its final
-// On Hold stamp and its final In Process stamp.
+// WHAT THE SOURCE GIVES US, and why that shapes everything here: the FIN23
+// export carries ONE timestamp per activity (createdDate, leadFollowUpDate,
+// leadOnHoldDate, leadInProcessDate, convertedDate, leadDeadDate) and the CRM
+// overwrites each with the LAST time the lead entered that activity. There is
+// no per-event history, so a lead that went On Hold -> In Process -> On Hold
+// again shows only its final On Hold stamp and its final In Process stamp.
 //
-// So "A → B" is defined here as: the lead has an A stamp in the selected
-// month(s), AND a B stamp dated on or after it. A lead whose B stamp predates
-// its A stamp did NOT make this move as far as the file can tell — it is
-// counted in the cohort (it genuinely entered A) but not as moved, and the
-// number of such rows is reported on the page rather than quietly dropped.
-// Everything downstream (tiles, charts, tables, Excel) uses that one rule.
+// Two readings follow from that, and the page shows both because they answer
+// different questions:
+//
+//   NEXT STEP (the flow) — for each lead, the destination whose stamp is the
+//   earliest one on/after the From stamp. Every lead lands in exactly one
+//   destination or in "no further activity", so the flow PARTITIONS the
+//   cohort and its nodes sum to it exactly. This is the actionable view: it
+//   says where a cohort actually goes and how much of it stalls.
+//
+//   EVER REACHED (the table) — for each destination, every lead with a stamp
+//   on/after the From stamp, counted once per destination. Overlapping, so
+//   the column does NOT sum to the cohort: one lead can appear under three
+//   destinations. This is the "did it eventually get there" view.
+//
+// A destination stamp dated BEFORE the From stamp is not a move either way
+// (the file cannot tell us it happened after), so it is excluded from both
+// and counted in the reversed tally the page reports.
 
 // ---- availability ----------------------------------------------------------
 
@@ -36,6 +47,8 @@ const activityByKey = key => ACTIVITIES.find(a => a.key === key) || ACTIVITIES[0
 const activityLabel = key => activityByKey(key).label;
 /** Activities a lead can move INTO — everything but the origin (see CONFIG.ACTIVITIES). */
 const activityToOptions = () => ACTIVITIES.filter(a => !a.origin);
+/** Destinations for one From activity: every non-origin activity but itself. */
+const activityDests = from => ACTIVITIES.filter(a => !a.origin && a.key !== from.key);
 
 /** Multi-select value → array of choices, or null for "All". */
 function activitySel(v){
@@ -49,6 +62,11 @@ function activitySelText(v){
 
 const ACTIVITY_DAY_MS = 86400000;
 const activityMonthOf = d => `${MONTHS_3[d.getMonth()]}-${d.getFullYear()}`;
+/** Local midnight today — the "sitting since" baseline for leads that never moved. */
+function activityToday(){
+  const n = new Date();
+  return new Date(n.getFullYear(), n.getMonth(), n.getDate());
+}
 
 // ---- cohort ----------------------------------------------------------------
 
@@ -63,7 +81,7 @@ const activityTeamOf = r => r.Team || 'SV';
  * filter (the one header filter that applies: it is the de-duplication rule
  * for secondary-applicant rows, not a view choice). The header's Month,
  * Ref+Cold and Status filters are deliberately NOT applied — this section's
- * own Month and From/To Activity supersede them.
+ * own Month and From Activity supersede them.
  */
 function activityPool(){
   const f = STATE.activity;
@@ -78,33 +96,71 @@ function activityPool(){
 }
 
 /**
- * The current From → To analysis.
- * @returns {{from:Object, to:Object, same:boolean, cohort:Array, moved:Array, reversed:number}}
- *   cohort: one record per lead with a From stamp in the selected month(s).
- *   moved:  the subset whose To stamp is on/after the From stamp (days set).
- *   reversed: cohort leads whose To stamp predates the From stamp.
+ * The whole analysis for the selected From activity, in one pass.
+ *
+ * Each record: { row, fromDate, fromMonth, dest, toDate, days, ageDays }.
+ * `dest` is null for a stalled lead, where `ageDays` is days since the From
+ * stamp instead of `days`.
+ *
+ * Tie-break: two destinations stamped the same day are ordered by
+ * CONFIG.ACTIVITIES, i.e. Follow Up, On Hold, In Process, Converted, Dead.
+ * Dates carry no time (buildRawData truncates them), so same-day ties are
+ * common and the rule has to be explicit rather than incidental.
+ *
+ * @returns {{from:Object, cohort:Array, dests:Array, stuck:Array, reach:Array, reversed:number}}
  */
-function activityChange(){
-  const f = STATE.activity;
-  const from = activityByKey(f.from), to = activityByKey(f.to);
-  const months = activitySel(f.month);
-  const out = { from, to, same: from.key === to.key, cohort: [], moved: [], reversed: 0 };
-  if(out.same) return out;
+function activityFanOut(){
+  const from = activityByKey(STATE.activity.from);
+  const months = activitySel(STATE.activity.month);
+  const dests = activityDests(from);
+  const nextOf = new Map(dests.map(d => [d.key, []]));
+  const reachOf = new Map(dests.map(d => [d.key, []]));
+  const out = { from, cohort: [], stuck: [], reversed: 0, dests: [], reach: [] };
+  const today = activityToday();
+
   for(const r of activityPool()){
     const fd = parseDateAny(r[from.field]);
     if(!fd) continue;
     const fromMonth = activityMonthOf(fd);
     if(months && !months.includes(fromMonth)) continue;
-    const td = parseDateAny(r[to.field]);
-    const rec = { row: r, fromDate: fd, toDate: null, fromMonth, days: null, reversed: false };
-    if(td){
+
+    let next = null;
+    for(const d of dests){
+      const td = parseDateAny(r[d.field]);
+      if(!td) continue;
       const days = Math.round((td.getTime() - fd.getTime()) / ACTIVITY_DAY_MS);
-      if(days >= 0){ rec.toDate = td; rec.days = days; out.moved.push(rec); }
-      else { rec.reversed = true; out.reversed++; }
+      if(days < 0){ out.reversed++; continue; }
+      const rec = { row: r, fromDate: fd, fromMonth, dest: d, toDate: td, days, ageDays: null };
+      reachOf.get(d.key).push(rec);
+      if(!next || days < next.days) next = rec;
     }
-    out.cohort.push(rec);
+
+    const landed = next || { row: r, fromDate: fd, fromMonth, dest: null, toDate: null, days: null,
+                             ageDays: Math.round((today.getTime() - fd.getTime()) / ACTIVITY_DAY_MS) };
+    if(next) nextOf.get(next.dest.key).push(landed); else out.stuck.push(landed);
+    out.cohort.push(landed);
   }
+
+  out.dests = dests.map(d => ({ act: d, recs: nextOf.get(d.key) }));
+  out.reach = dests.map(d => ({ act: d, recs: reachOf.get(d.key) }));
   return out;
+}
+
+/** Cohort leads that did move on (the complement of fan.stuck). */
+const activityMovedOn = fan => fan.cohort.filter(r => r.dest);
+
+// ---- focus (drill-down) ---------------------------------------------------
+
+// Clicking a flow card narrows the chart, the By Team table and the lead list
+// to that one destination — or to the stalled leads — without changing the
+// cohort above. null = the whole cohort.
+function activityFocusRecs(fan){
+  const f = STATE.activity.focus;
+  if(!f) return { label: 'the whole cohort', recs: fan.cohort };
+  if(f === 'stuck') return { label: 'leads with no further activity', recs: fan.stuck };
+  const hit = fan.dests.find(d => d.act.key === f);
+  return hit ? { label: 'leads whose next step was ' + hit.act.label, recs: hit.recs }
+             : { label: 'the whole cohort', recs: fan.cohort };
 }
 
 // ---- stats -----------------------------------------------------------------
@@ -126,6 +182,8 @@ function activityStats(days){
     max: s[s.length - 1],
   };
 }
+const activityMoveStats = recs => activityStats(recs.filter(r => r.days != null).map(r => r.days));
+const activityAgeStats  = recs => activityStats(recs.filter(r => r.ageDays != null).map(r => r.ageDays));
 
 const ACTIVITY_BUCKETS = [
   { label: 'Same day',   hit: d => d === 0 },
@@ -137,50 +195,49 @@ const ACTIVITY_BUCKETS = [
   { label: '90+ days',   hit: d => d >  90 },
 ];
 
-function activityBucketCounts(moved){
-  return ACTIVITY_BUCKETS.map(b => ({ label: b.label, count: moved.filter(m => b.hit(m.days)).length }));
+function activityBucketCounts(recs){
+  const days = recs.filter(r => r.days != null).map(r => r.days);
+  return ACTIVITY_BUCKETS.map(b => ({ label: b.label, count: days.filter(b.hit).length }));
 }
 
 /**
- * Group the cohort by any key and summarise each group the same way.
- * Shared by the By Team / By RM / By Month tables so the three can never
- * disagree about what "Moved" or "Avg Days" means.
+ * Group the cohort by any key, summarising "moved on vs stalled" the same way
+ * every time — shared by the By Team / By RM / By Month tables so the three
+ * can never disagree about what a column means.
  */
-function activityGroup(ch, keyOf, extraOf){
+function activityGroup(fan, keyOf, extraOf){
   const m = new Map();
-  for(const rec of ch.cohort){
+  for(const rec of fan.cohort){
     const k = keyOf(rec) || '—';
-    if(!m.has(k)) m.set(k, { label: k, cohort: 0, days: [], reversed: 0, extra: extraOf ? extraOf(rec) : null });
-    const g = m.get(k);
-    g.cohort++;
-    if(rec.days != null) g.days.push(rec.days);
-    else if(rec.reversed) g.reversed++;
+    if(!m.has(k)) m.set(k, { label: k, recs: [], extra: extraOf ? extraOf(rec) : null });
+    m.get(k).recs.push(rec);
   }
-  const rows = [...m.values()].map(g => ({
-    label: g.label, extra: g.extra, cohort: g.cohort, moved: g.days.length,
-    pct: g.cohort ? g.days.length / g.cohort : 0, reversed: g.reversed,
-    ...activityStats(g.days),
-  }));
-  return rows;
+  return [...m.values()].map(g => activityGroupRow(g.label, g.recs, g.extra));
 }
-
-function activityTotalRow(ch){
-  const st = activityStats(ch.moved.map(m => m.days));
+function activityGroupRow(label, recs, extra){
+  const moved = recs.filter(r => r.dest);
+  const stuck = recs.filter(r => !r.dest);
+  const mv = activityMoveStats(moved), ag = activityAgeStats(stuck);
   return {
-    label: 'Grand Total', extra: '', cohort: ch.cohort.length, moved: ch.moved.length,
-    pct: ch.cohort.length ? ch.moved.length / ch.cohort.length : 0, reversed: ch.reversed,
-    ...st, _tot: true,
+    label, extra, cohort: recs.length,
+    moved: moved.length, movedPct: recs.length ? moved.length / recs.length : 0,
+    stuck: stuck.length, stuckPct: recs.length ? stuck.length / recs.length : 0,
+    avg: mv.avg, median: mv.median, p90: mv.p90, min: mv.min, max: mv.max,
+    stuckMedianAge: ag.median, stuckMaxAge: ag.max,
   };
+}
+function activityTotalRow(fan){
+  return { ...activityGroupRow('Grand Total', fan.cohort, ''), _tot: true };
 }
 
 // ---- all-transitions matrix ------------------------------------------------
 
 // Every From × To pair at once for the current Team / RM / Month selection,
-// so the one pair chosen above can be read in context. The Month filter still
-// applies to each row's OWN From activity, exactly as it does for the chosen
-// pair — so a matrix row is always "leads that entered this activity in the
-// selected month(s)". Columns skip the origin activity, since nothing moves
-// INTO Created / Assigned.
+// as EVER-REACHED (not next-step), so the chosen From row can be read against
+// the others. The Month filter applies to each row's OWN From activity, so a
+// row is always "leads that entered this activity in the selected month(s)"
+// and the Entered column differs row to row. Columns skip the origin
+// activity, since nothing moves INTO Created / Assigned.
 function activityMatrix(){
   const months = activitySel(STATE.activity.month);
   const cols = activityToOptions();
@@ -253,6 +310,13 @@ function activityPruneMonth(){
   const kept = sel.filter(v => ok.has(v));
   STATE.activity.month = kept.length ? (kept.length === 1 ? kept[0] : kept) : 'All';
 }
+/** A focus on a destination the new From activity does not have must not stick. */
+function activityPruneFocus(){
+  const f = STATE.activity.focus;
+  if(!f || f === 'stuck') return;
+  const from = activityByKey(STATE.activity.from);
+  if(!activityDests(from).some(d => d.key === f)) STATE.activity.focus = null;
+}
 
 // The option lists depend on things outside this section — the header's Lead
 // Head filter, the loaded dataset, and the EMPLOYEE_REF team map (editable in
@@ -262,47 +326,18 @@ function activityPruneMonth(){
 let _activityFiltersFor = null;
 const activityFilterSignature = () =>
   [STATE.filterLeadHead, STATE.raw.length, Object.keys(STATE.teamMap).length].join('|');
+
 function buildActivityFilters(){
   const f = STATE.activity;
   activityPruneRm();
   activityPruneMonth();
+  activityPruneFocus();
   buildMultiSelect('#act-team-wrap', ['All', ...activityTeamOptions()], f.team,
     val => { f.team = val; f.page = 1; activityPruneRm(); buildActivityRmFilter(); renderActivityChange(); }, { multi: true });
   buildActivityRmFilter();
   buildActivityMonthFilter();
   buildActivityFromFilter();
-  buildActivityToFilter();
   _activityFiltersFor = activityFilterSignature();
-}
-
-// From and To are single-pick, but buildMultiSelect always offers an "All"
-// item (it is shared with the multi-select filters and prepends one unless the
-// caller's own first option is 'All'). "All" means nothing for a transition
-// endpoint, so picking it snaps the widget back to the activity already
-// selected rather than leaving the button labelled "All" over unchanged data.
-function buildActivityFromFilter(){
-  const f = STATE.activity;
-  buildMultiSelect('#act-from-wrap', ACTIVITIES.map(a => a.label), activityLabel(f.from),
-    val => {
-      const a = ACTIVITIES.find(x => x.label === val);
-      if(!a){ buildActivityFromFilter(); return; }
-      f.from = a.key;
-      f.page = 1;
-      activityPruneMonth(); buildActivityMonthFilter(); renderActivityChange();
-    }, { multi: false });
-}
-function buildActivityToFilter(){
-  const f = STATE.activity;
-  // Nothing moves INTO Created / Assigned, so the origin is a From only.
-  if(activityByKey(f.to).origin) f.to = activityToOptions()[0].key;
-  buildMultiSelect('#act-to-wrap', activityToOptions().map(a => a.label), activityLabel(f.to),
-    val => {
-      const a = activityToOptions().find(x => x.label === val);
-      if(!a){ buildActivityToFilter(); return; }
-      f.to = a.key;
-      f.page = 1;
-      renderActivityChange();
-    }, { multi: false });
 }
 function buildActivityRmFilter(){
   buildMultiSelect('#act-rm-wrap', ['All', ...activityRmOptions()], STATE.activity.rm,
@@ -312,6 +347,22 @@ function buildActivityMonthFilter(){
   buildMultiSelect('#act-month-wrap', ['All', ...activityMonthOptions()], STATE.activity.month,
     val => { STATE.activity.month = val; STATE.activity.page = 1; renderActivityChange(); }, { multi: true, search: true });
 }
+// From is single-pick, but buildMultiSelect always offers an "All" item (it is
+// shared with the multi-select filters and prepends one unless the caller's
+// own first option is 'All'). "All" means nothing for a cohort definition, so
+// picking it snaps the widget back to the activity already selected rather
+// than leaving the button labelled "All" over unchanged data.
+function buildActivityFromFilter(){
+  const f = STATE.activity;
+  buildMultiSelect('#act-from-wrap', ACTIVITIES.map(a => a.label), activityLabel(f.from),
+    val => {
+      const a = ACTIVITIES.find(x => x.label === val);
+      if(!a){ buildActivityFromFilter(); return; }
+      f.from = a.key;
+      f.page = 1;
+      activityPruneMonth(); activityPruneFocus(); buildActivityMonthFilter(); renderActivityChange();
+    }, { multi: false });
+}
 
 // ---- formatting helpers ---------------------------------------------------
 
@@ -319,11 +370,95 @@ const actDays = v => (v == null ? '—' : fmtIN(Math.round(v)) + 'd');
 const actDaysExact = v => (v == null ? '' : Math.round(v * 10) / 10);
 const actPct = v => (v == null ? '—' : fmtPct(v));
 
+// ---- the flow -------------------------------------------------------------
+
+// Tone per activity, so a destination keeps its colour across the flow and
+// the tables. Dead reads red, Converted green, stalled grey.
+const ACTIVITY_TONE = {
+  created: 'blue', followup: 'amber', onhold: 'violet',
+  inprocess: 'blue', converted: 'green', dead: 'red',
+};
+const activityTone = key => ACTIVITY_TONE[key] || 'muted';
+
+function activityNode(opts){
+  const sel = opts.focusKey && STATE.activity.focus === opts.focusKey;
+  return `<div class="cf-node cf-${opts.tone}${opts.focusKey ? ' cf-click' : ''}${sel ? ' cf-on' : ''}"
+       ${opts.focusKey ? `data-focus="${escHtml(opts.focusKey)}" role="button" tabindex="0"` : ''}
+       ${opts.title ? `title="${escHtml(opts.title)}"` : ''}>
+     <div class="cf-value">${opts.value}</div>
+     <div class="cf-label">${escHtml(opts.label)}</div>
+     ${opts.sub ? `<div class="cf-sub">${opts.sub}</div>` : ''}
+   </div>`;
+}
+
+function renderActivityFlow(fan){
+  const host = $('#act-flow');
+  if(!host) return;
+  const n = fan.cohort.length;
+  const pct = v => (n ? fmtPct(v / n) : '0%');
+  const moved = activityMovedOn(fan);
+
+  // Destinations with at least one lead, busiest first; the rest are named in
+  // the caption rather than drawn as a row of zeros.
+  const live = fan.dests.filter(d => d.recs.length).sort((a, b) => b.recs.length - a.recs.length);
+  const empty = fan.dests.filter(d => !d.recs.length);
+
+  const nodes = live.map(d => {
+    const st = activityMoveStats(d.recs);
+    return activityNode({
+      tone: activityTone(d.act.key), focusKey: d.act.key,
+      value: fmtIN(d.recs.length), label: d.act.label,
+      sub: `${pct(d.recs.length)} · median ${actDays(st.median)}`,
+      title: `Click to narrow the chart, By Team table and lead list to these ${fmtIN(d.recs.length)} leads`,
+    });
+  });
+  const ag = activityAgeStats(fan.stuck);
+  nodes.push(activityNode({
+    tone: 'muted', focusKey: 'stuck',
+    value: fmtIN(fan.stuck.length), label: 'No further activity',
+    sub: `${pct(fan.stuck.length)} · sitting median ${actDays(ag.median)}`,
+    title: 'Leads with no activity stamp after this one — click to list them',
+  }));
+
+  const cols = Math.min(nodes.length, 6);
+  host.innerHTML =
+    `<div class="cf-flow">
+      <div class="cf-row">${activityNode({
+        tone: activityTone(fan.from.key), value: fmtIN(n),
+        label: 'Entered ' + fan.from.label,
+        sub: activitySel(STATE.activity.month)
+          ? 'in ' + escHtml(activitySelText(STATE.activity.month))
+          : 'in any month on record',
+      })}</div>
+      <div class="cf-split cf-split-${cols}"></div>
+      <div class="cf-row cf-row-${cols}">${nodes.join('')}</div>
+      <div class="cf-caption">
+        Where those <strong>${fmtIN(n)}</strong> leads went <strong>next</strong> — each lead counted once, under its
+        earliest stamp on or after the ${escHtml(fan.from.label)} stamp, so these cards add up to
+        <strong>${fmtIN(n)}</strong> exactly.
+        <strong>${fmtIN(moved.length)}</strong> moved on (${pct(moved.length)}); <strong>${fmtIN(fan.stuck.length)}</strong> did not.
+        ${empty.length ? `No lead went next to ${empty.map(d => escHtml(d.act.label)).join(', ')}.` : ''}
+        ${fan.reversed ? `${fmtIN(fan.reversed)} stamp(s) predate the ${escHtml(fan.from.label)} stamp and are not counted as moves.` : ''}
+      </div>
+     </div>`;
+
+  host.querySelectorAll('.cf-click').forEach(el => {
+    const set = () => {
+      const k = el.dataset.focus;
+      STATE.activity.focus = (STATE.activity.focus === k) ? null : k;
+      STATE.activity.page = 1;
+      renderActivityChange();
+    };
+    el.onclick = set;
+    el.onkeydown = e => { if(e.key === 'Enter' || e.key === ' '){ e.preventDefault(); set(); } };
+  });
+}
+
 // ---- charts ---------------------------------------------------------------
 
-// Sequential single-hue ramp, light → dark, over the ordered day buckets:
-// the bars are one series (lead counts) and the colour reinforces "longer" —
-// it is not a second variable. Validated for lightness monotonicity.
+// Sequential single-hue ramp, light → dark, over the ordered day buckets: the
+// bars are one series (lead counts) and the colour reinforces "longer" — it is
+// not a second variable.
 const ACTIVITY_RAMP = ['#dbeafe', '#bfdbfe', '#93c5fd', '#60a5fa', '#3b82f6', '#2563eb', '#1d4ed8'];
 // Two series, same unit (leads), one axis. Checked with the dataviz validator:
 // adjacent ΔE 21.5 deutan / 22.8 normal against the light surface.
@@ -346,21 +481,18 @@ function activityChart(key, canvasSel, config){
   STATE[key] = new Chart(canvas.getContext('2d'), config);
 }
 
-function renderActivityBucketChart(ch){
-  const data = activityBucketCounts(ch.moved);
+function renderActivityBucketChart(recs){
+  const data = activityBucketCounts(recs);
+  const total = data.reduce((a, b) => a + b.count, 0);
   activityChart('activityBucketChart', '#act-bucket-chart', {
     type: 'bar',
     plugins: window.ChartDataLabels ? [window.ChartDataLabels] : [],
     data: {
       labels: data.map(d => d.label),
       datasets: [{
-        label: 'Leads',
-        data: data.map(d => d.count),
-        backgroundColor: ACTIVITY_RAMP,
-        borderColor: '#1e3a8a',
-        borderWidth: 1,
-        borderRadius: 4,
-        maxBarThickness: 64,
+        label: 'Leads', data: data.map(d => d.count),
+        backgroundColor: ACTIVITY_RAMP, borderColor: '#1e3a8a', borderWidth: 1,
+        borderRadius: 4, maxBarThickness: 64,
       }],
     },
     options: {
@@ -368,38 +500,33 @@ function renderActivityBucketChart(ch){
       layout: { padding: { top: 22, right: 8, left: 4, bottom: 0 } },
       plugins: {
         legend: { display: false },
-        tooltip: { callbacks: { label: c => `${fmtIN(c.raw)} lead(s) · ${fmtPct(ch.moved.length ? c.raw / ch.moved.length : 0)} of those that moved` } },
-        datalabels: {
-          anchor: 'end', align: 'top', offset: 2, color: '#1f2937',
-          font: { size: 11, weight: 'bold' },
-          formatter: v => (v ? fmtIN(v) : ''),
-        },
+        tooltip: { callbacks: { label: c => `${fmtIN(c.raw)} lead(s) · ${fmtPct(total ? c.raw / total : 0)} of those shown` } },
+        datalabels: { anchor: 'end', align: 'top', offset: 2, color: '#1f2937',
+          font: { size: 11, weight: 'bold' }, formatter: v => (v ? fmtIN(v) : '') },
       },
       scales: ACTIVITY_AXIS,
     },
   });
 }
 
-// The cohort can reach back years (the oldest On Hold stamp in the 2026-11-02
-// export is from 2018), and a chart of 50-odd months — several of them a
-// single lead that moved after 2,400 days — is unreadable and drowns out the
-// recent ones. The two month charts therefore show a trailing window; the By
-// Month table below them keeps every month, and the hint says what was cut.
+// The cohort can reach back years, and a chart of 50-odd months — several of
+// them a single lead — is unreadable and drowns out the recent ones. The two
+// month charts show a trailing window; the By Month table keeps every month.
 const ACTIVITY_CHART_MONTHS = 13;
 function activityChartMonths(byMonth){
   const sorted = [...byMonth].sort((a, b) => monthKey(a.label) - monthKey(b.label));
   const shown = sorted.length > ACTIVITY_CHART_MONTHS ? sorted.slice(-ACTIVITY_CHART_MONTHS) : sorted;
   return { shown, total: sorted.length, hidden: sorted.length - shown.length };
 }
-function activityChartHint(sel, win, what){
+function activityHint(sel, text, win){
   const el = $(sel);
   if(!el) return;
-  el.textContent = win.hidden
-    ? `${what} Showing the most recent ${win.shown.length} of ${win.total} months — the By Month table below has every one.`
-    : what;
+  el.innerHTML = (win && win.hidden)
+    ? `${text} Showing the most recent ${win.shown.length} of ${win.total} months — the By Month table below has every one.`
+    : text;
 }
 
-function renderActivityVolumeChart(ch, win){
+function renderActivityVolumeChart(fan, win){
   const rows = win.shown;
   activityChart('activityVolumeChart', '#act-volume-chart', {
     type: 'bar',
@@ -407,9 +534,9 @@ function renderActivityVolumeChart(ch, win){
     data: {
       labels: rows.map(r => r.label),
       datasets: [
-        { label: `In ${ch.from.label}`, data: rows.map(r => r.cohort),
+        { label: `Entered ${fan.from.label}`, data: rows.map(r => r.cohort),
           backgroundColor: ACTIVITY_COHORT_COLOR, borderRadius: 4, maxBarThickness: 34 },
-        { label: `Moved to ${ch.to.label}`, data: rows.map(r => r.moved),
+        { label: 'Moved on to something', data: rows.map(r => r.moved),
           backgroundColor: ACTIVITY_MOVED_COLOR, borderRadius: 4, maxBarThickness: 34 },
       ],
     },
@@ -437,17 +564,11 @@ function renderActivityTrendChart(win){
     data: {
       labels: rows.map(r => r.label),
       datasets: [{
-        label: 'Average days to move',
-        data: rows.map(r => (r.moved ? Math.round(r.avg * 10) / 10 : null)),
-        borderColor: ACTIVITY_AVG_COLOR,
-        backgroundColor: ACTIVITY_AVG_COLOR,
-        borderWidth: 2,
-        pointRadius: 4,
-        pointHoverRadius: 7,
-        pointBorderColor: '#fff',
-        pointBorderWidth: 2,
-        spanGaps: true,
-        tension: 0.25,
+        label: 'Median days to the next activity',
+        data: rows.map(r => (r.moved ? Math.round(r.median * 10) / 10 : null)),
+        borderColor: ACTIVITY_AVG_COLOR, backgroundColor: ACTIVITY_AVG_COLOR,
+        borderWidth: 2, pointRadius: 4, pointHoverRadius: 7,
+        pointBorderColor: '#fff', pointBorderWidth: 2, spanGaps: true, tension: 0.25,
       }],
     },
     options: {
@@ -455,7 +576,7 @@ function renderActivityTrendChart(win){
       layout: { padding: { top: 22, right: 10, left: 4, bottom: 0 } },
       plugins: {
         legend: { display: false },
-        tooltip: { callbacks: { label: c => (c.raw == null ? 'No lead moved' : `${c.raw} days on average`) } },
+        tooltip: { callbacks: { label: c => (c.raw == null ? 'No lead moved on' : `${c.raw} days (median)`) } },
         datalabels: {
           align: 'top', offset: 6, color: '#5b21b6', font: { size: 10, weight: 'bold' },
           formatter: (v, c) => (v == null ? '' : (c.dataIndex % Math.ceil(rows.length / 8 || 1) === 0 ? v : '')),
@@ -471,64 +592,90 @@ function renderActivityTrendChart(win){
 
 // ---- tables ---------------------------------------------------------------
 
-const ACTIVITY_SUMMARY_HEADERS = ['In From Activity', 'Moved to To Activity', '% Moved', 'Avg Days',
-  'Median Days', '90th Pct Days', 'Fastest', 'Slowest'];
+const ACTIVITY_SUMMARY_HEADERS = ['Entered', 'Moved On', '% Moved On', 'Median Days to Move',
+  'Avg Days to Move', 'Never Moved', '% Never Moved', 'Median Days Sitting'];
 
 const activitySummaryCells = r => ({
-  'In From Activity': fmtIN(r.cohort),
-  'Moved to To Activity': fmtIN(r.moved),
-  '% Moved': actPct(r.pct),
-  'Avg Days': actDays(r.avg),
-  'Median Days': actDays(r.median),
-  '90th Pct Days': actDays(r.p90),
-  Fastest: actDays(r.min),
-  Slowest: actDays(r.max),
+  Entered: fmtIN(r.cohort),
+  'Moved On': fmtIN(r.moved),
+  '% Moved On': actPct(r.movedPct),
+  'Median Days to Move': actDays(r.median),
+  'Avg Days to Move': actDays(r.avg),
+  'Never Moved': fmtIN(r.stuck),
+  '% Never Moved': actPct(r.stuckPct),
+  'Median Days Sitting': actDays(r.stuckMedianAge),
 });
 
-function renderActivityByTeam(ch){
-  const rows = activityGroup(ch, rec => activityTeamOf(rec.row))
-    .sort((a, b) => b.cohort - a.cohort);
-  const all = [...rows, activityTotalRow(ch)];
-  applyHeatAndLegend(all, 'cohort', '#legend-act-team', `Row heat by leads in ${ch.from.label}`);
-  const headers = ['Team', ...ACTIVITY_SUMMARY_HEADERS];
-  makeSortableTable('#tbl-act-team', headers,
+function renderActivityByTeam(fan){
+  const rows = activityGroup(fan, rec => activityTeamOf(rec.row)).sort((a, b) => b.stuck - a.stuck);
+  const all = [...rows, activityTotalRow(fan)];
+  applyHeatAndLegend(all, 'stuck', '#legend-act-team', 'Row heat by leads that never moved');
+  makeSortableTable('#tbl-act-team', ['Team', ...ACTIVITY_SUMMARY_HEADERS],
     all.map(r => ({ Team: r.label, ...activitySummaryCells(r), _tot: !!r._tot, _heat: r._heat })),
-    () => renderActivityByTeam(ch));
+    () => renderActivityByTeam(fan));
 }
 
-function renderActivityByRm(ch){
-  const rows = activityGroup(ch, rec => rec.row.currentRmName || '(no RM)', rec => activityTeamOf(rec.row))
-    .sort((a, b) => b.cohort - a.cohort);
-  const headers = ['RM', 'Team', ...ACTIVITY_SUMMARY_HEADERS];
-  makeSortableTable('#tbl-act-rm', headers,
-    [...rows, activityTotalRow(ch)].map(r => ({
+function renderActivityByRm(fan){
+  const rows = activityGroup(fan, rec => rec.row.currentRmName || '(no RM)', rec => activityTeamOf(rec.row))
+    .sort((a, b) => b.stuck - a.stuck);
+  makeSortableTable('#tbl-act-rm', ['RM', 'Team', ...ACTIVITY_SUMMARY_HEADERS],
+    [...rows, activityTotalRow(fan)].map(r => ({
       RM: r.label, Team: r.extra || '', ...activitySummaryCells(r), _tot: !!r._tot,
     })),
-    () => renderActivityByRm(ch));
+    () => renderActivityByRm(fan));
 }
 
-function renderActivityByMonth(ch, byMonth){
+function renderActivityByMonth(fan, byMonth){
   const rows = [...byMonth].sort((a, b) => monthKey(b.label) - monthKey(a.label));
-  const headers = ['Month of From Activity', ...ACTIVITY_SUMMARY_HEADERS];
-  renderTable('#tbl-act-month', headers,
-    [...rows, activityTotalRow(ch)].map(r => ({
-      'Month of From Activity': r.label, ...activitySummaryCells(r), _tot: !!r._tot,
+  renderTable('#tbl-act-month', ['Month Entered', ...ACTIVITY_SUMMARY_HEADERS],
+    [...rows, activityTotalRow(fan)].map(r => ({
+      'Month Entered': r.label, ...activitySummaryCells(r), _tot: !!r._tot,
     })));
 }
 
-// Rows = From activity, columns = To activity. Each cell reads
-// "<avg days> · <moved> of <cohort>" so the chosen pair above can be compared
-// against every other pair under the same Team / RM / Month selection.
+// Next step vs ever reached, side by side — the one place the difference
+// between the two readings is visible, and the reason the flow's Converted
+// card is smaller than the eventual conversion count.
+function renderActivityDestinations(fan){
+  const n = fan.cohort.length;
+  const headers = ['Destination', 'Went Here Next', '% of Cohort', 'Median Days (next step)',
+    'Ever Reached', '% of Cohort (ever)', 'Median Days (ever)', 'Avg Days (ever)'];
+  const rows = fan.dests.map((d, i) => {
+    const nx = activityMoveStats(d.recs);
+    const ev = activityMoveStats(fan.reach[i].recs);
+    return {
+      Destination: d.act.label,
+      'Went Here Next': fmtIN(d.recs.length),
+      '% of Cohort': actPct(n ? d.recs.length / n : 0),
+      'Median Days (next step)': actDays(nx.median),
+      'Ever Reached': fmtIN(fan.reach[i].recs.length),
+      '% of Cohort (ever)': actPct(n ? fan.reach[i].recs.length / n : 0),
+      'Median Days (ever)': actDays(ev.median),
+      'Avg Days (ever)': actDays(ev.avg),
+      _sort: d.recs.length,
+    };
+  }).sort((a, b) => b._sort - a._sort);
+  rows.push({
+    Destination: 'No further activity', 'Went Here Next': fmtIN(fan.stuck.length),
+    '% of Cohort': actPct(n ? fan.stuck.length / n : 0),
+    'Median Days (next step)': '—', 'Ever Reached': '—', '% of Cohort (ever)': '—',
+    'Median Days (ever)': '—', 'Avg Days (ever)': '—', _tot: true,
+  });
+  renderTable('#tbl-act-dest', headers, rows);
+}
+
+// Rows = From activity, columns = To activity, ever-reached. Each cell reads
+// "<median days> · <reached> of <entered>".
 function renderActivityMatrix(){
   const matrix = activityMatrix();
-  const headers = ['From ↓ / To →', 'In From Activity', ...activityToOptions().map(a => a.label)];
+  const headers = ['From ↓ / To →', 'Entered', ...activityToOptions().map(a => a.label)];
   const rows = matrix.map(r => {
-    const o = { 'From ↓ / To →': `<strong>${escHtml(r.from.label)}</strong>`, 'In From Activity': fmtIN(r.cohort) };
+    const o = { 'From ↓ / To →': `<strong>${escHtml(r.from.label)}</strong>`, Entered: fmtIN(r.cohort) };
     r.to.forEach(c => {
       o[c.to.label] = c.to.key === r.from.key
         ? '<span style="color:#cbd5e1">—</span>'
         : (c.moved
-          ? `<strong>${escHtml(actDays(c.avg))}</strong><br><span style="font-size:10px;color:#64748b">${fmtIN(c.moved)} of ${fmtIN(r.cohort)} · ${fmtPct(r.cohort ? c.moved / r.cohort : 0)}</span>`
+          ? `<strong>${escHtml(actDays(c.median))}</strong><br><span style="font-size:10px;color:#64748b">${fmtIN(c.moved)} of ${fmtIN(r.cohort)} · ${fmtPct(r.cohort ? c.moved / r.cohort : 0)}</span>`
           : '<span style="color:#94a3b8">0</span>');
     });
     return o;
@@ -539,9 +686,9 @@ function renderActivityMatrix(){
 // ---- lead detail ---------------------------------------------------------
 
 const ACTIVITY_DETAIL_HEADERS = ['Client Name', 'RM', 'Team', 'Current Status', 'Platform', 'Campaign',
-  'From Activity', 'From Date', 'To Activity', 'To Date', 'Days to Move'];
+  'Entered', 'On', 'Next Activity', 'Next Date', 'Days'];
 
-function activityDetailRow(ch, rec){
+function activityDetailRow(fan, rec){
   return {
     'Client Name': rec.row.clientName,
     RM: rec.row.currentRmName,
@@ -549,43 +696,47 @@ function activityDetailRow(ch, rec){
     'Current Status': rec.row.leadStatus,
     Platform: rec.row.platformName,
     Campaign: rec.row['Campaign Name'],
-    'From Activity': ch.from.label,
-    'From Date': toIsoDate(rec.fromDate),
-    'To Activity': ch.to.label,
-    'To Date': rec.toDate ? toIsoDate(rec.toDate) : '',
-    'Days to Move': rec.days == null ? '' : rec.days,
+    Entered: fan.from.label,
+    On: toIsoDate(rec.fromDate),
+    'Next Activity': rec.dest ? rec.dest.label : 'none yet',
+    'Next Date': rec.toDate ? toIsoDate(rec.toDate) : '',
+    Days: rec.dest ? rec.days : rec.ageDays,
   };
 }
 
-function renderActivityDetail(ch){
-  // Leads that moved first (fastest first), then the ones still sitting in the
-  // From activity — the ones a reader most often wants to chase.
-  const moved = [...ch.moved].sort((a, b) => a.days - b.days);
-  const notMoved = ch.cohort.filter(r => r.days == null);
-  const all = [...moved, ...notMoved];
+function renderActivityDetail(fan){
+  const focus = activityFocusRecs(fan);
+  // Stalled leads longest-sitting first (that is the follow-up list); movers
+  // fastest first. With no drill-down, movers come before the stalled.
+  const recs = [...focus.recs].sort((a, b) => {
+    if(a.dest && b.dest) return a.days - b.days;
+    if(!a.dest && !b.dest) return b.ageDays - a.ageDays;
+    return a.dest ? -1 : 1;
+  });
   const perPage = 15;
-  const totalPages = Math.max(1, Math.ceil(all.length / perPage));
+  const totalPages = Math.max(1, Math.ceil(recs.length / perPage));
   STATE.activity.page = Math.min(Math.max(1, STATE.activity.page), totalPages);
   const start = (STATE.activity.page - 1) * perPage;
   renderTable('#tbl-act-detail', ACTIVITY_DETAIL_HEADERS,
-    all.slice(start, start + perPage).map(rec => {
-      const o = activityDetailRow(ch, rec);
-      o['Days to Move'] = rec.days == null ? 'Not moved' : fmtIN(rec.days);
+    recs.slice(start, start + perPage).map(rec => {
+      const o = activityDetailRow(fan, rec);
+      o.Days = rec.dest ? fmtIN(rec.days) : fmtIN(rec.ageDays) + ' sitting';
       return o;
     }));
 
+  const scope = $('#act-detail-scope');
+  if(scope) scope.textContent = STATE.activity.focus ? '— ' + focus.label : '';
   const info = $('#act-page-info');
-  if(info) info.textContent = `Page ${STATE.activity.page} of ${totalPages} (${fmtIN(all.length)} lead(s): `
-    + `${fmtIN(moved.length)} moved, ${fmtIN(notMoved.length)} not)`;
+  if(info) info.textContent = `Page ${STATE.activity.page} of ${totalPages} (${fmtIN(recs.length)} lead(s))`;
   const prev = $('#act-prev');
-  if(prev){ prev.disabled = STATE.activity.page <= 1; prev.onclick = () => { STATE.activity.page--; renderActivityDetail(ch); }; }
+  if(prev){ prev.disabled = STATE.activity.page <= 1; prev.onclick = () => { STATE.activity.page--; renderActivityDetail(fan); }; }
   const next = $('#act-next');
-  if(next){ next.disabled = STATE.activity.page >= totalPages; next.onclick = () => { STATE.activity.page++; renderActivityDetail(ch); }; }
+  if(next){ next.disabled = STATE.activity.page >= totalPages; next.onclick = () => { STATE.activity.page++; renderActivityDetail(fan); }; }
   const dl = $('#act-download');
-  if(dl) dl.onclick = () => downloadActivityExcel(ch, all);
+  if(dl) dl.onclick = () => downloadActivityExcel(fan, recs);
 }
 
-function downloadActivityExcel(ch, all){
+function downloadActivityExcel(fan, recs){
   const sheet = (headers, rows) => {
     const ws = XLSX.utils.aoa_to_sheet([headers, ...rows.map(r => headers.map(h => r[h] ?? ''))]);
     ws['!cols'] = headers.map(h => ({ wch: Math.max(12, h.length + 2) }));
@@ -593,59 +744,83 @@ function downloadActivityExcel(ch, all){
   };
   // Raw numbers in the workbook, not the page's "34d" / "62.5%" display text,
   // so the file can be pivoted and charted without re-parsing.
-  const summaryHeaders = ['Label', 'Team', 'In From Activity', 'Moved', '% Moved', 'Avg Days', 'Median Days',
-    '90th Pct Days', 'Fastest Days', 'Slowest Days', 'To stamp before From stamp'];
+  const summaryHeaders = ['Label', 'Team', 'Entered', 'Moved On', '% Moved On', 'Median Days to Move',
+    'Avg Days to Move', 'Never Moved', '% Never Moved', 'Median Days Sitting', 'Longest Sitting'];
   const summaryRow = r => ({
-    Label: r.label, Team: r.extra || '', 'In From Activity': r.cohort, Moved: r.moved,
-    '% Moved': r.cohort ? Math.round(r.pct * 10000) / 100 : 0,
-    'Avg Days': actDaysExact(r.avg), 'Median Days': actDaysExact(r.median), '90th Pct Days': actDaysExact(r.p90),
-    'Fastest Days': actDaysExact(r.min), 'Slowest Days': actDaysExact(r.max),
-    'To stamp before From stamp': r.reversed,
+    Label: r.label, Team: r.extra || '', Entered: r.cohort, 'Moved On': r.moved,
+    '% Moved On': r.cohort ? Math.round(r.movedPct * 10000) / 100 : 0,
+    'Median Days to Move': actDaysExact(r.median), 'Avg Days to Move': actDaysExact(r.avg),
+    'Never Moved': r.stuck, '% Never Moved': r.cohort ? Math.round(r.stuckPct * 10000) / 100 : 0,
+    'Median Days Sitting': actDaysExact(r.stuckMedianAge), 'Longest Sitting': actDaysExact(r.stuckMaxAge),
   });
-  const byTeam = activityGroup(ch, rec => activityTeamOf(rec.row)).sort((a, b) => b.cohort - a.cohort);
-  const byRm = activityGroup(ch, rec => rec.row.currentRmName || '(no RM)', rec => activityTeamOf(rec.row))
-    .sort((a, b) => b.cohort - a.cohort);
-  const byMonth = activityGroup(ch, rec => rec.fromMonth).sort((a, b) => monthKey(b.label) - monthKey(a.label));
-  const total = activityTotalRow(ch);
+  const byTeam = activityGroup(fan, rec => activityTeamOf(rec.row)).sort((a, b) => b.stuck - a.stuck);
+  const byRm = activityGroup(fan, rec => rec.row.currentRmName || '(no RM)', rec => activityTeamOf(rec.row))
+    .sort((a, b) => b.stuck - a.stuck);
+  const byMonth = activityGroup(fan, rec => rec.fromMonth).sort((a, b) => monthKey(b.label) - monthKey(a.label));
+  const total = activityTotalRow(fan);
+
+  const n = fan.cohort.length;
+  const destHeaders = ['Destination', 'Went Here Next', 'Next Step % of Cohort', 'Median Days (next step)',
+    'Ever Reached', 'Ever Reached % of Cohort', 'Median Days (ever)'];
+  const destRows = fan.dests.map((d, i) => {
+    const nx = activityMoveStats(d.recs), ev = activityMoveStats(fan.reach[i].recs);
+    return {
+      Destination: d.act.label, 'Went Here Next': d.recs.length,
+      'Next Step % of Cohort': n ? Math.round(10000 * d.recs.length / n) / 100 : 0,
+      'Median Days (next step)': actDaysExact(nx.median),
+      'Ever Reached': fan.reach[i].recs.length,
+      'Ever Reached % of Cohort': n ? Math.round(10000 * fan.reach[i].recs.length / n) / 100 : 0,
+      'Median Days (ever)': actDaysExact(ev.median),
+    };
+  });
+  destRows.push({ Destination: 'No further activity', 'Went Here Next': fan.stuck.length,
+    'Next Step % of Cohort': n ? Math.round(10000 * fan.stuck.length / n) / 100 : 0 });
 
   const f = STATE.activity;
   const wsSel = XLSX.utils.aoa_to_sheet([
     ['Activity Change Days'], [],
-    ['From Activity', ch.from.label], ['To Activity', ch.to.label],
-    ['Month of From Activity', activitySelText(f.month)], ['Team', activitySelText(f.team)], ['RM', activitySelText(f.rm)],
-    ['Lead Head (Dashboard header filter)', STATE.filterLeadHead], [],
-    ['In the From activity', ch.cohort.length], ['Moved to the To activity', ch.moved.length],
-    ['% Moved', total.cohort ? Math.round(total.pct * 10000) / 100 : 0],
-    ['Average days to move', actDaysExact(total.avg)], ['Median days to move', actDaysExact(total.median)],
-    ['To stamp dated before the From stamp (not counted as moved)', ch.reversed], [],
-    ['How a move is counted',
-      'The export carries one timestamp per activity — the LAST time the lead entered it, with no per-event history. '
-      + 'A lead counts as moved when it has a To stamp dated on or after its From stamp. A To stamp that predates the '
-      + 'From stamp is reported above but not counted as a move.'],
+    ['From Activity', fan.from.label],
+    ['Month Entered', activitySelText(f.month)], ['Team', activitySelText(f.team)], ['RM', activitySelText(f.rm)],
+    ['Lead Head (Dashboard header filter)', STATE.filterLeadHead],
+    ['Drill-down applied to the Leads sheet', f.focus ? activityFocusRecs(fan).label : 'none (whole cohort)'], [],
+    ['Entered the From activity', n], ['Moved on', activityMovedOn(fan).length],
+    ['% moved on', n ? Math.round(total.movedPct * 10000) / 100 : 0],
+    ['Never moved again', fan.stuck.length],
+    ['Median days to the next activity', actDaysExact(total.median)],
+    ['Median days sitting, of those that never moved', actDaysExact(total.stuckMedianAge)],
+    ['Stamps dated before the From stamp (not counted)', fan.reversed], [],
+    ['Next Step vs Ever Reached',
+      'Went Here Next counts each lead once, under its earliest stamp on or after the From stamp, so it partitions '
+      + 'the cohort. Ever Reached counts a lead under every destination it reached, so it overlaps and does not sum '
+      + 'to the cohort. The export keeps only the last stamp per activity, so neither can see a repeated visit.'],
+    ['Same-day ties', 'Dates carry no time, so two destinations stamped the same day are ordered '
+      + 'Follow Up, On Hold, In Process, Converted, Dead.'],
     ['Team / RM basis', 'The lead\'s current RM, and that RM\'s team (EMPLOYEE_REF, then RM Master Mapping).'],
     ['Data till', STATE.dataTill || ''], ['Downloaded', new Date().toLocaleString('en-IN')],
   ]);
-  wsSel['!cols'] = [{ wch: 56 }, { wch: 100 }];
+  wsSel['!cols'] = [{ wch: 48 }, { wch: 100 }];
 
   const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, sheet(ACTIVITY_DETAIL_HEADERS, all.map(rec => activityDetailRow(ch, rec))), 'Leads');
+  XLSX.utils.book_append_sheet(wb, sheet(ACTIVITY_DETAIL_HEADERS, recs.map(rec => activityDetailRow(fan, rec))), 'Leads');
+  XLSX.utils.book_append_sheet(wb, sheet(destHeaders, destRows), 'Destinations');
   XLSX.utils.book_append_sheet(wb, sheet(summaryHeaders, [...byTeam, total].map(summaryRow)), 'By Team');
   XLSX.utils.book_append_sheet(wb, sheet(summaryHeaders, [...byRm, total].map(summaryRow)), 'By RM');
   XLSX.utils.book_append_sheet(wb, sheet(summaryHeaders, [...byMonth, total].map(summaryRow)), 'By Month');
   XLSX.utils.book_append_sheet(wb, wsSel, 'Selection');
   const slug = s => s.replace(/[^A-Za-z0-9]+/g, '');
-  XLSX.writeFile(wb, `Activity_${slug(ch.from.label)}_to_${slug(ch.to.label)}_${new Date().toISOString().slice(0, 10)}.xlsx`);
+  XLSX.writeFile(wb, `Activity_From_${slug(fan.from.label)}_${new Date().toISOString().slice(0, 10)}.xlsx`);
 }
 
 // ---- orchestration -------------------------------------------------------
 
-const ACTIVITY_HOSTS = ['#tbl-act-team', '#tbl-act-rm', '#tbl-act-month', '#tbl-act-matrix', '#tbl-act-detail'];
+const ACTIVITY_HOSTS = ['#act-flow', '#tbl-act-dest', '#tbl-act-team', '#tbl-act-rm', '#tbl-act-month',
+  '#tbl-act-matrix', '#tbl-act-detail'];
 
 function activityClear(html){
   _activityFiltersFor = null;
   const tiles = $('#act-kpis'); if(tiles) tiles.innerHTML = '';
   const note = $('#act-note'); if(note) note.innerHTML = html || '';
-  ['#legend-act-team', '#act-volume-hint', '#act-trend-hint']
+  ['#legend-act-team', '#act-bucket-hint', '#act-volume-hint', '#act-trend-hint']
     .forEach(sel => { const el = $(sel); if(el) el.innerHTML = ''; });
   ACTIVITY_HOSTS.forEach(sel => { const el = $(sel); if(el) el.innerHTML = ''; });
   ['activityBucketChart', 'activityVolumeChart', 'activityTrendChart'].forEach(k => {
@@ -669,27 +844,24 @@ function renderActivityChange(){
     return;
   }
   if(_activityFiltersFor !== activityFilterSignature()) buildActivityFilters();
+  activityPruneFocus();
 
-  const ch = activityChange();
+  const fan = activityFanOut();
+  const byMonth = activityGroup(fan, rec => rec.fromMonth);
+  const total = activityTotalRow(fan);
+  const moved = activityMovedOn(fan);
+  const focus = activityFocusRecs(fan);
+
   const title = $('#act-title');
-  if(title) title.textContent = `${ch.from.label} → ${ch.to.label}`;
-  if(ch.same){
-    activityClear(`<div class="file-not-uploaded"><span class="fnu-icon">&#9888;</span>
-      <strong>From Activity and To Activity are the same.</strong><br>
-      Pick two different activities to measure the move between them.</div>`);
-    return;
-  }
-
-  const byMonth = activityGroup(ch, rec => rec.fromMonth);
-  const total = activityTotalRow(ch);
+  if(title) title.textContent = 'From ' + fan.from.label;
 
   const tiles = [
-    { label: `In ${ch.from.label}`, value: fmtIN(ch.cohort.length), tone: 'blue' },
-    { label: `Moved to ${ch.to.label}`, value: fmtIN(ch.moved.length), tone: 'green' },
-    { label: '% Moved', value: actPct(total.pct), tone: 'orange' },
-    { label: 'Avg Days to Move', value: total.avg == null ? '—' : fmtIN(Math.round(total.avg)), tone: 'violet' },
-    { label: 'Median Days to Move', value: total.median == null ? '—' : fmtIN(Math.round(total.median)), tone: 'cyan' },
-    { label: `Still Not in ${ch.to.label}`, value: fmtIN(ch.cohort.length - ch.moved.length), tone: 'red' },
+    { label: 'Entered ' + fan.from.label, value: fmtIN(fan.cohort.length), tone: 'blue' },
+    { label: 'Moved On', value: fmtIN(moved.length), tone: 'green' },
+    { label: '% Moved On', value: actPct(total.movedPct), tone: 'orange' },
+    { label: 'Median Days to Move', value: total.median == null ? '—' : fmtIN(Math.round(total.median)), tone: 'violet' },
+    { label: 'Never Moved Again', value: fmtIN(fan.stuck.length), tone: 'red' },
+    { label: 'Median Days Sitting', value: total.stuckMedianAge == null ? '—' : fmtIN(Math.round(total.stuckMedianAge)), tone: 'amber' },
   ];
   const host = $('#act-kpis');
   if(host) host.innerHTML = tiles.map(c => `
@@ -702,37 +874,41 @@ function renderActivityChange(){
   if(note){
     const f = STATE.activity;
     const parts = [
-      `Cohort: every lead whose <strong>${escHtml(ch.from.label)}</strong> date falls in <strong>${escHtml(activitySelText(f.month))}</strong>`
-      + ` month(s), for Team <strong>${escHtml(activitySelText(f.team))}</strong> and RM <strong>${escHtml(activitySelText(f.rm))}</strong>`
-      + ` (Lead Head <strong>${escHtml(STATE.filterLeadHead)}</strong>, from the header).`,
-      `A lead counts as moved when its <strong>${escHtml(ch.to.label)}</strong> date is on or after its `
-      + `<strong>${escHtml(ch.from.label)}</strong> date.`,
+      `Cohort: every lead whose <strong>${escHtml(fan.from.label)}</strong> date falls in `
+      + `<strong>${escHtml(activitySelText(f.month))}</strong> month(s), for Team `
+      + `<strong>${escHtml(activitySelText(f.team))}</strong> and RM <strong>${escHtml(activitySelText(f.rm))}</strong> `
+      + `(Lead Head <strong>${escHtml(STATE.filterLeadHead)}</strong>, from the header).`,
     ];
-    if(ch.reversed) parts.push(`<strong>${fmtIN(ch.reversed)}</strong> lead(s) in this cohort have their `
-      + `<strong>${escHtml(ch.to.label)}</strong> date <em>earlier</em> than their <strong>${escHtml(ch.from.label)}</strong> date. `
-      + `The export keeps only the last stamp per activity, so that move cannot be read as `
-      + `${escHtml(ch.from.label)} → ${escHtml(ch.to.label)}; they are in the cohort but not counted as moved.`);
-    if(!ch.cohort.length) parts.push('<strong>No lead matches this selection.</strong> Widen the month, team or RM filter.');
+    if(f.focus) parts.push(`Drilled into <strong>${escHtml(focus.label)}</strong> — the chart, By Team table and lead `
+      + `list below show only those ${fmtIN(focus.recs.length)}. Click the highlighted card again to clear it.`);
+    if(!fan.cohort.length) parts.push('<strong>No lead matches this selection.</strong> Widen the month, team or RM filter.');
     note.innerHTML = parts.join(' ');
   }
 
+  renderActivityFlow(fan);
+
   const win = activityChartMonths(byMonth);
-  renderActivityBucketChart(ch);
-  renderActivityVolumeChart(ch, win);
+  renderActivityBucketChart(focus.recs);
+  renderActivityVolumeChart(fan, win);
   renderActivityTrendChart(win);
-  activityChartHint('#act-volume-hint', win,
-    `Per month in which a lead entered ${ch.from.label}: how many did, and how many went on to ${ch.to.label}.`);
-  activityChartHint('#act-trend-hint', win,
-    `Averaged over the leads that moved, so a month where none did is left as a gap. Use Median Days in the tables when a few very slow leads pull the average.`);
-  renderActivityByTeam(ch);
-  renderActivityByRm(ch);
-  renderActivityByMonth(ch, byMonth);
+  activityHint('#act-bucket-hint',
+    `Days from the ${escHtml(fan.from.label)} stamp to the next activity, for ${escHtml(focus.label)}. `
+    + 'Leads that never moved are not in this chart — the Never Moved Again tile counts them.');
+  activityHint('#act-volume-hint',
+    `Per month in which a lead entered ${escHtml(fan.from.label)}: how many did, and how many went on to anything else.`, win);
+  activityHint('#act-trend-hint',
+    'Median over the leads that moved on, so a month where none did is left as a gap.', win);
+
+  renderActivityDestinations(fan);
+  renderActivityByTeam(fan);
+  renderActivityByRm(fan);
+  renderActivityByMonth(fan, byMonth);
   renderActivityMatrix();
-  renderActivityDetail(ch);
+  renderActivityDetail(fan);
 
   const reset = $('#act-reset');
   if(reset) reset.onclick = () => {
-    STATE.activity = { team: 'All', rm: 'All', month: 'All', from: 'created', to: 'inprocess', page: 1 };
+    STATE.activity = { team: 'All', rm: 'All', month: 'All', from: 'created', focus: null, page: 1 };
     _activityFiltersFor = null;
     buildActivityFilters();
     renderActivityChange();

@@ -526,10 +526,14 @@ table.data.editable td input:focus{outline:2px solid var(--orange);background:va
 }
 .cf-split-3::after{left:16.6%;right:16.6%}
 .cf-split-4::after{left:12.5%;right:12.5%}
+/* Activity Change Days fans out to as many as six destinations; the bar is
+   inset to the centre of the outermost child, i.e. 100/(2N)%. */
+.cf-split-5::after{left:10%;right:10%}
+.cf-split-6::after{left:8.33%;right:8.33%}
 /* The horizontal bar only reaches the centre of the outermost children, so
    each child needs its own short stem rising to meet it. */
-.cf-row-2 .cf-node,.cf-row-3 .cf-node,.cf-row-4 .cf-node{position:relative}
-.cf-row-2 .cf-node::before,.cf-row-3 .cf-node::before,.cf-row-4 .cf-node::before{
+.cf-row-2 .cf-node,.cf-row-3 .cf-node,.cf-row-4 .cf-node,.cf-row-5 .cf-node,.cf-row-6 .cf-node{position:relative}
+.cf-row-2 .cf-node::before,.cf-row-3 .cf-node::before,.cf-row-4 .cf-node::before,.cf-row-5 .cf-node::before,.cf-row-6 .cf-node::before{
   content:'';position:absolute;top:-14px;left:50%;width:2px;height:14px;
   background:var(--border-strong);transform:translateX(-50%);
 }
@@ -543,6 +547,12 @@ table.data.editable td input:focus{outline:2px solid var(--orange);background:va
   content:'';position:absolute;top:13px;left:12.5%;right:12.5%;height:2px;
   background:var(--border-strong);
 }
+/* Activity Change Days: destination cards are drill-down controls. */
+.cf-node.cf-click{cursor:pointer;transition:transform .1s ease,box-shadow .1s ease}
+.cf-node.cf-click:hover{transform:translateY(-2px);box-shadow:0 3px 0 var(--border-strong)}
+.cf-node.cf-click:focus-visible{outline:3px solid var(--orange);outline-offset:2px}
+.cf-node.cf-on{box-shadow:0 0 0 3px var(--orange) inset}
+.cf-node.cf-on .cf-label{color:var(--orange)}
 .cf-caption{width:100%;margin-top:12px;font-size:12px;color:var(--muted);text-align:center}
 /* Team-wise flow cards (BD Performance) */
 .tf-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(330px,1fr));gap:16px}
@@ -1545,47 +1555,64 @@ table.data.editable td input:focus{outline:2px solid var(--orange);background:va
         <!-- ===== Activity Change Days ===== -->
         <div class="dash-subpanel" id="dashsub-activity">
           <div class="section bar-orange">
-            <h2>Activity Change Days &middot; <span id="act-title">Created / Assigned &rarr; In Process</span>
+            <h2>Activity Change Days &middot; <span id="act-title">From Created / Assigned</span>
               <button class="info-btn" data-info="activity-change" title="Section info">i</button>
             </h2>
             <div class="act-filters">
+              <span><label>From Activity</label><div id="act-from-wrap"></div></span>
+              <span><label>Month Entered</label><div id="act-month-wrap"></div></span>
               <span><label>Team</label><div id="act-team-wrap"></div></span>
               <span><label>RM Name</label><div id="act-rm-wrap"></div></span>
-              <span><label>Month</label><div id="act-month-wrap"></div></span>
-              <span><label>From Activity</label><div id="act-from-wrap"></div></span>
-              <span><label>To Activity</label><div id="act-to-wrap"></div></span>
               <button class="secondary" id="act-reset">Reset filters</button>
             </div>
-            <div class="meta">Of the leads that entered the <strong>From</strong> activity in the selected month(s),
-              how many went on to the <strong>To</strong> activity &mdash; and how long it took. <strong>Month</strong>
-              is the month of the <em>From</em> activity, so the cohort is fixed before any move is counted.
+            <div class="meta">Pick an activity and a month, and this shows <strong>where that cohort of leads went
+              next</strong> &mdash; and how much of it never moved again. <strong>Month</strong> is the month the lead
+              entered the <em>From</em> activity, so the cohort is fixed before any move is counted.
               <strong>Team</strong> and <strong>RM</strong> are the lead&rsquo;s current owner. This section uses its own
-              Month filter and the header&rsquo;s <strong>Lead Head</strong>; the header&rsquo;s Month, Ref+Cold and Status
-              do not apply here.</div>
+              Month filter and the header&rsquo;s <strong>Lead Head</strong>; the header&rsquo;s Month, Ref+Cold and
+              Status do not apply here.</div>
             <div id="act-note" class="hint"></div>
           </div>
 
           <div class="kpis" id="act-kpis"></div>
+
+          <div class="section bar-violet">
+            <h2>Where They Went Next
+              <button class="info-btn" data-info="activity-flow" title="Flow info">i</button>
+            </h2>
+            <div id="act-flow"></div>
+            <div class="hint">Every card is clickable &mdash; it narrows the chart, the By Team table and the lead list
+              below to those leads. Click it again to clear.</div>
+          </div>
 
           <div class="section bar-blue">
             <h2>How Long the Move Took
               <button class="info-btn" data-info="activity-buckets" title="Chart info">i</button>
             </h2>
             <div class="act-chart-wrap"><canvas id="act-bucket-chart"></canvas></div>
-            <div class="hint">Every lead that made the move, grouped by how many days it took. Leads that have not
-              moved are not in this chart &mdash; the tiles above count them.</div>
+            <div class="hint" id="act-bucket-hint"></div>
+          </div>
+
+          <div class="section bar-pink">
+            <h2>Next Step vs Ever Reached
+              <button class="info-btn" data-info="activity-dest" title="Table info">i</button>
+            </h2>
+            <div class="table-wrap" id="tbl-act-dest"></div>
+            <div class="hint"><strong>Went Here Next</strong> counts each lead once, so the column sums to the cohort.
+              <strong>Ever Reached</strong> counts a lead under every destination it reached, so it overlaps and will
+              not sum &mdash; it is the &ldquo;did it get there eventually&rdquo; number.</div>
           </div>
 
           <div class="grid cols-2">
             <div class="section bar-green">
-              <h2>Cohort vs Moved, by Month
+              <h2>Entered vs Moved On, by Month
                 <button class="info-btn" data-info="activity-volume" title="Chart info">i</button>
               </h2>
               <div class="act-chart-wrap"><canvas id="act-volume-chart"></canvas></div>
               <div class="hint" id="act-volume-hint"></div>
             </div>
             <div class="section bar-violet">
-              <h2>Average Days to Move, by Month
+              <h2>Median Days to the Next Activity
                 <button class="info-btn" data-info="activity-trend" title="Chart info">i</button>
               </h2>
               <div class="act-chart-wrap"><canvas id="act-trend-chart"></canvas></div>
@@ -1609,24 +1636,24 @@ table.data.editable td input:focus{outline:2px solid var(--orange);background:va
           </div>
 
           <div class="section bar-yellow">
-            <h2>By Month of the From Activity
+            <h2>By Month Entered
               <button class="info-btn" data-info="activity-month" title="Table info">i</button>
             </h2>
             <div class="table-wrap" id="tbl-act-month"></div>
           </div>
 
           <div class="section bar-violet">
-            <h2>Every Transition &middot; Average Days
+            <h2>Every Transition &middot; Median Days
               <button class="info-btn" data-info="activity-matrix" title="Table info">i</button>
             </h2>
-            <div class="meta">The same measure for all six activities at once, under the current Team / RM / Month
-              selection &mdash; so the pair chosen above can be read in context. Each cell: average days, then how many
-              of that row&rsquo;s cohort made the move.</div>
+            <div class="meta">All six activities at once under the current Team / RM / Month selection, as
+              <strong>ever reached</strong> &mdash; so the From activity chosen above can be read against the others.
+              Each cell: median days, then how many of that row&rsquo;s cohort got there.</div>
             <div class="table-wrap" id="tbl-act-matrix"></div>
           </div>
 
           <div class="section bar-orange">
-            <h2>Lead by Lead
+            <h2>Lead by Lead <span id="act-detail-scope" style="font-weight:400;text-transform:none;font-size:13px;color:var(--muted)"></span>
               <button class="info-btn" data-info="activity-detail" title="Table info">i</button>
               <span style="float:right;font-weight:400;text-transform:none;display:flex;align-items:center;gap:8px">
                 <button class="secondary" id="act-prev">&larr; Prev</button>
@@ -1636,12 +1663,12 @@ table.data.editable td input:focus{outline:2px solid var(--orange);background:va
               </span>
             </h2>
             <div class="table-wrap" id="tbl-act-detail"></div>
-            <div class="hint">Fastest movers first, then the leads still sitting in the From activity. The Excel
-              download has the complete list plus the By Team / By RM / By Month summaries, whichever page is open.</div>
+            <div class="hint">Leads that moved come first, fastest first; leads that never moved come last,
+              longest-sitting first. Drill into <strong>No further activity</strong> above to get the stalled list on
+              its own &mdash; that is the follow-up sheet. The Excel download has the complete list for whatever is
+              selected, plus the destination split and the By Team / By RM / By Month summaries.</div>
           </div>
-
         </div>
-
       </div>
     </div>
   </div>

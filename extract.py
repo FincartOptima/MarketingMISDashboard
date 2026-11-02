@@ -42,7 +42,7 @@ FIN23_COLUMNS = {
     'clientcategory', 'client category',
     # Added 2026-11-02: the FIN23 export gained these columns. The three
     # lead*Date stamps are what the Dashboard's Activity Change Days section
-    # measures (see activityChangeRows in app-activity.js); the rest are
+    # measures (see activityFanOut in app-activity.js); the rest are
     # carried through so the engine holds the whole new format.
     'leadonholddate', 'lead on hold date',
     'leadfollowupdate', 'lead follow up date',

@@ -62,12 +62,25 @@ The `app-*.js` files are loaded with a `?t=<timestamp>` cache-buster, so **scrip
 
 ### If the change touches the backend
 
-Changing `backend/extract_lib.py` or `backend/app.py` — **adding a column to `FIN23_COLUMNS` counts** — needs a redeploy, because the pushed code is not what PythonAnywhere runs:
+Changing `backend/extract_lib.py` or `backend/app.py` — **adding a column to `FIN23_COLUMNS` counts** — needs a redeploy, because the pushed code is not what PythonAnywhere runs.
 
-1. Upload the changed files to `/home/Fincart/marketing-mis/backend` (Files tab, or `git pull` in a PythonAnywhere Bash console).
+**Before you touch anything, find out what the server is actually running.** Open a PythonAnywhere **Bash console**:
+
+```bash
+cd ~/marketing-mis && git log --oneline -1 && git status --short
+```
+
+- A commit that is **not** `origin/main`'s tip, or **any modified file under `backend/`**, means the server has drifted from the repo and the repo does **not** tell you what is running.
+- Deploying a repo file over a locally-modified one in that state will take the backend down. On 2 Nov 2026 exactly this happened: the L&D backend had been hand-applied to the server and never committed, so a repo copy of `extract_lib.py` overwrote the version defining `load_ld_workbook_rows`, and `app.py` failed at import — every route 500ed, `/health` included.
+- Reconcile first: `git stash push backend/`, `git pull`, then diff the stash against the pulled files (`git show "stash@{0}:<file>" | diff - <file>`) to confirm nothing server-only is lost before dropping it.
+
+Once the server is clean and matches `origin/main`:
+
+1. `git pull` in the Bash console — preferred, because it keeps HEAD honest. Uploading via the **Files** tab works but re-creates the drift above.
 2. **Web tab → Reload**. Wait ~20 seconds.
-3. **Re-upload the B2C export.** This is the step that is easy to miss: the stored payload was parsed by the *old* code, so a newly allowed column is absent until something re-parses the file.
-4. Confirm at `/api/meta`, then reload the dashboard.
+3. **Check `/health` immediately.** It returns `{"status":"ok"}` only if the app imported; a PythonAnywhere "Something went wrong :-(" page means it did not, and the traceback is in **Web tab → Log files → error log**.
+4. **Re-upload the B2C export.** This is the step that is easy to miss: the stored payload was parsed by the *old* code, so a newly allowed column is absent until something re-parses the file.
+5. Confirm at `/api/meta`, then reload the dashboard.
 
 ### Adding a new column from the export
 
