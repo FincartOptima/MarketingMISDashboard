@@ -645,29 +645,6 @@ function costPerLeadPerRMWithTotals(){
   return rows;
 }
 
-// "All" means every dated lead (no FY window); a selection goes through monthFilter.
-function dateSetMonthMatch(m){
-  return isAllMonths() ? isValidMonth(m) : monthFilter(m);
-}
-
-function inProcessDataset(){
-  const base = applyRefColdFilter(STATE.raw);
-  const statuses = ['DEAD','ON HOLD','ASSIGNED','RE-ASSIGNED','FOLLOW UP','CONVERTED'];
-  const teams = teamsForRows(base, r => r.Team || 'SV');
-
-  const out = teams.map(team => {
-    const rows = base.filter(r => (r.Team || 'SV') === team);
-    const obj = {Team: team}; let total = 0;
-    for(const st of statuses){
-      const pool = rows.filter(r => dateSetMonthMatch(r.LPM) && r.leadStatus===st);
-      obj[st] = pool.length; total += pool.length;
-    }
-    obj.Total = total;
-    return obj;
-  });
-  out.push(buildGrandTotalRow('Team', 'Grand Total', statuses, out, 'Total'));
-  return {statuses, data: out};
-}
 
 // ---- Stagnant In-Process Leads ----
 // Every currently-In-Process lead (same rule as everywhere else: leadStatus
@@ -882,21 +859,3 @@ function bdCallsSummarize(rows){
   };
 }
 
-function convertedDataset(){
-  const base = applyRefColdFilter(STATE.raw);
-  const statuses = ['DEAD','ON HOLD','ASSIGNED','RE-ASSIGNED','FOLLOW UP','IN PROCESS'];
-  const teams = teamsForRows(base, r => r.Team || 'SV');
-
-  const out = teams.map(team => {
-    const rows = base.filter(r => (r.Team || 'SV') === team);
-    const obj = {Team: team}; let total = 0;
-    for(const st of statuses){
-      const pool = rows.filter(r => dateSetMonthMatch(r.CM) && r.leadStatus===st);
-      obj[st] = pool.length; total += pool.length;
-    }
-    obj.Total = total;
-    return obj;
-  });
-  out.push(buildGrandTotalRow('Team', 'Grand Total', statuses, out, 'Total'));
-  return {statuses, data: out};
-}

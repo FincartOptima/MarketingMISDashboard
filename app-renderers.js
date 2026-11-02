@@ -629,36 +629,6 @@ function renderCplRm(){
   makeSortableTable('#tbl-cpl-rm', headers, rows, renderCplRm);
 }
 
-function renderInProcessDataset(){
-  if(!STATE.filesLoaded.fin23){ setNotUploaded('#tbl-inprocess-ds','fin23'); return; }
-  const title = 'IN-PROCESS DATE SET, STATUS ≠ IN PROCESS   LPM: '+monthSelectionLabel()+'  |  '+rcFilter(STATE.filterRefCold);
-  $('#inprocess-ds-title').textContent = title;
-  const {statuses, data} = inProcessDataset();
-  const headers = ['Team', ...statuses, 'Total'];
-  const rows = data.map(r => {
-    const o = {Team: r.Team, _tot: !!r._tot};
-    statuses.forEach(s => o[s] = fmtIN(r[s]));
-    o.Total = fmtIN(r.Total);
-    return o;
-  });
-  renderTable('#tbl-inprocess-ds', headers, rows);
-}
-
-function renderConvertedDataset(){
-  if(!STATE.filesLoaded.fin23){ setNotUploaded('#tbl-converted-ds','fin23'); return; }
-  const title = 'CONVERTED DATE SET, STATUS ≠ CONVERTED   CM: '+monthSelectionLabel()+'  |  '+rcFilter(STATE.filterRefCold);
-  $('#converted-ds-title').textContent = title;
-  const {statuses, data} = convertedDataset();
-  const headers = ['Team', ...statuses, 'Total'];
-  const rows = data.map(r => {
-    const o = {Team: r.Team, _tot: !!r._tot};
-    statuses.forEach(s => o[s] = fmtIN(r[s]));
-    o.Total = fmtIN(r.Total);
-    return o;
-  });
-  renderTable('#tbl-converted-ds', headers, rows);
-}
-
 // Stagnant In-Process Leads: overview tiles, team-wise breakdown, then a
 // paginated (10/page) client-level table with a full-list Excel download.
 // Deliberately unfiltered by Month/Ref+Cold/Status/Lead Head — see
@@ -1234,9 +1204,8 @@ function renderDashboard(){
   renderIncome();
   renderCostSummary();
   renderCplRm();
-  renderInProcessDataset();
-  renderConvertedDataset();
   renderStagnantInProcess();
+  renderActivityChange();
   renderB2BTable();
   renderWorkshopStatus();
   renderDataHealth();     // last: reads the table-shape guard the renders above feed

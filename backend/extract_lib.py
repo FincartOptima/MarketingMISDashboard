@@ -32,6 +32,21 @@ FIN23_COLUMNS = {
     'convertedbyname', 'converted by name',
     'annualincome', 'annual income',
     'clientcategory', 'client category',
+    # Added 2026-11-02: the FIN23 export gained these columns. The three
+    # lead*Date stamps are what the Dashboard's Activity Change Days section
+    # measures (see activityChangeRows in app-activity.js); the rest are
+    # carried through so the engine holds the whole new format.
+    'leadonholddate', 'lead on hold date',
+    'leadfollowupdate', 'lead follow up date',
+    'leaddeaddate', 'lead dead date',
+    'isclient', 'is client',
+    'dndstatus', 'dnd status',
+    'utmid', 'utm id',
+    'utmsource', 'utm source',
+    'utmmedium', 'utm medium',
+    'utmcampaign', 'utm campaign',
+    'utmterm', 'utm term',
+    'utmcontent', 'utm content',
 }
 
 
@@ -141,6 +156,16 @@ FIN23_REQUIRED = {
 }
 FIN23_KNOWN_STATUSES = {'CONVERTED', 'IN PROCESS', 'ASSIGNED', 'RE-ASSIGNED', 'FOLLOW UP', 'ON HOLD', 'DEAD'}
 
+# Per-activity timestamps added to the FIN23 export on 2026-11-02. Not in
+# FIN23_REQUIRED on purpose: an older export without them must still load (the
+# rest of the dashboard does not use them), it only loses Activity Change Days
+# — which fin23_quality_warnings says out loud rather than leaving blank.
+FIN23_ACTIVITY_DATES = {
+    'leadOnHoldDate':   ('leadonholddate', 'lead on hold date'),
+    'leadFollowUpDate': ('leadfollowupdate', 'lead follow up date'),
+    'leadDeadDate':     ('leaddeaddate', 'lead dead date'),
+}
+
 
 def _field(row, aliases):
     lowered = {str(k).strip().lower(): v for k, v in row.items()}
@@ -196,6 +221,14 @@ def fin23_quality_warnings(rows):
         out.append(f'{no_created} lead(s) have no created date.')
     if dup:
         out.append(f'{dup} row(s) repeat a client (same email and Lead Head) already in the file.')
+    present = {str(k).strip().lower() for k in rows[0].keys()}
+    missing_activity = [label for label, aliases in FIN23_ACTIVITY_DATES.items()
+                        if not present.intersection(aliases)]
+    if missing_activity:
+        out.append(
+            f"This export has no {', '.join(missing_activity)} column(s), so the Dashboard's "
+            'Activity Change Days section cannot measure moves into those activities. '
+            'Download a fresh copy of the B2C lead file and upload that instead.')
     return out
 
 

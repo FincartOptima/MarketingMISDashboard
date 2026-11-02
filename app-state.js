@@ -58,6 +58,13 @@ const STATE = {
   categorizedCategoryFilter: 'All',
   categorizedFromMonth: '',
   categorizedToMonth: '',
+  // Activity Change Days (Dashboard subtab) — its own filters, independent of
+  // the header Month/Ref+Cold/Status (From/To Activity and the month below
+  // supersede them). `from`/`to` are CONFIG.ACTIVITIES keys.
+  activity: { team: 'All', rm: 'All', month: 'All', from: 'created', to: 'inprocess', page: 1 },
+  activityBucketChart: null,
+  activityVolumeChart: null,
+  activityTrendChart: null,
 };
 
 function notUploadedHTML(key){

@@ -108,13 +108,8 @@ function bd2BuildDataIssues(){
   const rows = STATE.bd;
 
   // ---- the data behind it ----
-  const src = STATE.dataSource || {};
-  if(src.fallback){
-    add('error', 'fallback', 'Showing the bundled data.js snapshot, not live data',
-      `The data API could not be reached (${src.error || 'unknown error'}), so every figure on this tab comes from a snapshot` +
-      (src.generated ? ` generated ${src.generated}` : '') + '.',
-      'Check the backend /health endpoint, then reload.');
-  }
+  // No stale-snapshot check: the dashboard no longer falls back to a bundle,
+  // so a tab that renders at all is rendering live data (see showLoadError).
   const haveB2c = STATE.filesLoaded.fin23 && STATE.raw.length > 0;
   if(!haveB2c){
     add('error', 'no-b2c', 'No Workpoint B2C data is loaded',

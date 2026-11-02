@@ -73,13 +73,9 @@ function dataHealthChecks(){
   }
 
   // ---- source ----
-  const src = STATE.dataSource || {};
-  if(src.fallback){
-    add('error', 'stale-fallback', 'Showing bundled data.js, not live data',
-      `The data API could not be reached (${src.error || 'unknown error'}), so the page uses the data.js snapshot` +
-      (src.generated ? ` generated ${src.generated}` : '') + '.',
-      'Check the backend /health endpoint, then reload.');
-  }
+  // A failed fetch never reaches here: loadAllFromRepo shows the data-load
+  // error screen and renders no dashboard at all, so every figure below is
+  // always from the live API. Nothing to check about the source itself.
   const newest = newestLeadDate();
   if(newest){
     const ageDays = Math.floor((Date.now() - newest.getTime()) / DAY_MS);
@@ -182,6 +178,23 @@ function dataHealthChecks(){
     add('warn', 'no-campaign', `${fmtIN(noCampaign)} lead(s) have no Category name`,
       'They are in team and status totals but have no cost attributed and no Cost table row.',
       'Fill the category in the CRM.');
+  }
+
+  // ---- activity stamps ----
+  // Columns the 2026-11-02 FIN23 format added. Everything else works without
+  // them, so this is a warning, not an error — but the Activity Change Days
+  // section can measure nothing without them, and an empty section with no
+  // explanation reads as "no leads moved" rather than "wrong file".
+  const missingActivity = activityMissingFields();
+  if(missingActivity.length === CONFIG.ACTIVITY_DATE_FIELDS.length){
+    add('warn', 'no-activity-dates', 'This export has no activity-date columns',
+      `None of ${CONFIG.ACTIVITY_DATE_FIELDS.join(', ')} is present, so Activity Change Days cannot measure ` +
+      'moves into On Hold, Follow Up or Dead. Every other section is unaffected.',
+      'Download a fresh copy of the B2C lead file (the format gained these columns on 2nd Nov 2026) and upload it on the backend /upload page.');
+  } else if(missingActivity.length){
+    add('warn', 'partial-activity-dates', `${missingActivity.length} activity-date column(s) are empty`,
+      `${missingActivity.join(', ')} carry no value on any lead, so Activity Change Days shows nothing for those activities.`,
+      'Check the export includes these columns, then re-upload.');
   }
 
   // ---- cost ----

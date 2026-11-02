@@ -39,6 +39,17 @@ function buildRawData(finRows){
     const fmonth = normalizeMonthLabel(pickField(r,'FMONTH','FMonth')) ||
       ((convertedMmm && convertedMmm!=='N/A') ? convertedMmm : createdMmm);
     const sourceTeam = pickField(r,'Team');
+    // Per-activity timestamps added to the FIN23 export on 2026-11-02 — the
+    // CRM stamps the LAST time a lead entered each activity, so they are a
+    // set of "latest seen in this state" marks, not an ordered history (see
+    // activityChangeRows in app-activity.js, which only counts a pair as a
+    // move when the To date is on/after the From date). Normalised to '' when
+    // absent so an older export without these columns reads as "no stamp"
+    // rather than the literal string 'N/A'.
+    const actDate = (...names) => {
+      const v = pickField(r, ...names);
+      return isBlankDate(v) ? '' : (toIsoDate(v) || '');
+    };
     return {
       currentRmName: rm,
       Team: sourceTeam||'SV',
@@ -65,6 +76,17 @@ function buildRawData(finRows){
       annualIncome: pickField(r,'annualIncome','Annual Income')||'',
       clientCategory: pickField(r,'clientCategory','Client Category')||'',
       FMONTH: fmonth,
+      leadOnHoldDate:   actDate('leadOnHoldDate','Lead On Hold Date'),
+      leadFollowUpDate: actDate('leadFollowUpDate','Lead Follow Up Date'),
+      leadDeadDate:     actDate('leadDeadDate','Lead Dead Date'),
+      isClient:    String(pickField(r,'isClient','Is Client')||''),
+      dndStatus:   String(pickField(r,'dndStatus','DND Status')||''),
+      utmId:       String(pickField(r,'utmId','UTM Id')||''),
+      utmSource:   String(pickField(r,'utmSource','UTM Source')||''),
+      utmMedium:   String(pickField(r,'utmMedium','UTM Medium')||''),
+      utmCampaign: String(pickField(r,'utmCampaign','UTM Campaign')||''),
+      utmTerm:     String(pickField(r,'utmTerm','UTM Term')||''),
+      utmContent:  String(pickField(r,'utmContent','UTM Content')||''),
     };
   });
 }
@@ -228,9 +250,153 @@ function yieldToPaint(){
   });
 }
 
-// Data is fetched from the hosted backend API (PythonAnywhere) instead of a static
-// data.js bundle — the /upload form there replaces the local extract.py + git push
-// workflow. Falls back to window.MARKETING_DATA (data.js) if the API is unreachable.
+// ---- data-load failure screen ----
+//
+// There is deliberately NO local fallback. The page used to drop back to the
+// bundled data.js when the API was unreachable, which meant a dashboard that
+// looked completely normal while showing figures from whenever that bundle was
+// last built — the worst possible failure mode for a reporting tool. Now a
+// failed load renders this screen instead of the dashboard, and not a single
+// figure is drawn. The one path that does not need the API is a self-contained
+// saved webpage, which embeds its own data (applyPreloadedState) and never
+// reaches this function — note that the exporter that builds those is itself
+// broken today, see downloadAsWebpage() in app-ui.js.
+const API_ORIGIN = (() => {
+  try { return new URL(DATA_API_URL).origin; }
+  catch(e){ return DATA_API_URL.replace(/\/api\/data\/?$/, ''); }
+})();
+const API_HEALTH_URL = API_ORIGIN + '/health';      // liveness only: {"status":"ok"}
+const API_META_URL   = API_ORIGIN + '/api/meta';    // row count + last-updated, per file
+const API_UPLOAD_URL = API_ORIGIN + '/upload';
+
+/**
+ * Plain-language diagnosis for one failed load. Keyed off what actually went
+ * wrong so the steps shown are the ones worth trying, not a generic list.
+ * @param {{kind:string, status?:number, error?:string}} fail
+ */
+function loadErrorDiagnosis(fail){
+  const api = `<code>${escHtml(DATA_API_URL)}</code>`;
+  const network = {
+    lede: 'The browser could not reach the data API at all — the request never got a reply.',
+    checks: [
+      `Are you online? Open any other site to confirm.`,
+      `Open ${api} in a new tab. A working API answers with text starting <code>{"meta":</code>. ` +
+        `If the tab shows a PythonAnywhere error page, the backend itself is down.`,
+      `If that tab works but this page still fails, the browser is blocking the cross-origin request: ` +
+        `open the console with <strong>F12 → Console</strong> and look for a <strong>CORS</strong> or ` +
+        `<strong>blocked</strong> message. An ad-blocker, a corporate proxy or a VPN is the usual cause.`,
+      `On a free PythonAnywhere account the web app stops serving every 3 months. Sign in, open the ` +
+        `<strong>Web</strong> tab and press <strong>Run until 3 months from today</strong>.`,
+    ],
+    fix: [
+      'Reconnect or disable the blocker, then press Retry.',
+      'If the backend is down, sign in to PythonAnywhere, press <strong>Reload</strong> on the Web tab, and wait ~20 seconds.',
+      'Still failing? <code>/health</code> below answers whenever the app is alive. If it answers but <code>/api/data</code> does not, the fault is in the data rather than the hosting — check <code>/api/meta</code>.',
+    ],
+  };
+  const byKind = {
+    network,
+    http: {
+      lede: `The data API answered, but with an error: <strong>HTTP ${fail.status}</strong>.`,
+      checks: [
+        fail.status === 404
+          ? `A 404 means the URL is wrong or the backend is running an older build without <code>/api/data</code>. Confirm <code>CONFIG.DATA_API_URL</code> in <code>app-config.js</code> matches the deployed app.`
+          : `A ${fail.status} means the backend crashed while building the response. Its traceback is in the PythonAnywhere <strong>Error log</strong> (Web tab → Log files).`,
+        `<code>/health</code> below answers whenever the app is alive, even when <code>/api/data</code> crashes — use it to tell a hosting problem from a data one.`,
+        `<code>/api/meta</code> below lists the row count and last-updated time per file. A zero against <code>fin23</code> means nothing has been uploaded since the database was last reset.`,
+      ],
+      fix: [
+        'Open the upload page below and re-upload the B2C export (and Revenue Input, B2B, FY2026, Plan Approval if they changed).',
+        'If the error log shows a traceback, redeploy <code>backend/extract_lib.py</code> and <code>backend/app.py</code>, then press <strong>Reload</strong> on the PythonAnywhere Web tab.',
+        'Press Retry once the upload page reports success.',
+      ],
+    },
+    parse: {
+      lede: 'The data API replied, but the reply was not readable JSON.',
+      checks: [
+        `Open ${api} in a new tab and look at what comes back — an HTML error page or a half-written response means the backend failed mid-request.`,
+        'Check the PythonAnywhere <strong>Error log</strong> (Web tab → Log files) for a traceback at the matching time.',
+        'A request that times out part-way through also lands here; a very large upload can take the backend past its limit.',
+      ],
+      fix: [
+        'Press <strong>Reload</strong> on the PythonAnywhere Web tab, then Retry.',
+        'If it keeps failing, re-upload the B2C export on the upload page so the stored payload is rewritten.',
+      ],
+    },
+    empty: {
+      lede: 'The data API is up and answered correctly, but it holds no B2C lead rows — so there is nothing to report on.',
+      checks: [
+        'Open <code>/api/meta</code> below: it lists the row count and last-updated time per file. A zero against <code>fin23</code> confirms it.',
+        'Has anyone uploaded since the backend was last redeployed or its database reset? The upload page shows what is stored.',
+        'If an upload was rejected, the upload page says which required column was missing — a renamed column in the export does that.',
+      ],
+      fix: [
+        'Open the upload page below and upload the B2C (FIN23) export. It is the only required file.',
+        'Wait for the page to confirm the row count, then press Retry.',
+      ],
+    },
+  };
+  return byKind[fail.kind] || network;
+}
+
+function showLoadError(fail){
+  const panel = $('#load-error');
+  const loading = document.querySelector('#upload-screen .fc-loading-content');
+  const symbol = document.querySelector('#upload-screen .fc-loading-symbol');
+  if(symbol) symbol.classList.remove('fc-spinning');   // stop the spinner behind the hidden panel
+  if(loading) loading.style.display = 'none';
+  $('#upload-screen').style.display = 'flex';
+  $('#app').style.display = 'none';
+  if(!panel) return;                                   // nothing to render into: console still has the error
+  panel.hidden = false;
+
+  const d = loadErrorDiagnosis(fail);
+  $('#le-lede').innerHTML = d.lede;
+  $('#le-detail').innerHTML = `${escHtml(fail.error || 'No further detail')}`
+    + `<br>Endpoint: ${escHtml(DATA_API_URL)}`
+    + `<br>Time: ${escHtml(new Date().toLocaleString('en-IN'))}`;
+  $('#le-checks').innerHTML = d.checks.map(c => `<li>${c}</li>`).join('');
+  $('#le-fix').innerHTML = d.fix.map(c => `<li>${c}</li>`).join('');
+  $('#le-api').href = DATA_API_URL;
+  $('#le-health').href = API_HEALTH_URL;
+  $('#le-meta').href = API_META_URL;
+  $('#le-upload').href = API_UPLOAD_URL;
+  $('#le-retry').onclick = () => {
+    panel.hidden = true;
+    if(loading) loading.style.display = '';
+    if(symbol) symbol.classList.add('fc-spinning');
+    setLoadingStatus('Retrying…');
+    loadAllFromRepo();
+  };
+}
+
+/**
+ * Fetch the dashboard payload, or describe the failure.
+ * @returns {Promise<{ok:true, data:Object}|{ok:false, kind:string, status?:number, error:string}>}
+ */
+async function fetchDashboardData(){
+  let res;
+  try {
+    res = await fetch(DATA_API_URL, { cache: 'no-store' });
+  } catch(e) {
+    return { ok: false, kind: 'network', error: e.message || String(e) };
+  }
+  if(!res.ok) return { ok: false, kind: 'http', status: res.status, error: `HTTP ${res.status} ${res.statusText || ''}`.trim() };
+  let data;
+  try {
+    data = await res.json();
+  } catch(e) {
+    return { ok: false, kind: 'parse', error: e.message || String(e) };
+  }
+  if(!data || !Array.isArray(data.fin23) || !data.fin23.length){
+    return { ok: false, kind: 'empty', error: 'The response carried no fin23 (B2C lead) rows.' };
+  }
+  return { ok: true, data };
+}
+
+// Data is fetched from the hosted backend API (PythonAnywhere); the /upload form
+// there replaces the old local extract.py + git push workflow. A failed fetch is
+// a hard stop — see showLoadError above.
 async function loadAllFromRepo(){
   // #upload-screen and #app both start with display:none in CSS — without this,
   // the page stays completely blank (no spinner, no error) for the entire loading
@@ -245,28 +411,21 @@ async function loadAllFromRepo(){
   setLoadingStatus('Fetching latest data…');
   await yieldToPaint();
 
-  let d = {};
-  // Recorded so the data-health panel can say when the stale data.js fallback is in use.
-  STATE.dataSource = { fallback: false, error: null, generated: null };
-  try {
-    const res = await fetch(DATA_API_URL, { cache: 'no-store' });
-    if(!res.ok) throw new Error(`API returned ${res.status}`);
-    d = await res.json();
-    STATE.dataSource.generated = (d.meta && d.meta.generated) || null;
-  } catch(e) {
-    console.warn('[MIS] Failed to fetch data from API, falling back to data.js', e);
-    d = window.MARKETING_DATA || {};
-    STATE.dataSource = { fallback: true, error: e.message || String(e), generated: (d.meta && d.meta.generated) || null };
-  }
-
-  if(d.fin23 && d.fin23.length){
-    STATE.raw = buildRawData(d.fin23);
-    STATE.rawFilters = {};
-    STATE.filesLoaded.fin23 = true;
-  } else {
-    console.warn('[MIS] fin23 data missing from data.js');
+  const fetched = await fetchDashboardData();
+  if(!fetched.ok){
+    console.error('[MIS] Could not load dashboard data from ' + DATA_API_URL, fetched);
+    // Nothing is rendered: STATE.raw stays empty and the dashboard stays hidden.
     STATE.raw = []; STATE.rawFilters = {};
+    STATE.dataSource = { error: fetched.error, generated: null, failed: true };
+    showLoadError(fetched);
+    return;
   }
+  const d = fetched.data;
+  STATE.dataSource = { error: null, generated: (d.meta && d.meta.generated) || null, failed: false };
+
+  STATE.raw = buildRawData(d.fin23);
+  STATE.rawFilters = {};
+  STATE.filesLoaded.fin23 = true;
 
   rebuildTeamMap();
 
@@ -274,7 +433,7 @@ async function loadAllFromRepo(){
     STATE.rev = d.rev;
     STATE.filesLoaded.rev = true;
   } else {
-    console.warn('[MIS] rev data missing from data.js');
+    console.warn('[MIS] rev data missing from the API response');
     STATE.rev = [];
   }
 
@@ -284,7 +443,7 @@ async function loadAllFromRepo(){
     STATE.b2bFilters = {};
     STATE.filesLoaded.b2b = true;
   } else {
-    console.warn('[MIS] b2b data missing from data.js');
+    console.warn('[MIS] b2b data missing from the API response');
     STATE.b2bRaw = []; STATE.b2b = []; STATE.b2bFilters = {};
   }
 
@@ -292,7 +451,7 @@ async function loadAllFromRepo(){
     STATE.fy = buildFYData(d.fy);
     STATE.filesLoaded.fy = true;
   } else {
-    console.warn('[MIS] fy data missing from data.js');
+    console.warn('[MIS] fy data missing from the API response');
     STATE.fy = [];
   }
 
@@ -300,7 +459,7 @@ async function loadAllFromRepo(){
     STATE.pa = buildPAData(d.pa);
     STATE.filesLoaded.pa = true;
   } else {
-    console.warn('[MIS] pa data missing from data.js');
+    console.warn('[MIS] pa data missing from the API response');
     STATE.pa = [];
   }
 
@@ -309,7 +468,7 @@ async function loadAllFromRepo(){
     annotateBDWithB2CMatch();
     STATE.filesLoaded.bd = true;
   } else {
-    console.warn('[MIS] bd data missing from data.js');
+    console.warn('[MIS] bd data missing from the API response');
     STATE.bd = [];
   }
 
@@ -317,7 +476,7 @@ async function loadAllFromRepo(){
     STATE.bdCalls = d.bdcalls;
     STATE.filesLoaded.bdcalls = true;
   } else {
-    console.warn('[MIS] bdcalls data missing from data.js');
+    console.warn('[MIS] bdcalls data missing from the API response');
     STATE.bdCalls = [];
   }
   canonicalizeBDNames();

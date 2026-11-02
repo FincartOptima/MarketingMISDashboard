@@ -649,6 +649,18 @@ table.data.editable td input:focus{outline:2px solid var(--orange);background:va
    the right, replacing the old single long scroll. Only the active
    sub-panel's tables/charts are visible at a time; everything still renders
    on every filter change exactly as before, this just changes what's shown. */
+/* Activity Change Days — its five filters sit in one row above the charts
+   (not in the page header), since they describe this section only. */
+.act-filters{
+  display:flex;flex-wrap:wrap;align-items:flex-end;gap:12px;
+  margin:12px 0 14px;padding:12px;background:#f8fafc;border:2px solid var(--line);
+}
+.act-filters>span{display:flex;flex-direction:column;gap:4px}
+.act-filters label{
+  font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);
+}
+.act-chart-wrap{height:280px;background:#fff;border:2px solid var(--line);padding:12px}
+
 .dash-layout{display:flex;align-items:flex-start;gap:20px}
 .dash-subnav{
   flex:none;width:220px;display:flex;flex-direction:column;gap:8px;
@@ -964,6 +976,51 @@ table.data.editable td input:focus{outline:2px solid var(--orange);background:va
     .fc-spinning { animation: none; }
     #upload-screen { transition: none; }
   }
+
+  /* ---- data-load failure ---- */
+  #load-error[hidden] { display: none; }
+  #load-error {
+    width: 100%;
+    max-width: 720px;
+    padding: 24px;
+    font-family: Inter, Arial, sans-serif;
+    max-height: 100vh;
+    overflow-y: auto;
+  }
+  .le-card {
+    background: #fff;
+    border: 2px solid #e5e7eb;
+    border-top: 6px solid #dc2626;
+    padding: 24px 26px 20px;
+  }
+  .le-head { display: flex; align-items: center; gap: 12px; }
+  .le-icon { font-size: 26px; color: #dc2626; line-height: 1; }
+  .le-card h1 { margin: 0; font-size: 20px; font-weight: 700; color: #1e293b; }
+  .le-card h2 {
+    margin: 22px 0 8px;
+    font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .6px;
+    color: #64748b;
+  }
+  .le-lede { margin: 14px 0 0; font-size: 14px; line-height: 1.6; color: #334155; }
+  .le-detail {
+    margin-top: 12px; padding: 10px 12px;
+    background: #fef2f2; border: 1px solid #fecaca;
+    font: 12px/1.6 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    color: #991b1b; word-break: break-word;
+  }
+  #load-error ol { margin: 0; padding-left: 22px; }
+  #load-error li { font-size: 13px; line-height: 1.65; color: #334155; margin-bottom: 8px; }
+  #load-error code {
+    background: #f1f5f9; padding: 1px 5px;
+    font: 12px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; color: #0f172a;
+    word-break: break-all;
+  }
+  .le-actions {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 14px;
+    margin-top: 22px; padding-top: 18px; border-top: 2px solid #e5e7eb;
+  }
+  .le-link { font-size: 13px; font-weight: 600; color: #1649cf; }
+  .le-foot { margin: 16px 0 0; font-size: 12px; line-height: 1.6; color: #64748b; }
 </style>
 
 <div id="upload-screen" aria-label="Loading dashboard">
@@ -991,6 +1048,34 @@ table.data.editable td input:focus{outline:2px solid var(--orange);background:va
     <p class="fc-loading-title">Marketing MIS Dashboard</p>
     <div id="loading-status" role="status" aria-live="polite">
       Loading your dashboard…
+    </div>
+  </div>
+
+  <!-- Shown by showLoadError() (app-dataload.js) when the data API cannot be
+       reached or returns nothing usable. There is no offline copy of the data
+       by design, so this replaces the dashboard rather than sitting above a
+       half-empty one: no figure is ever rendered from a stale source. -->
+  <div id="load-error" role="alert" hidden>
+    <div class="le-card">
+      <div class="le-head">
+        <span class="le-icon">&#9888;</span>
+        <h1>Dashboard data could not be loaded</h1>
+      </div>
+      <p class="le-lede" id="le-lede"></p>
+      <div class="le-detail" id="le-detail"></div>
+      <h2>What to check</h2>
+      <ol id="le-checks"></ol>
+      <h2>How to correct it</h2>
+      <ol id="le-fix"></ol>
+      <div class="le-actions">
+        <button class="btn-blue" id="le-retry">&#8635; Retry</button>
+        <a class="le-link" id="le-api" href="#" target="_blank" rel="noopener">Open the data API</a>
+        <a class="le-link" id="le-health" href="#" target="_blank" rel="noopener">Is the backend alive? (/health)</a>
+        <a class="le-link" id="le-meta" href="#" target="_blank" rel="noopener">What data does it hold? (/api/meta)</a>
+        <a class="le-link" id="le-upload" href="#" target="_blank" rel="noopener">Open the upload page</a>
+      </div>
+      <p class="le-foot">Nothing on this page is cached locally &mdash; the dashboard shows live data or nothing at
+        all, so no figure here can be out of date without saying so.</p>
     </div>
   </div>
 </div>
@@ -1224,7 +1309,7 @@ table.data.editable td input:focus{outline:2px solid var(--orange);background:va
         <button class="dash-subtab" data-subtab="income">Income Segment Analysis</button>
         <button class="dash-subtab" data-subtab="b2b">B2B Corporate Leads</button>
         <button class="dash-subtab" data-subtab="stagnant">Stagnant In-Process Leads</button>
-        <button class="dash-subtab" data-subtab="other">Other Reports</button>
+        <button class="dash-subtab" data-subtab="activity">Activity Change Days</button>
       </nav>
 
       <div class="dash-content">
@@ -1457,22 +1542,104 @@ table.data.editable td input:focus{outline:2px solid var(--orange);background:va
           </div>
         </div>
 
-        <!-- ===== Other Reports ===== -->
-        <div class="dash-subpanel" id="dashsub-other">
-          <div id="sec-inprocess-converted">
-            <div class="section bar-pink">
-              <h2 id="inprocess-ds-title">In-Process Date Set, Status ≠ IN PROCESS
-                <button class="info-btn" data-info="inprocess-ds" title="Table info">i</button>
+        <!-- ===== Activity Change Days ===== -->
+        <div class="dash-subpanel" id="dashsub-activity">
+          <div class="section bar-orange">
+            <h2>Activity Change Days &middot; <span id="act-title">Created / Assigned &rarr; In Process</span>
+              <button class="info-btn" data-info="activity-change" title="Section info">i</button>
+            </h2>
+            <div class="act-filters">
+              <span><label>Team</label><div id="act-team-wrap"></div></span>
+              <span><label>RM Name</label><div id="act-rm-wrap"></div></span>
+              <span><label>Month</label><div id="act-month-wrap"></div></span>
+              <span><label>From Activity</label><div id="act-from-wrap"></div></span>
+              <span><label>To Activity</label><div id="act-to-wrap"></div></span>
+              <button class="secondary" id="act-reset">Reset filters</button>
+            </div>
+            <div class="meta">Of the leads that entered the <strong>From</strong> activity in the selected month(s),
+              how many went on to the <strong>To</strong> activity &mdash; and how long it took. <strong>Month</strong>
+              is the month of the <em>From</em> activity, so the cohort is fixed before any move is counted.
+              <strong>Team</strong> and <strong>RM</strong> are the lead&rsquo;s current owner. This section uses its own
+              Month filter and the header&rsquo;s <strong>Lead Head</strong>; the header&rsquo;s Month, Ref+Cold and Status
+              do not apply here.</div>
+            <div id="act-note" class="hint"></div>
+          </div>
+
+          <div class="kpis" id="act-kpis"></div>
+
+          <div class="section bar-blue">
+            <h2>How Long the Move Took
+              <button class="info-btn" data-info="activity-buckets" title="Chart info">i</button>
+            </h2>
+            <div class="act-chart-wrap"><canvas id="act-bucket-chart"></canvas></div>
+            <div class="hint">Every lead that made the move, grouped by how many days it took. Leads that have not
+              moved are not in this chart &mdash; the tiles above count them.</div>
+          </div>
+
+          <div class="grid cols-2">
+            <div class="section bar-green">
+              <h2>Cohort vs Moved, by Month
+                <button class="info-btn" data-info="activity-volume" title="Chart info">i</button>
               </h2>
-              <div class="table-wrap" id="tbl-inprocess-ds"></div>
+              <div class="act-chart-wrap"><canvas id="act-volume-chart"></canvas></div>
+              <div class="hint" id="act-volume-hint"></div>
             </div>
             <div class="section bar-violet">
-              <h2 id="converted-ds-title">Converted Date Set, Status ≠ CONVERTED
-                <button class="info-btn" data-info="converted-ds" title="Table info">i</button>
+              <h2>Average Days to Move, by Month
+                <button class="info-btn" data-info="activity-trend" title="Chart info">i</button>
               </h2>
-              <div class="table-wrap" id="tbl-converted-ds"></div>
+              <div class="act-chart-wrap"><canvas id="act-trend-chart"></canvas></div>
+              <div class="hint" id="act-trend-hint"></div>
             </div>
           </div>
+
+          <div class="section bar-pink">
+            <h2>By Team
+              <button class="info-btn" data-info="activity-team" title="Table info">i</button>
+            </h2>
+            <div id="legend-act-team"></div>
+            <div class="table-wrap" id="tbl-act-team"></div>
+          </div>
+
+          <div class="section bar-cyan">
+            <h2>By RM
+              <button class="info-btn" data-info="activity-rm" title="Table info">i</button>
+            </h2>
+            <div class="table-wrap" id="tbl-act-rm"></div>
+          </div>
+
+          <div class="section bar-yellow">
+            <h2>By Month of the From Activity
+              <button class="info-btn" data-info="activity-month" title="Table info">i</button>
+            </h2>
+            <div class="table-wrap" id="tbl-act-month"></div>
+          </div>
+
+          <div class="section bar-violet">
+            <h2>Every Transition &middot; Average Days
+              <button class="info-btn" data-info="activity-matrix" title="Table info">i</button>
+            </h2>
+            <div class="meta">The same measure for all six activities at once, under the current Team / RM / Month
+              selection &mdash; so the pair chosen above can be read in context. Each cell: average days, then how many
+              of that row&rsquo;s cohort made the move.</div>
+            <div class="table-wrap" id="tbl-act-matrix"></div>
+          </div>
+
+          <div class="section bar-orange">
+            <h2>Lead by Lead
+              <button class="info-btn" data-info="activity-detail" title="Table info">i</button>
+              <span style="float:right;font-weight:400;text-transform:none;display:flex;align-items:center;gap:8px">
+                <button class="secondary" id="act-prev">&larr; Prev</button>
+                <span id="act-page-info" style="font-size:12px;color:var(--muted)"></span>
+                <button class="secondary" id="act-next">Next &rarr;</button>
+                <button class="btn-blue" id="act-download">&#8595; Download Excel</button>
+              </span>
+            </h2>
+            <div class="table-wrap" id="tbl-act-detail"></div>
+            <div class="hint">Fastest movers first, then the leads still sitting in the From activity. The Excel
+              download has the complete list plus the By Team / By RM / By Month summaries, whichever page is open.</div>
+          </div>
+
         </div>
 
       </div>
@@ -2178,7 +2345,7 @@ table.data.editable td input:focus{outline:2px solid var(--orange);background:va
     // Nothing below is requested until sign-in succeeds.
     MISAuth.ready(function(){
       var t = Date.now();
-      ['data.js','snapshot.js','categorized_leads_data.js','app-config.js','app-dateutils.js','app-state.js','app-dataload.js','app-filters.js','app-aggregators.js','app-rmperf.js','app-bd2.js','app-bd2-health.js','ld_leads_snapshot.js','app-ld.js','app-categorized.js','app-tables.js','app-renderers.js','app-ui.js','app-health.js','app-bootstrap.js'].forEach(function(src){
+      ['snapshot.js','categorized_leads_data.js','app-config.js','app-dateutils.js','app-state.js','app-dataload.js','app-filters.js','app-aggregators.js','app-rmperf.js','app-bd2.js','app-bd2-health.js','ld_leads_snapshot.js','app-ld.js','app-categorized.js','app-tables.js','app-activity.js','app-renderers.js','app-ui.js','app-health.js','app-bootstrap.js'].forEach(function(src){
         var s = document.createElement('script');
         s.src = src + '?t=' + t;
         s.async = false;

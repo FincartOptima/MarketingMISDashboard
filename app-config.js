@@ -17,8 +17,37 @@ const CONFIG = {
   // 'BD Team' is the business-development desk (Suhani, Himani, Kajal, Kunal,
   // Srishti) — reported on its own, not under Ambika, who now stands alone.
   FIXED_TEAMS: ['Akanksha','Ankit S','Anmol G','Ratan P','Ravi S','Vidhi','Vivek S','Yash T','Ambika','BD Team','DIY Team','SV'],
-  RAW_COLUMNS: ['currentRmName','Team','clientName','landingPage','platformName','Campaign Name','userId','createdDate','CTM','lastStatusDate','LSM','leadInProcessDate','LPM','leadHead','leadStatus','convertedDate','CM','firstRmName','Team of FirstRM','convertedByName','annualIncome','clientCategory','FMONTH'],
+  RAW_COLUMNS: ['currentRmName','Team','clientName','landingPage','platformName','Campaign Name','userId','createdDate','CTM','lastStatusDate','LSM','leadInProcessDate','LPM','leadHead','leadStatus','convertedDate','CM','firstRmName','Team of FirstRM','convertedByName','annualIncome','clientCategory','FMONTH',
+    // Added to the FIN23 export on 2026-11-02. The three lead*Date stamps
+    // drive the Dashboard's Activity Change Days section; the rest are shown
+    // here so the Raw Data tab reflects the whole loaded format.
+    'leadOnHoldDate','leadFollowUpDate','leadDeadDate','isClient','dndStatus','utmId','utmSource','utmMedium','utmCampaign','utmTerm','utmContent'],
   B2B_RAW_COLUMNS: ['name','email','phone','companyName','companyEmail','leadHead','currentRmName','firstRmName','createdDate','CreateMonth','brokerName','brokerEmail','leadStatus','platformName','categoryName','landingPage','enquiryType'],
+  // The lead activities the Activity Change Days section can measure between,
+  // in lifecycle order. Each one is a single timestamp column in the FIN23
+  // export recording the LAST time the lead entered that activity — there is
+  // no per-event history in the file, so a move is only counted when the To
+  // stamp is on/after the From stamp (see app-activity.js). ASSIGNED and
+  // RE-ASSIGNED have no stamp of their own; createdDate stands in for the
+  // moment the lead first landed with an RM.
+  //
+  // `origin: true` marks an activity a lead can only ever move OUT of, so it
+  // is offered as a From but never as a To. Without that, "X → Created /
+  // Assigned" reads as a real transition when it can only ever be a dirty
+  // stamp: ~1,000 leads in the 2026-11-02 export carry a Follow Up or On Hold
+  // date predating their own createdDate, and every one of them would show as
+  // a 0-day "move into Created".
+  ACTIVITIES: [
+    { key: 'created',   label: 'Created / Assigned', field: 'createdDate', origin: true },
+    { key: 'followup',  label: 'Follow Up',          field: 'leadFollowUpDate'   },
+    { key: 'onhold',    label: 'On Hold',            field: 'leadOnHoldDate'     },
+    { key: 'inprocess', label: 'In Process',         field: 'leadInProcessDate'  },
+    { key: 'converted', label: 'Converted',          field: 'convertedDate'      },
+    { key: 'dead',      label: 'Dead',               field: 'leadDeadDate'       },
+  ],
+  // Columns the Activity Change Days section needs that older exports lack —
+  // used to tell the user to re-download rather than showing an empty section.
+  ACTIVITY_DATE_FIELDS: ['leadOnHoldDate', 'leadFollowUpDate', 'leadDeadDate'],
   // Google Form (Name + Suggestion) linked to a Google Sheet.
   FEEDBACK_FORM_URL: 'https://docs.google.com/forms/d/e/1FAIpQLSeee0xpyNQvoG2ULnAR0xPbG23wwcmhERKCMwKT6dw8dWp4eA/viewform?usp=publish-editor',
   DATA_API_URL: 'https://fincart.pythonanywhere.com/api/data',
@@ -58,6 +87,7 @@ const MONTHS_3 = CONFIG.MONTHS_3;
 const STATUSES = CONFIG.STATUSES;
 const FIXED_TEAMS = CONFIG.FIXED_TEAMS;
 const RAW_COLUMNS = CONFIG.RAW_COLUMNS;
+const ACTIVITIES = CONFIG.ACTIVITIES;
 const B2B_RAW_COLUMNS = CONFIG.B2B_RAW_COLUMNS;
 const FEEDBACK_FORM_URL = CONFIG.FEEDBACK_FORM_URL;
 const DATA_API_URL = CONFIG.DATA_API_URL;

@@ -40,6 +40,21 @@ FIN23_COLUMNS = {
     'convertedbyname', 'converted by name',
     'annualincome', 'annual income',
     'clientcategory', 'client category',
+    # Added 2026-11-02: the FIN23 export gained these columns. The three
+    # lead*Date stamps are what the Dashboard's Activity Change Days section
+    # measures (see activityChangeRows in app-activity.js); the rest are
+    # carried through so the engine holds the whole new format.
+    'leadonholddate', 'lead on hold date',
+    'leadfollowupdate', 'lead follow up date',
+    'leaddeaddate', 'lead dead date',
+    'isclient', 'is client',
+    'dndstatus', 'dnd status',
+    'utmid', 'utm id',
+    'utmsource', 'utm source',
+    'utmmedium', 'utm medium',
+    'utmcampaign', 'utm campaign',
+    'utmterm', 'utm term',
+    'utmcontent', 'utm content',
 }
 
 def cell_value(v):
@@ -151,7 +166,7 @@ pa_path    = prompt_path('Plan Approval Sheet (optional)', required=False)
 print()
 data = {'meta': {'generated': datetime.now().strftime('%Y-%m-%d %H:%M')}}
 
-data['fin23'] = load_sheet_rows(fin23_path, sheet_names=['RAW_DATA', 'RawData'], column_allowlist=FIN23_COLUMNS)
+data['fin23'] = load_sheet_rows(fin23_path, sheet_names=['RAW_DATA', 'RawData', 'Data'], column_allowlist=FIN23_COLUMNS)
 data['rev']   = load_revenue_input_rows(rev_path) if rev_path else []
 data['b2b']   = load_sheet_rows(b2b_path) if b2b_path else []
 data['fy']    = load_sheet_rows(fy_path) if fy_path else []
