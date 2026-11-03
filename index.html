@@ -351,6 +351,12 @@ tr.heat-vlow td{background:rgba(239,68,68,.16) !important}
 
 /* ============ TABLE WRAPPER ============ */
 .table-wrap{overflow:auto;max-height:460px;border:2px solid var(--line)}
+/* Per-table Excel link (app-tables.js). A sibling above .table-wrap, not a
+   child: .table-wrap scrolls, and a button inside would scroll away. */
+.tbl-dl-bar{display:flex;justify-content:flex-end;margin:0 0 5px}
+.tbl-dl{font:700 11px/1 inherit;color:var(--orange);text-decoration:none;
+  border:1px solid var(--line);background:#fff;padding:5px 9px}
+.tbl-dl:hover{background:var(--orange);color:#fff;border-color:var(--orange)}
 .table-wrap::-webkit-scrollbar{width:7px;height:7px}
 .table-wrap::-webkit-scrollbar-track{background:var(--bg)}
 .table-wrap::-webkit-scrollbar-thumb{background:var(--orange)}

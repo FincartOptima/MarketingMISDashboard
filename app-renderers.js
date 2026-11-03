@@ -470,11 +470,33 @@ function renderTeamPerfNote(data){
       : '');
 }
 
+const RM_TRANSFER_EXPORT_COLS = ['From Team', 'From RM', 'To Team', 'To RM', 'Campaign',
+  'Current Status', 'Leads'];
+
+/**
+ * One row per distinct transfer, which is what the expandable detail rows
+ * show. Flattened because a nested table cannot be a spreadsheet, and the
+ * detail level is the one worth having in Excel.
+ */
+function rmTransferExportRows(teams){
+  const out = [];
+  for(const t of teams){
+    for(const d of (t.detailRows || [])){
+      out.push({
+        'From Team': t.team, 'From RM': d.firstRm, 'To Team': d.currentTeam, 'To RM': d.currentRm,
+        Campaign: d.campaign, 'Current Status': d.status, Leads: d.count,
+      });
+    }
+  }
+  return out;
+}
+
 function renderRmTransfer(){
   if(!STATE.filesLoaded.fin23){ setNotUploaded('#tbl-rm-transfer','fin23'); return; }
   const {teams, totalTransfers} = rmTransferData();
   const el = $('#tbl-rm-transfer');
   if(!el) return;
+  attachTableDownload(el, RM_TRANSFER_EXPORT_COLS, rmTransferExportRows(teams), {});
   if(!teams.length){
     el.innerHTML = '<div style="padding:16px;color:var(--muted);font-size:13px">No RM transfers found for the selected period.</div>';
     return;
@@ -1163,7 +1185,12 @@ function renderMissing(){
   const cols = ['currentRmName','Team','clientName','Campaign Name','platformName','createdDate','leadStatus','Reason'];
   const head = '<thead><tr>'+cols.map(c=>`<th>${c}</th>`).join('')+'</tr></thead>';
   const body = '<tbody>'+rows.slice(0,500).map(r=>'<tr>'+cols.map(c=>`<td>${escHtml(r[c]??'')}</td>`).join('')+'</tr>').join('')+'</tbody>';
-  $('#tbl-missing').innerHTML = `<div class="meta">${rows.length.toLocaleString()} rows flagged (showing first 500).</div><table class="data compact">${head}${body}</table>`;
+  const el = $('#tbl-missing');
+  el.innerHTML = `<div class="meta">${rows.length.toLocaleString()} rows flagged (showing first 500).</div><table class="data compact">${head}${body}</table>`;
+  // Hand-built table, so the download is attached explicitly. It exports ALL
+  // flagged rows rather than the 500 on screen — the table already says it is
+  // truncated, and a partial file would be the less useful of the two.
+  attachTableDownload(el, cols, rows, {});
 }
 
 function renderRMRev(){

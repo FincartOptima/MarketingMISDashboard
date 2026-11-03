@@ -71,10 +71,16 @@ function renderTable(host, headers, rows, opts = {}){
   const body = rows.map(r =>
     `<tr class="${tableRowClass(r)}">${headers.map(h => `<td>${cell(fmt(r[h], h, r))}</td>`).join('')}</tr>`
   ).join('');
-  resolveHost(host).innerHTML = `<table class="data ${opts.cls || ''}">
+  const el = resolveHost(host);
+  el.innerHTML = `<table class="data ${opts.cls || ''}">
     <thead><tr>${headers.map(h => `<th>${escHtml(h)}</th>`).join('')}</tr></thead>
     <tbody>${body}</tbody>
   </table>`;
+  // Export what is on screen, formatted cells and all, so the download and
+  // the table can never disagree.
+  attachTableDownload(el, headers, rows.map(r => {
+    const o = {}; headers.forEach(h => { o[h] = fmt(r[h], h, r); }); o._tot = r._tot; return o;
+  }), opts);
 }
 
 /**
@@ -86,6 +92,174 @@ function downloadRowsAsXlsx(headers, rows, sheetName, fileName){
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, sheetName);
   XLSX.writeFile(wb, fileName);
+}
+
+// ---- per-table Excel download ----
+//
+// Every table on the dashboard goes through renderTable() or
+// makeSortableTable(), so the button is attached in those two places instead
+// of at the 39 call sites. Each table therefore gains one without its
+// renderer knowing, and a table added tomorrow gets one for free.
+//
+// What gets exported is what is on screen: the same headers, the same rows,
+// in the order currently sorted, under the filters currently applied. That is
+// the point — someone asking for "this table in Excel" means the thing they
+// are looking at, not the unfiltered dataset behind it.
+
+/** Excel forbids []:*?/\ in a sheet name and truncates past 31 characters. */
+const xlsxSheetName = name => (String(name || 'Sheet').replace(/[[\]:*?\/\\]/g, ' ')
+  .replace(/\s+/g, ' ').trim().slice(0, 31) || 'Sheet');
+
+const xlsxSlug = name => String(name || 'table').replace(/[^A-Za-z0-9]+/g, '_')
+  .replace(/^_+|_+$/g, '').slice(0, 60) || 'table';
+
+/** The handful of entities the renderers emit, back to characters. */
+const XLSX_ENTITIES = {
+  '&nbsp;': ' ', '&amp;': '&', '&lt;': '<', '&gt;': '>', '&quot;': '"', '&#39;': "'",
+  '&mdash;': '—', '&ndash;': '–', '&rarr;': '→', '&times;': '×',
+  '&middot;': '·', '&rsquo;': '’', '&#8377;': '₹', '&check;': '✓',
+};
+
+/**
+ * One rendered cell, as a value Excel can actually work with.
+ *
+ * Cells arrive as display strings ("63.27%", "₹1,04,040", "82d", "1.6×") and
+ * sometimes as markup, because tables rendered with `html: true` carry it.
+ * A cell that is ONE value becomes a real number so it can be summed,
+ * averaged and pivoted; a percentage becomes the fraction with a percent
+ * format, so Excel shows 63.27% and averages it correctly rather than
+ * averaging the number 63.27 as if it were a count.
+ *
+ * A cell holding two values — the rate-over-count cells in Who Drives Each
+ * Move and the transition matrix use a <br> for exactly that — cannot be one
+ * number, so it is exported as readable text ("63.27% · 93") instead of being
+ * silently halved. Losing the typing on those two tables is the right trade
+ * against exporting a number that means something else.
+ *
+ * @returns {{v:(string|number), z?:string}}
+ */
+function xlsxCellValue(raw){
+  if(raw == null) return { v: '' };
+  if(typeof raw === 'number') return { v: isFinite(raw) ? raw : '' };
+  if(typeof raw === 'boolean') return { v: raw ? 'Yes' : 'No' };
+  let t = String(raw);
+  if(t.indexOf('<') >= 0){
+    // <br> separates two values in one cell; keep both, visibly.
+    t = t.replace(/<br\s*\/?>/gi, ' · ').replace(/<[^>]*>/g, '');
+  }
+  if(t.indexOf('&') >= 0){
+    t = t.replace(/&[a-z]+;|&#\d+;/gi, m => (XLSX_ENTITIES[m.toLowerCase()] !== undefined
+      ? XLSX_ENTITIES[m.toLowerCase()] : ' '));
+  }
+  t = t.replace(/\s+/g, ' ').trim();
+  if(t === '' || t === '—' || t === '-' || t === 'n/a') return { v: t };
+
+  const plain = n => parseFloat(String(n).replace(/,/g, ''));
+  let m = /^(-?[\d,]+(?:\.\d+)?)\s*%$/.exec(t);
+  if(m) return { v: plain(m[1]) / 100, z: '0.00%' };
+  m = /^₹\s*(-?[\d,]+(?:\.\d+)?)$/.exec(t);
+  if(m) return { v: plain(m[1]), z: '#,##0' };
+  m = /^(-?[\d,]+(?:\.\d+)?)\s*(?:d|×)$/.exec(t);
+  if(m) return { v: plain(m[1]) };
+  m = /^-?[\d,]+$/.exec(t);
+  if(m) return { v: plain(t), z: '#,##0' };
+  m = /^-?[\d,]*\.\d+$/.exec(t);
+  if(m) return { v: plain(t) };
+  return { v: t };
+}
+
+/**
+ * Write headers + rows to .xlsx, typing each cell and applying the number
+ * formats xlsxCellValue() asked for.
+ */
+function downloadTableAsXlsx(headers, rows, sheetName, fileName){
+  if(!window.XLSX){ alert('The spreadsheet library did not load, so Excel export is unavailable. Reload the page.'); return; }
+  const cells = rows.map(r => headers.map(h => xlsxCellValue(r[h])));
+  const aoa = [headers, ...cells.map(row => row.map(c => c.v))];
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  // Number formats have to be set on the sheet after the fact; aoa_to_sheet
+  // only carries values.
+  cells.forEach((row, ri) => row.forEach((c, ci) => {
+    if(!c.z) return;
+    const ref = XLSX.utils.encode_cell({ r: ri + 1, c: ci });
+    if(ws[ref] && typeof ws[ref].v === 'number') ws[ref].z = c.z;
+  }));
+  ws['!cols'] = headers.map((h, i) => ({
+    wch: Math.min(42, Math.max(String(h).length + 2,
+      ...cells.map(row => String(row[i] && row[i].v != null ? row[i].v : '').length + 2))),
+  }));
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, xlsxSheetName(sheetName));
+  XLSX.writeFile(wb, fileName);
+}
+
+/** The section heading above a table, for the sheet name and the file name. */
+function tableTitleFor(hostEl){
+  const sec = hostEl.closest ? (hostEl.closest('.section') || hostEl.parentElement) : null;
+  const h2 = sec ? sec.querySelector('h2') : null;
+  if(h2){
+    const c = h2.cloneNode(true);
+    c.querySelectorAll('button, .info-btn, a').forEach(n => n.remove());
+    const t = c.textContent.replace(/\s+/g, ' ').replace(/[·|]+\s*$/, '').trim();
+    if(t) return t;
+  }
+  return (hostEl.id || 'table').replace(/^tbl-/, '').replace(/-/g, ' ');
+}
+
+// Every table host gets a stable key, because the bar is found by lookup
+// rather than by adjacency — see attachTableDownload.
+let _dlSeq = 0;
+const tableDlKey = hostEl => (hostEl.dataset.dlKey
+  || (hostEl.dataset.dlKey = hostEl.id || ('tbl-anon-' + (++_dlSeq))));
+
+/**
+ * Put a download link above `hostEl`, as a SIBLING rather than inside it:
+ * table hosts are `.table-wrap`, which scrolls, and a button inside would
+ * scroll away with the rows.
+ *
+ * The bar is located by `data-for`, NOT by being the previous sibling, and
+ * this is load-bearing: attachMirrorScroll() inserts the top scrollbar
+ * immediately before every .table-wrap after each render, so an adjacency
+ * check stops finding the bar as soon as a mirror lands between the two. It
+ * looked fine on a first render and then bred a new button on every filter
+ * change — 33 after one pass, and climbing.
+ *
+ * For the same reason the bar goes ABOVE the mirror, so the order on screen
+ * stays download link, top scrollbar, table.
+ *
+ * Renderers run on every filter change, so the bar is created once per host
+ * and its handler rebound to the current data each time.
+ */
+function attachTableDownload(hostEl, headers, rows, opts){
+  if(!hostEl || !hostEl.parentNode) return;
+  if(opts && opts.noDownload) return;
+  // Nothing to download, and no button promising otherwise.
+  const data = (rows || []).filter(r => r && !r._blank);
+  const key = tableDlKey(hostEl);
+  const existing = hostEl.parentNode.querySelector(
+    '.tbl-dl-bar[data-for="' + (window.CSS && CSS.escape ? CSS.escape(key) : key) + '"]');
+  if(!data.length || (headers || []).length < 2){
+    if(existing) existing.remove();
+    return;
+  }
+  const bar = existing || (() => {
+    const d = document.createElement('div');
+    d.className = 'tbl-dl-bar';
+    d.setAttribute('data-for', key);
+    d.innerHTML = '<a href="#" class="tbl-dl" role="button">&darr; Excel</a>';
+    const prev = hostEl.previousElementSibling;
+    const before = (prev && prev.classList && prev.classList.contains('scroll-mirror')) ? prev : hostEl;
+    hostEl.parentNode.insertBefore(d, before);
+    return d;
+  })();
+  const link = bar.querySelector('.tbl-dl');
+  const title = tableTitleFor(hostEl);
+  link.title = 'Download these ' + fmtIN(data.length) + ' row(s) as shown — same columns, same sort, same filters';
+  link.onclick = e => {
+    e.preventDefault();
+    downloadTableAsXlsx(headers, data, title,
+      xlsxSlug(title) + '_' + new Date().toISOString().slice(0, 10) + '.xlsx');
+  };
 }
 
 // ---- heat tiers (quartile-based row highlighting) ----
@@ -215,6 +389,9 @@ function makeSortableTable(host, headers, rows, rerenderFn, opts = {}){
       rerenderFn();
     };
   });
+  // Rows in the order they are displayed, so a re-sort re-exports in the new
+  // order and the total row stays pinned last.
+  attachTableDownload(el, headers, [...body, ...totals], opts);
 }
 
 function updateDashboardHeaderFilters(){
