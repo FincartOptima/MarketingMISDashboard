@@ -378,7 +378,7 @@ const LD = (() => {
   // /api/data for every signed-in visitor; it only keeps the tab itself closed. To change the login:
   //   python -c "import hashlib;print(hashlib.pbkdf2_hmac('sha256',b'<username lower-case>:<password>',b'<salt>',200000).hex())"
   const LD_LOCK = { salt: '919316fa753e66e3c72253782f0d370d', iterations: 200000, sessionKey: 'ld_auth',
-                    verifier: '95733532cbce0f06c0bbe9c4a20c221bb48c8d2bb3d0af4df8c4285639c21d51' };
+                    verifier: 'a1a2b63d546731adf831eb44bdf9d29bf804bb28607ef2346971ecfe66f60158' };
   const unlocked = () => { try{ return sessionStorage.getItem(LD_LOCK.sessionKey) === '1'; }catch(e){ return false; } };
   async function lockDerive(username, password){
     const enc = new TextEncoder();
