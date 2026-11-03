@@ -166,8 +166,13 @@ const SORT_STATE = {};
 /** Numbers sort numerically even when formatted ("₹1,234", "12%"); text falls back to case-insensitive. */
 function sortVal(v){
   if(v == null || v === '' || v === '—') return typeof v === 'string' ? '' : 0;
-  const n = parseFloat(String(v).replace(/[₹,\s%]/g, ''));
-  return isNaN(n) ? String(v).toLowerCase() : n;
+  // Tables rendered with `html: true` hand us markup, so a numeric column
+  // like "<strong>1.9×</strong>" has to be unwrapped before it can be
+  // compared as a number — otherwise it sorts lexically on its own tags.
+  const plain = String(v).replace(/<[^>]*>/g, ' ').replace(/&[a-z]+;|&#\d+;/gi, ' ').trim();
+  if(plain === '' || plain === '—') return typeof v === 'string' ? '' : 0;
+  const n = parseFloat(plain.replace(/[₹,\s%×]/g, ''));
+  return isNaN(n) ? plain.toLowerCase() : n;
 }
 
 /**

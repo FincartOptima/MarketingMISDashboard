@@ -669,7 +669,32 @@ table.data.editable td input:focus{outline:2px solid var(--orange);background:va
 .act-filters label{
   font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);
 }
-.act-chart-wrap{height:280px;background:#fff;border:2px solid var(--line);padding:12px}
+.act-chart-wrap,.src-chart-wrap{height:280px;background:#fff;border:2px solid var(--line);padding:12px}
+/* ---- the insight callout (app-insights.js) ----
+   One finding, stated in words, above the table it came from. Tone is the
+   severity of the finding, matching the Data health panel's vocabulary so a
+   red left edge means the same thing everywhere on the dashboard. */
+.insight{border:2px solid var(--line);border-left:5px solid var(--muted);background:#fff;
+  padding:12px 16px;margin:0 0 14px}
+.insight-bad{border-left-color:#dc2626;background:#fef2f2}
+.insight-warn{border-left-color:#d97706;background:#fffbeb}
+.insight-good{border-left-color:#16a34a;background:#f0fdf4}
+.insight-info{border-left-color:#0284c7;background:#f0f9ff}
+.in-head{font:700 11px/1 inherit;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);
+  margin-bottom:7px}
+.in-verdict{font-size:14.5px;line-height:1.55;color:var(--text)}
+.in-points{margin:9px 0 0;padding-left:18px;display:grid;gap:5px}
+.in-points li{font-size:12.5px;line-height:1.55;color:var(--text)}
+.in-action{margin-top:10px}
+.in-act-btn{display:inline-block;font:700 12px/1 inherit;color:#fff;background:var(--orange);
+  padding:8px 13px;text-decoration:none;border:2px solid var(--orange)}
+.in-act-btn:hover{background:#fff;color:var(--orange)}
+.in-basis{margin-top:10px;padding-top:8px;border-top:1px solid var(--line);font-size:11px;
+  line-height:1.55;color:var(--muted)}
+/* An over-indexing cell, so the grid agrees with the verdict above it. */
+.in-hot{display:inline-block;padding:1px 5px}
+.in-hot-bad{background:#fee2e2;box-shadow:inset 0 0 0 1px #fca5a5}
+.in-hot-warn{background:#fef3c7;box-shadow:inset 0 0 0 1px #fcd34d}
 
 .dash-layout{display:flex;align-items:flex-start;gap:20px}
 .dash-subnav{
@@ -1461,13 +1486,48 @@ table.data.editable td input:focus{outline:2px solid var(--orange);background:va
 
         <!-- ===== Cost ===== -->
         <div class="dash-subpanel" id="dashsub-cost">
+          <!-- Source Quality: the conversion rate per source against what it costs.
+               Volume and quality point opposite ways here, and only the rate shows it. -->
+          <div class="section bar-green" id="sec-source-quality">
+            <h2>Source Quality &amp; Cost Efficiency
+              <button class="info-btn" data-info="source-quality" title="Table info">i</button>
+            </h2>
+            <div class="meta" id="source-note"></div>
+            <div id="source-insight"></div>
+            <div class="table-wrap" id="tbl-source-quality"></div>
+            <div class="hint">Costs come from the editable <strong>Cost Per Campaign</strong> tab;
+              <strong>n/a</strong> means that tab has no row for the source at all, which is not the same as a free
+              one.</div>
+          </div>
+
+          <div class="grid cols-2" id="sec-source-charts">
+            <div class="section bar-blue">
+              <h2>Conversion Rate by Source
+                <button class="info-btn" data-info="source-conv" title="Chart info">i</button>
+              </h2>
+              <div class="src-chart-wrap"><canvas id="source-conv-chart"></canvas></div>
+              <div class="hint" id="source-conv-hint"></div>
+            </div>
+            <div class="section bar-violet">
+              <h2>Share of Spend vs Share of Conversions
+                <button class="info-btn" data-info="source-spend" title="Chart info">i</button>
+              </h2>
+              <div class="src-chart-wrap"><canvas id="source-spend-chart"></canvas></div>
+              <div class="hint" id="source-spend-hint"></div>
+            </div>
+          </div>
+
           <div class="section bar-yellow" id="sec-cost-summary">
             <h2>Cost Summary by Campaign
               <button class="info-btn" data-info="cost-summary" title="Table info">i</button>
             </h2>
             <div id="legend-cost-summary"></div>
             <div class="table-wrap" id="tbl-cost-summary"></div>
-            <div class="hint">Costs from the editable <strong>Cost Per Campaign</strong> tab.</div>
+            <div class="hint">Costs from the editable <strong>Cost Per Campaign</strong> tab.
+              This table counts conversions <strong>landing</strong> in the selected months &mdash; a
+              conversion in June counts for June whatever month its lead came from. <strong>Source
+              Quality</strong> above instead follows the leads <em>created</em> in those months, which is
+              why its Converted column differs.</div>
           </div>
 
           <div class="section bar-red" id="sec-cpl-rm">
@@ -1576,6 +1636,9 @@ table.data.editable td input:focus{outline:2px solid var(--orange);background:va
 
           <div class="kpis" id="act-kpis"></div>
 
+          <!-- The finding, before the picture: what these numbers mean and who owns it. -->
+          <div id="act-insight"></div>
+
           <div class="section bar-violet">
             <h2>Where They Went Next
               <button class="info-btn" data-info="activity-flow" title="Flow info">i</button>
@@ -1583,6 +1646,17 @@ table.data.editable td input:focus{outline:2px solid var(--orange);background:va
             <div id="act-flow"></div>
             <div class="hint">Every card is clickable &mdash; it narrows the chart, the By Team table and the lead list
               below to those leads. Click it again to clear.</div>
+          </div>
+
+          <div class="section bar-red">
+            <h2>Who Drives Each Move
+              <button class="info-btn" data-info="activity-drivers" title="Table info">i</button>
+            </h2>
+            <div class="table-wrap" id="tbl-act-drivers"></div>
+            <div class="hint">Every cell is a share of <strong>that team&rsquo;s own</strong> cohort, not of the whole
+              cohort &mdash; so a big book cannot top a column by size alone. The bottom row is the benchmark; a tinted
+              cell is a team running at <strong>1.2&times;</strong> (amber) or <strong>1.5&times;</strong> (red) that
+              benchmark, and only teams with at least 30 leads are tinted.</div>
           </div>
 
           <div class="section bar-blue">
@@ -2372,7 +2446,7 @@ table.data.editable td input:focus{outline:2px solid var(--orange);background:va
     // Nothing below is requested until sign-in succeeds.
     MISAuth.ready(function(){
       var t = Date.now();
-      ['snapshot.js','categorized_leads_data.js','app-config.js','app-dateutils.js','app-state.js','app-dataload.js','app-filters.js','app-aggregators.js','app-rmperf.js','app-bd2.js','app-bd2-health.js','ld_leads_snapshot.js','app-ld.js','app-categorized.js','app-tables.js','app-activity.js','app-renderers.js','app-ui.js','app-health.js','app-bootstrap.js'].forEach(function(src){
+      ['snapshot.js','categorized_leads_data.js','app-config.js','app-dateutils.js','app-state.js','app-dataload.js','app-filters.js','app-aggregators.js','app-rmperf.js','app-bd2.js','app-bd2-health.js','ld_leads_snapshot.js','app-ld.js','app-categorized.js','app-tables.js','app-insights.js','app-activity.js','app-source.js','app-renderers.js','app-ui.js','app-health.js','app-bootstrap.js'].forEach(function(src){
         var s = document.createElement('script');
         s.src = src + '?t=' + t;
         s.async = false;

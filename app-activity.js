@@ -606,23 +606,42 @@ const activitySummaryCells = r => ({
   'Median Days Sitting': actDays(r.stuckMedianAge),
 });
 
+// "% Never Moved vs Average" is the column that turns this table into a
+// finding: 1.9x says the row is a problem, 1.0x says it is merely large.
+// A multiple rather than a percentage-point gap, because a multiple stays
+// comparable across From activities whose base rates differ wildly (7% of
+// Created never moves again; 99% of On Hold does not). Blank for a row too
+// small to judge, so nobody acts on two leads.
+const activityIndexCell = (r, bench) => (r._tot
+  ? '<strong>1.0&times;</strong>'
+  : (r.cohort < ACTIVITY_MIN_BASE
+    ? '<span style="color:#cbd5e1" title="Fewer than ' + ACTIVITY_MIN_BASE
+      + ' leads - too few to judge">&mdash;</span>'
+    : insightCell('<strong>' + (insightTimes(r.stuckPct, bench) || '&mdash;') + '</strong>',
+        insightIndex(r.stuckPct, bench))));
+
 function renderActivityByTeam(fan){
   const rows = activityGroup(fan, rec => activityTeamOf(rec.row)).sort((a, b) => b.stuck - a.stuck);
   const all = [...rows, activityTotalRow(fan)];
+  const bench = fan.cohort.length ? fan.stuck.length / fan.cohort.length : 0;
   applyHeatAndLegend(all, 'stuck', '#legend-act-team', 'Row heat by leads that never moved');
-  makeSortableTable('#tbl-act-team', ['Team', ...ACTIVITY_SUMMARY_HEADERS],
-    all.map(r => ({ Team: r.label, ...activitySummaryCells(r), _tot: !!r._tot, _heat: r._heat })),
-    () => renderActivityByTeam(fan));
+  makeSortableTable('#tbl-act-team', ['Team', ...ACTIVITY_SUMMARY_HEADERS, '% Never Moved vs Average'],
+    all.map(r => ({ Team: escHtml(r.label), ...activitySummaryCells(r),
+      '% Never Moved vs Average': activityIndexCell(r, bench),
+      _tot: !!r._tot, _heat: r._heat })),
+    () => renderActivityByTeam(fan), { html: true });
 }
 
 function renderActivityByRm(fan){
   const rows = activityGroup(fan, rec => rec.row.currentRmName || '(no RM)', rec => activityTeamOf(rec.row))
     .sort((a, b) => b.stuck - a.stuck);
-  makeSortableTable('#tbl-act-rm', ['RM', 'Team', ...ACTIVITY_SUMMARY_HEADERS],
+  const bench = fan.cohort.length ? fan.stuck.length / fan.cohort.length : 0;
+  makeSortableTable('#tbl-act-rm', ['RM', 'Team', ...ACTIVITY_SUMMARY_HEADERS, '% Never Moved vs Average'],
     [...rows, activityTotalRow(fan)].map(r => ({
-      RM: r.label, Team: r.extra || '', ...activitySummaryCells(r), _tot: !!r._tot,
+      RM: escHtml(r.label), Team: escHtml(r.extra || ''), ...activitySummaryCells(r),
+      '% Never Moved vs Average': activityIndexCell(r, bench), _tot: !!r._tot,
     })),
-    () => renderActivityByRm(fan));
+    () => renderActivityByRm(fan), { html: true });
 }
 
 function renderActivityByMonth(fan, byMonth){
@@ -811,10 +830,172 @@ function downloadActivityExcel(fan, recs){
   XLSX.writeFile(wb, `Activity_From_${slug(fan.from.label)}_${new Date().toISOString().slice(0, 10)}.xlsx`);
 }
 
+// ---- the finding -----------------------------------------------------------
+
+// A team with fewer than this many leads in the cohort is reported in the
+// tables but never named as best or worst - see rule 2 in app-insights.js.
+const ACTIVITY_MIN_BASE = 30;
+
+/**
+ * Team x destination, as each team's OWN rate rather than as counts.
+ *
+ * This is the table that answers "40% move to on hold - whose?". Counts
+ * cannot answer it: the biggest book has the most of every destination, so
+ * ranking by count always returns the same name and tells you nothing. Each
+ * cell here is the share of THAT team's own cohort, so a small team parking
+ * everything is visible next to a big team parking a third.
+ *
+ * @returns {{dests:Array, rows:Array, bench:Object}} `bench` holds the
+ *   whole-cohort rate per destination - the number each cell is judged against.
+ */
+function activityDrivers(fan){
+  const dests = fan.dests.map(d => d.act);
+  const m = new Map();
+  for(const rec of fan.cohort){
+    const team = activityTeamOf(rec.row);
+    if(!m.has(team)) m.set(team, { label: team, cohort: 0, hit: {}, stuck: 0, stuckAges: [] });
+    const g = m.get(team);
+    g.cohort++;
+    if(rec.dest) g.hit[rec.dest.key] = (g.hit[rec.dest.key] || 0) + 1;
+    else { g.stuck++; if(rec.ageDays != null) g.stuckAges.push(rec.ageDays); }
+  }
+  const n = fan.cohort.length;
+  const bench = { stuck: n ? fan.stuck.length / n : 0 };
+  for(const d of fan.dests) bench[d.act.key] = n ? d.recs.length / n : 0;
+  const rows = [...m.values()].map(g => {
+    g.rate = {};
+    for(const d of dests) g.rate[d.key] = g.cohort ? (g.hit[d.key] || 0) / g.cohort : 0;
+    g.stuckRate = g.cohort ? g.stuck / g.cohort : 0;
+    g.stuckMedian = activityStats(g.stuckAges).median;
+    g.judgeable = g.cohort >= ACTIVITY_MIN_BASE;
+    return g;
+  // Judgeable books first, worst of them at the top; the teams too small to
+  // read sink to the bottom. Sorting on rate alone put a 6-lead team at 100%
+  // in the first row, which is the exact noise rule 2 exists to keep out of
+  // sight — and the first row is the one people act on.
+  }).sort((a, b) => (b.judgeable - a.judgeable) || (b.stuckRate - a.stuckRate) || (b.cohort - a.cohort));
+  return { dests, rows, bench };
+}
+
+function renderActivityDrivers(fan){
+  const drv = activityDrivers(fan);
+  const dests = drv.dests, bench = drv.bench;
+  const ARROW = '→ ';
+  const headers = ['Team', 'Entered'].concat(dests.map(d => ARROW + d.label),
+    ['Never Moved', 'Median Days Sitting']);
+  const cell = (count, rate, benchRate, big) => {
+    if(!count) return '<span style="color:#cbd5e1">&mdash;</span>';
+    const body = '<strong>' + fmtPct(rate) + '</strong><br>'
+      + '<span style="font-size:10px;color:#64748b">' + fmtIN(count) + '</span>';
+    // Only flag a team big enough to judge, and only against a benchmark that
+    // exists; otherwise the grid lights up on noise.
+    return (big && benchRate > 0) ? insightCell(body, rate / benchRate) : body;
+  };
+  const out = drv.rows.map(g => {
+    const big = g.cohort >= ACTIVITY_MIN_BASE;
+    const o = {
+      Team: escHtml(g.label) + (insightIsPool(g.label)
+        ? ' <span style="font-size:10px;color:#94a3b8">(pool)</span>' : ''),
+      Entered: fmtIN(g.cohort),
+      'Never Moved': cell(g.stuck, g.stuckRate, bench.stuck, big),
+      'Median Days Sitting': actDays(g.stuckMedian),
+    };
+    dests.forEach(d => { o[ARROW + d.label] = cell(g.hit[d.key] || 0, g.rate[d.key], bench[d.key], big); });
+    return o;
+  });
+  const n = fan.cohort.length;
+  const tot = {
+    Team: '<strong>All teams (the benchmark)</strong>', Entered: fmtIN(n),
+    'Never Moved': '<strong>' + fmtPct(bench.stuck) + '</strong><br>'
+      + '<span style="font-size:10px;color:#64748b">' + fmtIN(fan.stuck.length) + '</span>',
+    'Median Days Sitting': actDays(activityAgeStats(fan.stuck).median), _tot: true,
+  };
+  fan.dests.forEach(d => {
+    tot[ARROW + d.act.label] = '<strong>' + fmtPct(bench[d.act.key]) + '</strong><br>'
+      + '<span style="font-size:10px;color:#64748b">' + fmtIN(d.recs.length) + '</span>';
+  });
+  out.push(tot);
+  renderTable('#tbl-act-drivers', headers, out, { html: true });
+}
+
+/**
+ * The headline verdict for the whole section.
+ *
+ * Built from rates, not counts, and it names the team only when the team
+ * clears ACTIVITY_MIN_BASE. The unassigned SV pool is reported on its own line
+ * because it is not a book anyone owns and it would otherwise win every
+ * ranking by sheer size.
+ */
+function activityInsight(fan){
+  const n = fan.cohort.length;
+  if(!n) return null;
+
+  const stuckRank = insightRank(
+    activityDrivers(fan).rows.map(g => ({ label: g.label, base: g.cohort, hits: g.stuck })),
+    { minBase: ACTIVITY_MIN_BASE });
+  const stuckPct = fan.stuck.length / n;
+  const ag = activityAgeStats(fan.stuck);
+  const from = escHtml(fan.from.label);
+
+  const biggest = [...fan.dests].sort((a, b) => b.recs.length - a.recs.length)[0];
+  const points = [];
+
+  // Where the cohort actually goes, so the verdict is not only bad news.
+  if(biggest && biggest.recs.length){
+    const st = activityMoveStats(biggest.recs);
+    points.push('Of those that do move, most go to <strong>' + escHtml(biggest.act.label) + '</strong> &mdash; '
+      + '<strong>' + fmtIN(biggest.recs.length) + '</strong> (' + fmtPct(biggest.recs.length / n)
+      + ') in a median of <strong>' + actDays(st.median) + '</strong>.');
+  }
+
+  // Rule 1: the named culprit is a rate against the average, never a count.
+  const spread = insightSpread(stuckRank, { noun: 'book', verb: 'leaves' });
+  if(spread) points.push(spread);
+
+  if(stuckRank.pool){
+    points.push('The biggest single pile is the unassigned <strong>' + escHtml(stuckRank.pool.label)
+      + '</strong> pool: <strong>' + fmtIN(stuckRank.pool.hits) + '</strong> of its '
+      + fmtIN(stuckRank.pool.base) + ' (' + fmtPct(stuckRank.pool.rate) + '). That is an ownership problem, '
+      + 'not a performance one &mdash; nobody is accountable for these until they are assigned.');
+  }
+
+  const dead = fan.dests.find(d => d.act.key === 'dead');
+  const conv = fan.dests.find(d => d.act.key === 'converted');
+  if(dead && conv && dead.recs.length > conv.recs.length * 2 && dead.recs.length >= 20){
+    points.push('<strong>' + fmtIN(dead.recs.length) + '</strong> went straight to <strong>Dead</strong> against '
+      + '<strong>' + fmtIN(conv.recs.length) + '</strong> straight to <strong>Converted</strong> &mdash; '
+      + insightTimes(dead.recs.length, conv.recs.length) + ' as many.');
+  }
+
+  const held = insightHeldNote(stuckRank, 'lead(s)');
+
+  return {
+    tone: stuckPct >= 0.5 ? 'bad' : (stuckPct >= 0.25 ? 'warn' : 'good'),
+    head: 'What this says',
+    verdict: '<strong>' + fmtPct(stuckPct) + '</strong> of the <strong>' + fmtIN(n)
+      + '</strong> leads that entered <strong>' + from + '</strong> have no later activity at all'
+      + (ag.median == null ? '.' : ' &mdash; a median of <strong>' + actDays(ag.median)
+        + '</strong> sitting, the oldest <strong>' + actDays(ag.max) + '</strong>.'),
+    points: points,
+    action: fan.stuck.length
+      ? '<a href="#" class="in-act-btn">Show me those ' + fmtIN(fan.stuck.length) + ' leads &rarr;</a>'
+      : '',
+    onAction: () => {
+      STATE.activity.focus = 'stuck';
+      STATE.activity.page = 1;
+      renderActivityChange();
+      const host = $('#tbl-act-detail');
+      if(host && host.scrollIntoView) host.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    },
+    basis: 'Rates are each team&rsquo;s share of its <em>own</em> cohort, so a large book cannot top the list '
+      + 'by size alone. ' + held + ' Teams are the lead&rsquo;s <strong>current</strong> owner.',
+  };
+}
+
 // ---- orchestration -------------------------------------------------------
 
-const ACTIVITY_HOSTS = ['#act-flow', '#tbl-act-dest', '#tbl-act-team', '#tbl-act-rm', '#tbl-act-month',
-  '#tbl-act-matrix', '#tbl-act-detail'];
+const ACTIVITY_HOSTS = ['#act-flow', '#act-insight', '#tbl-act-dest', '#tbl-act-drivers',
+  '#tbl-act-team', '#tbl-act-rm', '#tbl-act-month', '#tbl-act-matrix', '#tbl-act-detail'];
 
 function activityClear(html){
   _activityFiltersFor = null;
@@ -886,6 +1067,7 @@ function renderActivityChange(){
   }
 
   renderActivityFlow(fan);
+  insightCard('#act-insight', activityInsight(fan));
 
   const win = activityChartMonths(byMonth);
   renderActivityBucketChart(focus.recs);
@@ -900,6 +1082,7 @@ function renderActivityChange(){
     'Median over the leads that moved on, so a month where none did is left as a gap.', win);
 
   renderActivityDestinations(fan);
+  renderActivityDrivers(fan);
   renderActivityByTeam(fan);
   renderActivityByRm(fan);
   renderActivityByMonth(fan, byMonth);

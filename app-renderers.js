@@ -760,7 +760,7 @@ function renderCPC(){
     inp.oninput = () => {
       STATE.cost[+inp.dataset.r][+inp.dataset.c] = +inp.value || 0;
       persistOverride(CONFIG.STORAGE_KEYS.COST, 'Cost Per Campaign', STATE.cost);
-      renderCostSummary(); renderCplRm(); renderMTD();
+      renderSourceQuality(); renderCostSummary(); renderCplRm(); renderMTD();
     };
   });
 }
@@ -1202,6 +1202,7 @@ function renderDashboard(){
   renderRmTransferByTeam();
   renderCampaignByTeam();
   renderIncome();
+  renderSourceQuality();
   renderCostSummary();
   renderCplRm();
   renderStagnantInProcess();

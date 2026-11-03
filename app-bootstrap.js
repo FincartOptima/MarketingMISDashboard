@@ -102,6 +102,60 @@ const TABLE_INFO = {
     source: 'RAW_DATA sheet',
     note: 'Leads column uses CTM; In Process uses LPM; Converted uses CM. A lead created before the selected month that moved to IN PROCESS within it will appear in the In Process column but not in Leads — so Leads and Quality Leads counts are on different bases and will not add up directly.'
   },
+  'source-quality': {
+    title: 'Source Quality & Cost Efficiency',
+    desc: 'What each source is worth, rather than how much of it there is. For the leads <strong>created</strong> in '
+      + 'the selected months: how many there were, how many have converted <em>since</em>, what share that is, what the '
+      + 'source cost, and what each conversion therefore cost.<br><br>'
+      + '<strong>Conv %</strong> is the column that settles the volume-versus-quality argument, and it was the one '
+      + 'missing from Cost Summary by Campaign. <strong>Cost / Conversion</strong> is the spend divided by the '
+      + 'conversions it produced; it reads <strong>never</strong> when a source has spent money and converted nobody, '
+      + 'which is a different and worse thing than a blank.<br><br>'
+      + '<strong>How this differs from Cost Summary by Campaign, on purpose.</strong> This table follows a cohort: the '
+      + 'leads born in the window, counted against what became of them. That table counts conversions '
+      + '<em>landing</em> in the window, whatever month their lead came from. Both are valid; they answer different '
+      + 'questions and their Converted columns will not match.',
+    cols: 'Campaign Name (the field the Cost Per Campaign tab is keyed on, and what buildRawData() maps Category Name '
+      + 'onto) &middot; CTM (the lead\'s created month, for the cohort) &middot; CM (presence = converted, the '
+      + 'dashboard-wide rule) &middot; leadStatus (for In Process) &middot; leadHead &middot; Cost Per Campaign tab',
+    source: 'RAW_DATA sheet, Cost Per Campaign tab',
+    note: 'Grouped by <strong>campaign/category</strong> (Google, Social Media, Corporate, Branding, Referral) rather '
+      + 'than by platformName, because that is the only key the cost figures can be joined to.<br><br>'
+      + 'The header\'s <strong>Month</strong>, <strong>Lead Head</strong> and <strong>Ref+Cold</strong> filters apply. '
+      + 'The <strong>Status</strong> filter deliberately does <strong>not</strong>: narrowing the cohort to CONVERTED '
+      + 'would force every conversion rate to 100% and destroy the measure.<br><br>'
+      + '<strong>Watch the cost window.</strong> Spend is summed only over selected months the Cost Per Campaign tab '
+      + 'actually has a column for, while leads are counted over every selected month. When those differ the insight '
+      + 'box says so by name &mdash; CPL and Cost / Conversion are then covering a shorter period than the lead counts '
+      + 'and understate both. Either fill the missing months into the tab or select only the costed ones before '
+      + 'quoting the figures.<br><br>'
+      + '<strong>n/a</strong> in the Cost column means the tab has no row for that source at all; <strong>&#8377;0</strong> '
+      + 'means it has a row and the source is genuinely free (Referral, Branding). The difference changes what the row '
+      + 'means, so they are not merged.'
+  },
+  'source-conv': {
+    title: 'Conversion Rate by Source',
+    desc: 'The share of each source\'s <em>own</em> leads that has converted, ordered best to worst. One series (a '
+      + 'rate) on one axis; the bars darken with rank to reinforce the order, not to encode a second number. The hint '
+      + 'under the chart states the blended average the bars should be read against.',
+    cols: 'Campaign Name &middot; CTM (cohort month) &middot; CM (presence = converted)',
+    source: 'RAW_DATA sheet',
+    note: 'Sources with fewer than 30 leads in the window are left out entirely: a source with 2 leads and 1 conversion '
+      + 'reads 50% and would top the chart. They are still in the table.'
+  },
+  'source-spend': {
+    title: 'Share of Spend vs Share of Conversions',
+    desc: 'Two series, both percentages of their own total &mdash; spend as a share of all spend, conversions as a '
+      + 'share of all conversions &mdash; which is why they can share one axis. <strong>A blue bar taller than its '
+      + 'green one is a source costing more than it returns</strong>, and the size of the gap is the size of the '
+      + 'misallocation. A source with a green bar and no blue one is free.<br><br>'
+      + 'This is the chart that shows a channel can dominate the budget without dominating the result.',
+    cols: 'Campaign Name &middot; CTM (cohort month) &middot; CM (presence = converted) &middot; Cost Per Campaign tab',
+    source: 'RAW_DATA sheet, Cost Per Campaign tab',
+    note: 'Both totals are restricted the same way the table is, so the two sets of bars each sum to 100% across the '
+      + 'chart. Spend covers only the months the Cost Per Campaign tab has columns for &mdash; see the Source Quality '
+      + 'table info for what that does to the comparison.'
+  },
   'cost-summary': {
     title: 'Cost Summary by Campaign',
     desc: 'Campaign costs from the CPC tab summed over selected months, with CPL and CPQL calculated. <strong>Campaigns are dynamically read from the Cost Per Campaign data</strong> — new campaigns are automatically included. Quality Leads = rows where leadStatus is CONVERTED or IN PROCESS, filtered by CTM.',
@@ -169,6 +223,29 @@ const TABLE_INFO = {
     cols: 'The From activity stamp (month) · days to the next activity stamp',
     source: 'RAW_DATA sheet',
     note: 'Median, not mean, because a handful of leads revived after two years would otherwise swamp the line. The By Month table carries the mean alongside it if you want both.'
+  },
+  'activity-drivers': {
+    title: 'Who Drives Each Move',
+    desc: 'The same cohort as the flow above, split by the lead\'s <strong>current</strong> team, with every cell '
+      + 'expressed as a share of <strong>that team\'s own</strong> cohort.<br><br>'
+      + '<strong>Why rates and not counts.</strong> Asked as a count, "which team sends the most leads to On Hold?" '
+      + 'has the same answer in every column and every month: the largest book. It is a question about team size, not '
+      + 'about behaviour, and it is useless for deciding anything. Divided by each team\'s own cohort it becomes '
+      + 'answerable &mdash; a team of 146 parking 64% of them is visible beside a team of 10,334 parking 0.5%.<br><br>'
+      + 'The bottom row is the whole cohort, which is the <strong>benchmark</strong> every cell is measured against. A '
+      + 'cell is tinted amber at <strong>1.2&times;</strong> that benchmark and red at <strong>1.5&times;</strong>, and '
+      + 'only for teams holding at least 30 leads &mdash; a team with 3 leads and 2 parked reads 67% and means nothing. '
+      + 'Rows are sorted by <strong>% Never Moved</strong>, worst first.<br><br>'
+      + 'Each row sums across its destination columns plus Never Moved to 100% of that team\'s cohort, because the '
+      + 'flow counts each lead once, under its earliest stamp on or after the From stamp.',
+    cols: 'currentRmName &rarr; Team (via STATE.teamMap, then RM Master Mapping) &middot; the From activity stamp and '
+      + 'every destination stamp &middot; today\'s date (for Median Days Sitting)',
+    source: 'RAW_DATA sheet, EMPLOYEE_REF sheet',
+    note: '<strong>SV is not a team.</strong> It is where a lead whose current RM is in neither EMPLOYEE_REF nor the RM '
+      + 'Master Mapping lands, so it is usually the largest row and its numbers describe an ownership gap rather than '
+      + 'anyone\'s performance. It is labelled <em>(pool)</em> and is never named as the worst team in the verdict '
+      + 'above. The same applies to <strong>BD Team</strong> and <strong>DIY Team</strong> rows, which hold leads that '
+      + 'are worked outside the RM activity flow entirely.'
   },
   'activity-team': {
     title: 'Activity Change Days — By Team',

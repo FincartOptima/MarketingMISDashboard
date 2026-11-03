@@ -66,6 +66,8 @@ const STATE = {
   activityBucketChart: null,
   activityVolumeChart: null,
   activityTrendChart: null,
+  sourceConvChart: null,
+  sourceSpendChart: null,
 };
 
 function notUploadedHTML(key){
