@@ -565,6 +565,12 @@ table.data.editable td input:focus{outline:2px solid var(--orange);background:va
 .tf-card{background:#fff;border:2px solid var(--line);border-top:4px solid var(--violet);padding:12px 14px}
 .tf-team{font-size:11px;color:var(--muted);margin:-4px 0 8px}
 .tf-title{font-size:13px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px}
+/* Card heading row: title left, the card's own Excel link right (app-bd2.js). */
+.tf-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
+.tf-head .tf-title{margin-bottom:8px}
+.tf-dl{flex:0 0 auto;font:700 10px/1 inherit;color:var(--orange);text-decoration:none;
+  border:1px solid var(--line);background:#fff;padding:4px 7px;white-space:nowrap}
+.tf-dl:hover{background:var(--orange);color:#fff;border-color:var(--orange)}
 .tf-row{display:grid;grid-template-columns:128px 1fr 54px;align-items:center;gap:8px;margin:5px 0;font-size:12px}
 .tf-row.tf-sub{padding-left:10px}
 .tf-bar{height:12px;background:var(--panel2)}
@@ -1933,7 +1939,7 @@ table.data.editable td input:focus{outline:2px solid var(--orange);background:va
             <h2>Team-wise Flow
               <button class="info-btn" data-info="bd2-team" title="Flow info">i</button>
             </h2>
-            <div class="hint" style="margin:0 0 12px">One flow per team, from meetings scheduled to where the joined clients stand in Workpoint. Bars are scaled to each team's own meetings. Calls are not split by team in the BD Daily Log, so they are not part of this view. A lead's team is the team of its <strong>first RM</strong>; the exception is a lead first handled by someone on the <strong>BD team</strong> (Himani, Suhani, Kajal, Kunal, Srishti), which takes the team of its <strong>current RM</strong>. Leads not found in B2C are <strong>Unmatched</strong>.</div>
+            <div class="hint" style="margin:0 0 12px">One flow per team, from meetings scheduled to where the joined clients stand in Workpoint. Bars are scaled to each team's own meetings. Calls are not split by team in the BD Daily Log, so they are not part of this view. A lead's team is the team of its <strong>first RM</strong>; the exception is a lead first handled by someone on the <strong>BD team</strong> (Himani, Suhani, Kajal, Kunal, Srishti), which takes the team of its <strong>current RM</strong>. Leads not found in B2C are <strong>Unmatched</strong>. <strong>&darr; Excel</strong> on a card downloads the meetings behind that one team &mdash; the client, the RMs and the marketing platform for each.</div>
             <div id="bd2-team-basis" class="filter-note"></div>
             <div id="bd2-team-flows" class="tf-grid"></div>
           </div>
@@ -1961,7 +1967,7 @@ table.data.editable td input:focus{outline:2px solid var(--orange);background:va
               <button class="info-btn" data-info="bd2-rm" title="Flow info">i</button>
               <a href="#" id="bd2-rm-xlsx-dl" style="float:right;font-weight:400;text-transform:none;font-size:12px">&darr; Download Excel</a>
             </h2>
-            <div class="hint" style="margin:0 0 12px">One flow per RM, from meetings scheduled to where the joined clients stand in Workpoint, busiest RMs first. An RM is the lead's <strong>first RM</strong>; the exception is a lead first handled by someone on the <strong>BD team</strong> (Himani, Suhani, Kajal, Kunal, Srishti), which is shown under its <strong>current RM</strong>. Leads not found in B2C are <strong>Unmatched</strong>. Use the RM filter above to see just one RM. Calls are not split by RM in the BD Daily Log, so they are not part of this view.</div>
+            <div class="hint" style="margin:0 0 12px">One flow per RM, from meetings scheduled to where the joined clients stand in Workpoint, busiest RMs first. An RM is the lead's <strong>first RM</strong>; the exception is a lead first handled by someone on the <strong>BD team</strong> (Himani, Suhani, Kajal, Kunal, Srishti), which is shown under its <strong>current RM</strong>. Leads not found in B2C are <strong>Unmatched</strong>. Use the RM filter above to see just one RM. Calls are not split by RM in the BD Daily Log, so they are not part of this view. <strong>&darr; Excel</strong> on a card downloads the meetings behind that one RM &mdash; the client, the RMs and the marketing platform for each.</div>
             <div id="bd2-rm-basis" class="filter-note"></div>
             <div id="bd2-rm-flows" class="tf-grid"></div>
             <div id="bd2-rm-more" style="text-align:center;margin-top:14px"></div>

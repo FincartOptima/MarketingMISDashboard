@@ -190,7 +190,10 @@ function bd2ByTeam(){
   const teams = FIXED_TEAMS.filter(t => present.has(t));
   for(const t of present){ if(t !== BD2_UNMATCHED && !teams.includes(t)) teams.push(t); }
   if(present.has(BD2_UNMATCHED)) teams.push(BD2_UNMATCHED);
-  const out = teams.map(t => ({ label: t, ...bd2Tally(rows.filter(r => bd2Team(r) === t)) }));
+  const out = teams.map(t => {
+    const rs = rows.filter(r => bd2Team(r) === t);
+    return { label: t, _rows: rs, ...bd2Tally(rs) };
+  });
   out.push({ label: 'Grand Total', ...bd2Tally(rows), _tot: true });
   return out;
 }
@@ -205,7 +208,7 @@ function bd2ByRm(){
     byRm.get(k).push(r);
   }
   const out = [...byRm].map(([rm, rs]) => ({
-    label: rm, team: [...new Set(rs.map(bd2Team))].sort().join(' / '), ...bd2Tally(rs),
+    label: rm, team: [...new Set(rs.map(bd2Team))].sort().join(' / '), _rows: rs, ...bd2Tally(rs),
   }));
   out.sort((a, b) => b.meetings - a.meetings || a.label.localeCompare(b.label));
   out.push({ label: 'Grand Total', team: '', ...bd2Tally(rows), _tot: true });
@@ -241,6 +244,85 @@ function bd2MeetingLines(){
 
 const BD2_LINE_HEADERS = ['BD Rep', 'Email', 'Client Name', 'Date Assigned', 'GMeet Joined', 'Found in B2C', 'B2C Lead Status',
   'B2C Converted Month', 'Status (Workpoint)', 'First RM', 'First RM Team', 'Current RM', 'Current RM Team', 'Team Basis', 'Team', 'RM', 'Platform'];
+
+// ---- per-card client detail ----
+//
+// The meeting list above answers "does this number tie out". A card's download
+// answers the next question, "who are they" — so each line carries the client,
+// the RMs and the marketing platform the lead came through, in that order, every
+// field from the matched Workpoint (B2C) record. A lead whose email is not in B2C
+// (Unmatched) has its meeting columns filled and the B2C ones blank, rather than
+// being left out: an Unmatched card is exactly the list someone needs to chase.
+const BD2_DETAIL_HEADERS = [
+  // the meeting (BD tracker + Daily Log side)
+  'BD Rep', 'Month', 'Date Assigned', 'GMeet Joined', 'Status (Workpoint)', 'Found in B2C',
+  // the client (Workpoint B2C)
+  'Client Name', 'Email', 'Lead Head', 'B2C Lead Status', 'Created Date', 'Created Month',
+  'In Process Month', 'Converted Month', 'Converted Date', 'Annual Income', 'Client Category',
+  'Is Client', 'DND Status',
+  // the RMs
+  'RM (this card)', 'Team (this card)', 'Team Basis', 'First RM', 'First RM Team',
+  'Current RM', 'Current RM Team', 'Converted By',
+  // the marketing platform
+  'Platform', 'Campaign Name', 'Landing Page',
+  'UTM Source', 'UTM Medium', 'UTM Campaign', 'UTM Term', 'UTM Content',
+];
+
+/**
+ * One detail line per meeting in `rows`, in the BD2_DETAIL_HEADERS columns.
+ *
+ * @param {Array<object>} rows BD tracker rows (the meetings behind one card).
+ * @returns {Array<object>} one object per row, keyed by header.
+ */
+function bd2DetailLines(rows){
+  const b2c = buildB2CEmailIndex();
+  // The B2C export writes 'N/A' for an absent month or date; blank reads better in Excel.
+  const val = v => (v == null || v === 'N/A') ? '' : String(v);
+  return (rows || []).map(r => {
+    const b = r.crmMatched ? b2c[bdClientKey(r)] : null;
+    const i = bd2Info(r);
+    return {
+      'BD Rep': r.person || '',
+      Month: bd2Month(r) || '',
+      'Date Assigned': toIsoDate(r.dateAssigned) || '',
+      'GMeet Joined': ['Yes', 'No', 'Pending'].includes(r.gmeetJoined) ? r.gmeetJoined : 'Not Logged',
+      'Status (Workpoint)': bd2Status(r),
+      'Found in B2C': r.crmMatched ? 'Yes' : 'No',
+
+      'Client Name': b ? val(b.clientName) : '',
+      Email: String(r.email == null ? '' : r.email),
+      'Lead Head': b ? val(b.leadHead) : '',
+      'B2C Lead Status': b ? val(b.leadStatus) : '',
+      'Created Date': b ? val(b.createdDate) : '',
+      'Created Month': b ? val(b.CTM) : '',
+      'In Process Month': b ? val(b.LPM) : '',
+      'Converted Month': b ? val(b.CM) : '',
+      'Converted Date': b ? val(b.convertedDate) : '',
+      'Annual Income': b && b.annualIncome !== '' ? b.annualIncome : '',
+      'Client Category': b ? val(b.clientCategory) : '',
+      'Is Client': b ? val(b.isClient) : '',
+      'DND Status': b ? val(b.dndStatus) : '',
+
+      'RM (this card)': bd2Rm(r),
+      'Team (this card)': bd2Team(r),
+      'Team Basis': i.basis,
+      'First RM': i.firstRm,
+      'First RM Team': i.firstTeam,
+      'Current RM': i.currentRm,
+      'Current RM Team': b ? (b.Team || 'SV') : '',
+      'Converted By': b ? val(b.convertedByName) : '',
+
+      Platform: bd2Platform(r),
+      'Campaign Name': b ? val(b['Campaign Name']) : '',
+      'Landing Page': b ? val(b.landingPage) : '',
+      'UTM Source': b ? val(b.utmSource) : '',
+      'UTM Medium': b ? val(b.utmMedium) : '',
+      'UTM Campaign': b ? val(b.utmCampaign) : '',
+      'UTM Term': b ? val(b.utmTerm) : '',
+      'UTM Content': b ? val(b.utmContent) : '',
+    };
+  });
+}
 
 // How the meetings in the current selection were assigned to a team, for the note above the team view.
 function bd2TeamBasis(){
@@ -416,9 +498,102 @@ function renderBD2RmTable(){
   makeSortableTable('#tbl-bd2-rmflow', headers, rows, renderBD2RmTable);
 }
 
+// ---- per-card Excel download ----
+//
+// Each card carries its own download link, giving the client, RM and marketing
+// platform detail behind that one team's or RM's funnel (bd2DetailLines).
+//
+// The rows are held in a registry the link indexes into by id, NOT encoded in the
+// markup: a team or RM name goes into an attribute only as text, and looking that
+// name back up would have to re-derive the filtering the card was drawn from and
+// could answer with a different card once a filter changed. The registry holds the
+// rows the card actually drew.
+//
+// Cards are redrawn on every filter change, so a scope's entries are cleared before
+// it is drawn again; the click handler is delegated to the host, which outlives
+// those redraws, so it is bound once instead of per card.
+const _bd2Cards = new Map();            // card id -> { id, scope, title, subtitle, tally, rows }
+let _bd2CardSeq = 0;
+
+const bd2ClearCards = scope => {
+  for(const k of [..._bd2Cards.keys()]){ if(k.indexOf(scope + ':') === 0) _bd2Cards.delete(k); }
+};
+
+function bd2RegisterCard(scope, title, subtitle, tally, rows){
+  const card = { id: scope + ':' + (++_bd2CardSeq), scope, title, subtitle, tally, rows: rows || [] };
+  _bd2Cards.set(card.id, card);
+  return card;
+}
+
+/** Delegated once per host (#bd2-team-flows / #bd2-rm-flows), which outlives each redraw. */
+function bd2BindCardDownloads(host){
+  if(!host || host.dataset.cardDlBound) return;
+  host.dataset.cardDlBound = '1';
+  host.addEventListener('click', e => {
+    const link = e.target.closest && e.target.closest('.tf-dl');
+    if(!link) return;
+    e.preventDefault();
+    const card = _bd2Cards.get(link.dataset.bd2card);
+    if(card) downloadBd2CardWorkbook(card);
+  });
+}
+
+/** Clients sheet, plus a Card sheet holding the funnel, the filters and how the card was scoped. */
+function downloadBd2CardWorkbook(card){
+  if(!window.XLSX){ alert('The spreadsheet library did not load, so Excel export is unavailable. Reload the page.'); return; }
+  const lines = bd2DetailLines(card.rows);
+  if(!lines.length){ alert('No meetings behind this card, so there is nothing to download.'); return; }
+
+  const wsCl = XLSX.utils.aoa_to_sheet([BD2_DETAIL_HEADERS,
+    ...lines.map(l => BD2_DETAIL_HEADERS.map(h => l[h] == null ? '' : l[h]))]);
+  wsCl['!cols'] = BD2_DETAIL_HEADERS.map(h => ({
+    wch: Math.min(40, Math.max(h.length + 2, ...lines.map(l => String(l[h] == null ? '' : l[h]).length + 2))),
+  }));
+  wsCl['!autofilter'] = { ref: XLSX.utils.encode_range({ s: { r: 0, c: 0 },
+    e: { r: lines.length, c: BD2_DETAIL_HEADERS.length - 1 } }) };
+
+  const t = card.tally, f = STATE.bd2;
+  const what = card.scope === 'team' ? 'Team' : 'RM';
+  const pct = (a, b) => b > 0 ? a / b : '';
+  const sheetRows = [
+    [`BD Performance \u2014 ${what}: ${card.title}`], [],
+    [what, card.title],
+    ...(card.subtitle ? [[card.scope === 'team' ? 'Teams' : 'Team', card.subtitle.replace(/^Team:\s*/, '')]] : []),
+    [],
+    ['Filters in force when this was downloaded'],
+    ['Month', bd2SelectionText(f.month)], ['Team', bd2SelectionText(f.team)], ['RM', bd2SelectionText(f.rm)],
+    ['BD rep (Person)', bd2SelectionText(f.person)], ['Platform', bd2SelectionText(f.platform)], [],
+    ['The funnel on this card'],
+    ['Meetings Scheduled', t.meetings], ['Meetings Joined', t.joined], ['Joined % of scheduled', pct(t.joined, t.meetings)],
+    ['Not Joined', t.notJoined], ['Pending', t.pending], ['Not Logged', t.notLogged], [],
+    ['Of the meetings joined'],
+    ['In Process', t.inProcess], ['In Process % of joined', pct(t.inProcess, t.joined)],
+    ['Converted', t.converted], ['Converted % of joined', pct(t.converted, t.joined)],
+    ['Other States', t.other], ['Unmatched', t.unmatched], [],
+    ['Lines on the Clients sheet', lines.length],
+    ['Tie-out against Meetings Scheduled (should be 0)', t.meetings - lines.length], [],
+    [`${what} basis`, "A lead's RM is its first RM; if the first RM is on the BD team, the current RM. Team follows the same rule. A lead whose email is not found in B2C is Unmatched, with no client, RM or platform detail to show."],
+    ['Meetings', 'One BD tracker row, counted in the month of its Date Assigned. A client logged twice is two meetings, so two lines.'],
+    bd2DataTillRow(), ['Downloaded', new Date().toLocaleString('en-IN')],
+  ];
+  const wsCard = XLSX.utils.aoa_to_sheet(sheetRows);
+  wsCard['!cols'] = [{ wch: 44 }, { wch: 90 }];
+  sheetRows.forEach((r, i) => {
+    if(!/%/.test(String(r[0]))) return;
+    const cell = wsCard[XLSX.utils.encode_cell({ r: i, c: 1 })];
+    if(cell && typeof cell.v === 'number') cell.z = '0.0%';
+  });
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, wsCl, 'Clients');
+  XLSX.utils.book_append_sheet(wb, wsCard, 'Card');
+  XLSX.writeFile(wb, `BD_${what}_${xlsxSlug(card.title)}_${new Date().toISOString().slice(0, 10)}.xlsx`);
+}
+
 // One compact flow card (a team or an RM): bars are scaled to the card's own meetings, so the
 // shape of each funnel is comparable across cards while the numbers carry the size.
-function bd2FlowCard(title, subtitle, t){
+// `card`, the registry entry from bd2RegisterCard(), adds this card's download link.
+function bd2FlowCard(title, subtitle, t, card){
   const base = t.meetings;
   const row = (label, n, tone, sub) =>
     `<div class="tf-row${sub ? ' tf-sub' : ''}">
@@ -426,8 +601,11 @@ function bd2FlowCard(title, subtitle, t){
        <div class="tf-bar"><span class="tf-fill tf-${tone}" style="width:${Math.max(base ? n / base * 100 : 0, n ? 2 : 0)}%"></span></div>
        <div class="tf-num"><strong>${fmtIN(n)}</strong></div>
      </div>`;
+  const dl = card && card.rows.length
+    ? `<a href="#" class="tf-dl" role="button" data-bd2card="${escHtml(card.id)}" title="Download the ${fmtIN(card.rows.length)} meeting(s) behind this card &mdash; client, RM and marketing platform detail for each">&darr; Excel</a>`
+    : '';
   return `<div class="tf-card">
-      <div class="tf-title">${escHtml(title)}</div>
+      <div class="tf-head"><div class="tf-title">${escHtml(title)}</div>${dl}</div>
       ${subtitle ? `<div class="tf-team">${escHtml(subtitle)}</div>` : ''}
       ${row('Meetings Scheduled', t.meetings, 'violet')}
       ${row('Meeting Joined', t.joined, 'green')}
@@ -459,8 +637,12 @@ function renderBD2TeamFlows(){
   const basisEl = $('#bd2-team-basis');
   if(basisEl) basisEl.innerHTML = bd2BasisHtml('Team');
   const teams = bd2ByTeam().filter(r => !r._tot);
+  bd2ClearCards('team');
   if(!teams.length){ host.innerHTML = '<div class="hint">No meetings match these filters.</div>'; return; }
-  host.innerHTML = teams.map(t => bd2FlowCard(t.label, '', t)).join('');
+  host.innerHTML = teams
+    .map(t => bd2FlowCard(t.label, '', t, bd2RegisterCard('team', t.label, '', t, t._rows)))
+    .join('');
+  bd2BindCardDownloads(host);
 }
 
 // RM BD Performance: one flow per RM, most meetings first. With many RMs only the busiest are
@@ -472,13 +654,18 @@ function renderBD2RmFlows(){
   const basisEl = $('#bd2-rm-basis');
   if(basisEl) basisEl.innerHTML = bd2BasisHtml('RM');
   const rms = bd2ByRm().filter(r => !r._tot);
+  bd2ClearCards('rm');
   if(!rms.length){
     host.innerHTML = '<div class="hint">No meetings match these filters.</div>';
     if(more) more.innerHTML = '';
     return;
   }
   host.innerHTML = (STATE.bd2.rmAll ? rms : rms.slice(0, BD2_RM_CARDS))
-    .map(r => bd2FlowCard(r.label, r.team ? 'Team: ' + r.team : '', r)).join('');
+    .map(r => {
+      const sub = r.team ? 'Team: ' + r.team : '';
+      return bd2FlowCard(r.label, sub, r, bd2RegisterCard('rm', r.label, sub, r, r._rows));
+    }).join('');
+  bd2BindCardDownloads(host);
   if(more){
     more.innerHTML = rms.length > BD2_RM_CARDS
       ? `<button class="secondary" id="bd2-rm-more-btn">${STATE.bd2.rmAll ? `Show only the top ${BD2_RM_CARDS} RMs` : `Show all ${fmtIN(rms.length)} RMs`}</button>`
@@ -518,6 +705,10 @@ function renderBD2Mapping(){
 }
 
 // Excel: RM-wise flow for the current filters, the meetings behind it, and the selection with a tie-out.
+// STATE.dataTill is the banner stamp, already worded "Data till <date>", so it is
+// its own label in a two-column sheet rather than the value beside one.
+const bd2DataTillRow = () => [STATE.dataTill || 'Data till', ''];
+
 function bd2SelectionText(v){
   const s = bd2Sel(v);
   return s ? s.join(', ') : 'All';
@@ -557,7 +748,7 @@ function downloadBd2Workbook(){
     ['Unmapped with no email', map.noEmail], ['Whole Google Sheet: clients / mapped / unmapped', `${mapAll.clients} / ${mapAll.mapped} / ${mapAll.unmapped}`], [],
     ['RM basis', 'A lead\'s RM is its first RM; if the first RM is on the BD team, the current RM. Team follows the same rule. Leads whose email is not found in B2C are Unmatched.'],
     ['Meetings', 'One tracker row, counted in the month of its Date Assigned.'],
-    ['Data till', STATE.dataTill || ''], ['Downloaded', new Date().toLocaleString('en-IN')],
+    bd2DataTillRow(), ['Downloaded', new Date().toLocaleString('en-IN')],
   ]);
   wsSel['!cols'] = [{ wch: 28 }, { wch: 90 }];
 
