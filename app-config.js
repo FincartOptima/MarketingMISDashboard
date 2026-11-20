@@ -23,6 +23,26 @@ const CONFIG = {
     // here so the Raw Data tab reflects the whole loaded format.
     'leadOnHoldDate','leadFollowUpDate','leadDeadDate','isClient','dndStatus','utmId','utmSource','utmMedium','utmCampaign','utmTerm','utmContent'],
   B2B_RAW_COLUMNS: ['name','email','phone','companyName','companyEmail','leadHead','currentRmName','firstRmName','createdDate','CreateMonth','brokerName','brokerEmail','leadStatus','platformName','categoryName','landingPage','enquiryType'],
+  // ---- B2B Corporate Leads (app-b2b.js) ----
+  // Corporate-category leads arrive through one landing page per company
+  // workshop, named  Workshop<Company>-<Employee>_<Type>  — for example
+  // "WorkshopMaanAluminum-S_WR". The name is the only place the company, its
+  // owner and how it was sourced are recorded.
+  B2B_CATEGORY: 'Corporate',
+  // <Type>: how the company lead was sourced. Adding a code here is all the
+  // parser needs to start reading it.
+  B2B_LEAD_TYPES: {
+    FC: 'Google',
+    WR: 'LinkedIn / HR Referral / Referral',
+    RR: 'RM Referral',
+    B5: 'BSE 500 company',
+  },
+  // <Employee>: the single letter naming the Fincart team member who owns the
+  // company. A letter that turns up in a landing page but is missing here is
+  // reported, never guessed — R is in use today and has no name yet.
+  B2B_EMPLOYEE_CODES: { D: 'Devanshi', H: 'Himanshi', S: 'Shreya' },
+  // "Leads from Google (Corporate)" counts the Corporate leads whose landing page contains this text.
+  B2B_GOOGLE_MARKER: '_FC',
   // The lead activities the Activity Change Days section can measure between,
   // in lifecycle order. Each one is a single timestamp column in the FIN23
   // export recording the LAST time the lead entered that activity — there is

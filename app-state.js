@@ -44,6 +44,14 @@ const STATE = {
   lpTeamFilter: 'All',
   lpCampaignFilter: null,
   lpLandingPages: null,
+  // B2B Corporate Leads (Dashboard subtab): one filter per widget, each belonging to the table named in its key.
+  // Each is 'All' or a list. Only b2bCompanyEmployeeFilter starts as null — the first render then picks a single
+  // employee, so By Company opens short.
+  b2bTypeEmployeeFilter: 'All',
+  b2bEmployeeTypeFilter: 'All',
+  b2bEmployeeCompanyFilter: 'All',
+  b2bCompanyEmployeeFilter: null,
+  b2bCompanyNameFilter: 'All',
   revChart: null,
   statusChart: null,
   rawFilters: {},

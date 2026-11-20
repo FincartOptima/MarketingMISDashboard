@@ -256,43 +256,6 @@ function b2bKPI(){
   return STATE.b2b.filter(r => monthFilter(r.CreateMonth)).length;
 }
 
-function b2bByRMStatus(){
-  const data = STATE.b2b.filter(r => monthFilter(r.CreateMonth));
-  const B2B_STATUSES = ['ASSIGNED','DEAD','FOLLOW UP','ON HOLD','RE-ASSIGNED'];
-  const rms = Array.from(new Set(data.map(r => r.currentRmName).filter(Boolean))).sort();
-  const out = rms.map(rm => {
-    const sub = data.filter(r => r.currentRmName===rm);
-    const obj = {RM: rm}; let total = 0;
-    for(const st of B2B_STATUSES){ obj[st] = sub.filter(r => r.status===st).length; total += obj[st]; }
-    obj.Total = total;
-    return obj;
-  });
-  if(!out.length) return {statuses: B2B_STATUSES, data: []};
-  out.push(buildGrandTotalRow('RM', 'Grand Total', B2B_STATUSES, out, 'Total'));
-  return {statuses: B2B_STATUSES, data: out};
-}
-
-function renderB2BTable(){
-  if(!STATE.filesLoaded.b2b){ setNotUploaded('#tbl-b2b','b2b'); return; }
-  const {statuses, data} = b2bByRMStatus();
-  const monthLabel = hasSpecificMonths() ? effectiveMonths().join(', ') : 'All Months';
-  const title = 'B2B CORP LEADS — RM × STATUS  (' + monthLabel + ')';
-  const el = $('#b2b-table-title'); if(el) el.textContent = title;
-  const host = '#tbl-b2b';
-  if(!data.length){
-    $(host).innerHTML = '<div class="meta" style="padding:12px">No B2B data — B2B.xlsx was not found in the repo.</div>';
-    return;
-  }
-  const headers = ['RM', ...statuses, 'Total'];
-  const rows = data.map(r => {
-    const o = {RM: r.RM, _tot: !!r._tot};
-    statuses.forEach(s => o[s] = fmtIN(r[s]));
-    o.Total = fmtIN(r.Total);
-    return o;
-  });
-  renderTable(host, headers, rows);
-}
-
 function renderRMPerfFunnel(grand){
   const host = $('#rmperf-funnel'); if(!host) return;
   const stages = [

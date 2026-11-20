@@ -76,10 +76,29 @@ const TABLE_INFO = {
     source: 'RAW_DATA sheet, EMPLOYEE_REF sheet',
     note: 'Total Leads can exceed the Generated Leads KPI and the Campaign × Team table: those count leads CREATED in the period, whereas this counts every lead with a status event in it (an older lead converted this month is in CONVERTED, so it is in Total Leads too). The footnote under the table shows the exact difference. FirstRM mode shows the original team assignment before any transfers; RMs missing from EMPLOYEE_REF land on SV and are listed in the Data Health panel.'
   },
-  'workshop-status': {
-    title: 'Workshop Status Distribution',
-    desc: 'Status breakdown for BTL Marketing workshop leads, grouped by the person running the landing page. Landing pages containing "-D" are Devanshi\'s, "-H" are Himanshi\'s, "-S" are Shreya\'s; any BTL Marketing landing page matching none of these falls into Unclassified. Honors the global Month, Ref+Cold, and Status filters. <strong>Lead Conversion Rate</strong> = CONVERTED ÷ Total. <strong>Lead (In Process + Converted) Rate</strong> = (CONVERTED + IN PROCESS) ÷ Total.',
-    cols: 'platformName (= BTL Marketing only) · landingPage (substring match: -D / -H / -S) · leadStatus (CONVERTED / IN PROCESS / ASSIGNED / RE-ASSIGNED / FOLLOW UP / ON HOLD / DEAD) · CTM / LPM / CM (selected months, per status)',
+  'b2b-corp': {
+    title: 'B2B Corporate Leads',
+    desc: 'Corporate-category leads, read from each lead\'s landing page. Every workshop landing page is named <strong>Workshop&lt;Company&gt;-&lt;Employee&gt;_&lt;Type&gt;</strong> — for example WorkshopMaanAluminum-S_WR is company <em>MaanAluminum</em>, owned by employee <em>S</em>, sourced as <em>WR</em>.<br><br><strong>Employee</strong> is the Fincart team member who owns the company (D = Devanshi, H = Himanshi, S = Shreya). <strong>Type</strong> is how the company lead was sourced: <strong>FC</strong> = Google · <strong>WR</strong> = LinkedIn / HR referral / referral · <strong>RR</strong> = RM referral · <strong>B5</strong> = BSE 500 company. The type has to be the literal ending <strong>_FC / _WR / _RR / _B5</strong> — the same test as an Excel "contains _FC" filter — so the dashboard and a spreadsheet count the same leads.<br><br>Leads are counted by the month they were <strong>created</strong> and by their <strong>current status</strong>. <strong>Converted</strong> means a <strong>converted date</strong> and nothing else: the written status is not used, so a lead written RE-ASSIGNED that has a converted date is Converted. The Month, Ref+Cold, Status and Lead Head filters in the header all apply — Lead Head defaults to Primary, so Secondary leads are left out until it is set to All.<br><br><strong>Conv. Rate</strong> = Converted ÷ Corporate Leads. <strong>QL Conversion Rate</strong> = (Converted + In Process) ÷ Corporate Leads, the same formula as the Overview\'s QL Conversion Rate. <strong>Leads Generated from Google (Corporate)</strong> = the leads in the Corporate Leads card, narrowed to those whose landing page contains <strong>_FC</strong>; it is also on the Overview.<br><br>Landing-page names are typed by hand. The <strong>company</strong> and the <strong>employee</strong> are read from the page whatever its ending (<em>-H-FC</em> is plainly Himanshi\'s), but the <strong>type</strong> must be the literal ending. A page whose ending is not exactly <em>_FC / _WR / _RR / _B5</em> (a space or hyphen in place of the underscore) keeps its company and employee — so it is in By Employee and By Company — but its lead type is <strong>Unclassified</strong>, so it is in no type row and not in the Google card; it is listed in the data notes at the top of this tab with the fix. A page with no readable company at all is Unclassified throughout. Every lead stays in every total. Harmless slips (a trailing "_", lower case, the "Worshop" typo) are read and listed as repairs.<br><br>Every table has an <strong>Excel</strong> button that downloads the <strong>clients behind it</strong>, one row each (employee, company, lead type, client name and email, created date, status, RMs, landing page), under the same filters the table is showing.',
+    cols: 'categoryName (= Corporate) · landingPage (read into company / employee / type; contains _FC for the Google card) · leadStatus · convertedDate (Converted) · CTM (Created Month, selected months) · leadHead (Lead Head filter)',
+    source: 'RAW_DATA sheet (B2C lead file)',
+    note: 'Companies counts distinct company names, ignoring case and spacing. A company sourced two ways (for instance an FC and a WR landing page) is counted once in the Grand Total but under each type in By Lead Type.'
+  },
+  'b2b-type': {
+    title: 'B2B Corporate Leads — By Lead Type',
+    desc: 'One row per way a company lead was sourced (FC / WR / RR / B5), with the companies, the leads that registered through them, and where those leads stand today. <strong>Conv. Rate</strong> = Converted ÷ Leads. <strong>QL Conv. Rate</strong> = (Converted + In Process) ÷ Leads. <strong>Unclassified</strong> holds leads whose landing page does not end in a valid _FC / _WR / _RR / _B5 (or has no readable company); their employee and company are still known, so they are counted in By Employee and By Company.<br><br>The <strong>Employee</strong> filter narrows the table to the leads of the chosen employees (D / H / S / others, or several together); with All selected every lead is counted. It applies to this table only, and the Excel button downloads the clients left after it.',
+    cols: 'landingPage (the _FC / _WR / _RR / _B5 ending, and the employee letter for the filter) · leadStatus · convertedDate · CTM (selected months)',
+    source: 'RAW_DATA sheet'
+  },
+  'b2b-employee': {
+    title: 'B2B Corporate Leads — By Employee',
+    desc: 'One row per Fincart employee named in the landing pages (the letter between "-" and "_"), with the companies they own, the leads those companies produced and their status. A letter with no name in CONFIG.B2B_EMPLOYEE_CODES shows as "<letter> (not mapped)" rather than being guessed. Pages with no employee part are counted under "(no employee in landing page)".<br><br>Two filters, both All by default and both applying to this table only: <strong>Lead Type</strong> keeps leads sourced a given way (FC / WR / RR / B5, or several together), and <strong>Company</strong> then keeps the chosen companies. The Company list offers only the companies of the chosen lead types, and resets to All when they change.',
+    cols: 'landingPage (the letter after the last "-", and the company) · leadStatus · convertedDate · CTM (selected months)',
+    source: 'RAW_DATA sheet'
+  },
+  'b2b-company': {
+    title: 'B2B Corporate Leads — By Company',
+    desc: 'One row per employee, company and lead type, with its leads and their status; click a heading to sort. A company sourced two ways appears once per way. Names that differ only by capital letters or spaces are the same company.<br><br>The table opens on <strong>one employee</strong> (the first in the list) so it stays short. The <strong>Employee</strong> filter picks others, or All; the <strong>Company</strong> filter then lists only the companies of the chosen employees, and is reset whenever the employees change. Both apply to this table only.',
+    cols: 'landingPage (company, employee, type) · leadStatus · CM · CTM (selected months)',
     source: 'RAW_DATA sheet'
   },
   'rm-transfer': {
@@ -281,12 +300,6 @@ const TABLE_INFO = {
     cols: 'clientName · currentRmName · Team · leadStatus · platformName · Campaign Name · the From activity stamp · the next activity and its stamp · days between them (or days since, for a stalled lead)',
     source: 'RAW_DATA sheet, EMPLOYEE_REF sheet',
     note: '<strong>Current Status</strong> is the lead\'s status now, which need not match either activity: a lead that moved On Hold → In Process in March can be CONVERTED today. <strong>Next Activity</strong> reads "none yet" when the lead has no stamp after the From stamp — either none at all, or only ones dated before it.'
-  },
-  'b2b': {
-    title: 'B2B Corp Leads — RM × Status',
-    desc: 'B2B corporate lead counts by RM and status, filtered by CreateMonth. Requires separate B2B file upload.',
-    cols: 'currentRmName (all RM names) · leadStatus (all statuses) · CreateMonth (selected months)',
-    source: 'B2B Corporate Lead File'
   },
   'rmperf-funnel': {
     title: 'Conversion Funnel',

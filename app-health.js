@@ -230,6 +230,7 @@ function dataHealthChecks(){
   if(bind) add('warn', 'bindings', bind.headline, bind.detail, bind.fix);
   const rev = rmRevenueIssueReport();
   if(rev) add('warn', 'revenue', rev.headline, rev.detail, rev.fix);
+  for(const rep of b2bIssueReports()) add(rep.level, rep.id, rep.headline, rep.detail, rep.fix);
   if(STATE.filesLoaded.bd){
     const bd = bd2HealthSummary();
     if(bd) add(bd.level, 'bd-tracker', bd.title, bd.detail, bd.fix);

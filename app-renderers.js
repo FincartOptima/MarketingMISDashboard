@@ -33,12 +33,13 @@ function renderLiveKPIs(){
     {label:'Same Month Converted', value: k.sameConv!==null ? fmtIN(k.sameConv) : '—', tone:'green'},
     {label:'Same Month InProcess', value: k.sameIP!==null ? fmtIN(k.sameIP) : '—', tone:'cyan'},
     {label:'B2B Corp Leads', value: fmtIN(b2bKPI()), tone:'violet'},
+    b2bGoogleCard(),
   ];
   const el = $('#live-kpis');
   el.innerHTML = '<div style="font-size:12px;color:#cfd9f0;margin-bottom:6px;font-weight:600">▲ Live Data '+hint+'</div>' +
     '<div class="live-kpi-grid">' +
     cards.map(c => `
-    <div class="kpi kpi-${c.tone}">
+    <div class="kpi kpi-${c.tone}"${c.title ? ` title="${escHtml(c.title)}"` : ''}>
       <div class="kpi-value">${c.value}</div>
       <div class="kpi-label">${c.label}</div>
     </div>`).join('') + '</div>';
@@ -1234,27 +1235,9 @@ function renderDashboard(){
   renderCplRm();
   renderStagnantInProcess();
   renderActivityChange();
-  renderB2BTable();
-  renderWorkshopStatus();
+  renderB2BCorp();
   renderDataHealth();     // last: reads the table-shape guard the renders above feed
   requestAnimationFrame(attachAllMirrors);
-}
-
-function renderWorkshopStatus(){
-  if(!STATE.filesLoaded.fin23){ setNotUploaded('#tbl-workshop-status','fin23'); $('#legend-workshop-status').innerHTML=''; return; }
-  const data = workshopStatusDistribution();
-  applyHeatAndLegend(data, 'Total', '#legend-workshop-status', 'Row heat by Total');
-  const headers = ['Person', ...STATUSES, 'Total', 'Lead Conversion Rate', 'Lead (In Process + Converted) Rate'];
-  const rows = data.map(r => {
-    const o = {Person: r.Person};
-    STATUSES.forEach(s => o[s] = fmtIN(r[s]));
-    o.Total = fmtIN(r.Total);
-    o['Lead Conversion Rate'] = fmtPct(r['Lead Conversion Rate']);
-    o['Lead (In Process + Converted) Rate'] = fmtPct(r['Quality Lead Rate']);
-    o._tot = !!r._tot; o._heat = r._heat;
-    return o;
-  });
-  renderTable('#tbl-workshop-status', headers, rows);
 }
 
 function renderAll(){

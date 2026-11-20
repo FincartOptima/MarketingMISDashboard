@@ -772,40 +772,6 @@ function stagnantInProcessTeamSummary(){
   return out;
 }
 
-// Landing pages under the BTL Marketing platform are run by three people;
-// the owner is encoded as a "-D"/"-H"/"-S" suffix in the landing page name.
-function workshopOwnerForLandingPage(lp){
-  const s = (lp || '').toString();
-  if(s.includes('-D')) return 'Devanshi';
-  if(s.includes('-H')) return 'Himanshi';
-  if(s.includes('-S')) return 'Shreya';
-  return 'Unclassified';
-}
-
-function workshopStatusDistribution(){
-  const rows = applyRefColdFilter(STATE.raw).filter(r => r.platformName === 'BTL Marketing');
-  const owners = ['Devanshi','Himanshi','Shreya','Unclassified'];
-  const out = owners.map(owner => {
-    const subset = rows.filter(r => workshopOwnerForLandingPage(r.landingPage) === owner);
-    const obj = {Person: owner}; let total = 0;
-    for(const st of STATUSES){
-      const pool = st === 'CONVERTED'
-        ? subset.filter(r => isConvertedLead(r, monthFilter))
-        : subset.filter(r => r.leadStatus===st && !isConvertedLead(r) && monthFilter(r[statusMonthCol(st)]));
-      obj[st] = pool.length; total += pool.length;
-    }
-    obj.Total = total;
-    obj['Lead Conversion Rate'] = total>0 ? (obj.CONVERTED||0)/total : 0;
-    obj['Quality Lead Rate']    = total>0 ? ((obj.CONVERTED||0)+(obj['IN PROCESS']||0))/total : 0;
-    return obj;
-  }).filter(r => r.Total > 0 || r.Person !== 'Unclassified');
-  const gt = buildGrandTotalRow('Person', 'Grand Total', STATUSES, out, 'Total');
-  gt['Lead Conversion Rate'] = gt.Total>0 ? (gt.CONVERTED||0)/gt.Total : 0;
-  gt['Quality Lead Rate']    = gt.Total>0 ? ((gt.CONVERTED||0)+(gt['IN PROCESS']||0))/gt.Total : 0;
-  out.push(gt);
-  return out;
-}
-
 // ---- BD Performance: tracker <-> B2C matching ----
 // A tracker row is matched to its B2C record by email only: tracker Email <-> B2C userId
 // (despite the name, the client's email). annotateBDWithB2CMatch() in app-state.js makes

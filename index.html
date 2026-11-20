@@ -1564,21 +1564,63 @@ table.data.editable td input:focus{outline:2px solid var(--orange);background:va
 
         <!-- ===== B2B Corporate Leads ===== -->
         <div class="dash-subpanel" id="dashsub-b2b">
-          <div class="section bar-orange" id="sec-b2b" style="border-top-color:var(--orange)">
-            <h2 id="b2b-table-title">B2B Corp Leads — RM × Status
-              <button class="info-btn" data-info="b2b" title="Table info">i</button>
+          <div id="b2b-guards"></div>
+
+          <div class="section bar-orange" id="sec-b2b-corp" style="border-top-color:var(--orange)">
+            <h2>B2B Corporate Leads
+              <button class="info-btn" data-info="b2b-corp" title="Table info">i</button>
             </h2>
-            <div class="table-wrap" id="tbl-b2b"></div>
-            <div class="hint">Add <strong>B2B.xlsx</strong> to the repo to populate this table.</div>
+            <div class="hint" id="b2b-corp-scope"></div>
+            <div class="hint">Read from each lead's landing page: <strong>Workshop&lt;Company&gt;-&lt;Employee&gt;_&lt;Type&gt;</strong>, e.g. WorkshopMaanAluminum-S_WR. Type: <strong>FC</strong> Google · <strong>WR</strong> LinkedIn / HR referral / referral · <strong>RR</strong> RM referral · <strong>B5</strong> BSE 500 company.</div>
+            <div class="kpis" id="b2b-corp-kpis" style="margin-top:14px"></div>
           </div>
 
-          <div class="section bar-cyan" id="sec-workshop">
-            <h2>Workshop Status Distribution
-              <button class="info-btn" data-info="workshop-status" title="Table info">i</button>
+          <div class="section bar-violet" id="sec-b2b-type">
+            <h2>By Lead Type
+              <button class="info-btn" data-info="b2b-type" title="Table info">i</button>
             </h2>
-            <div id="legend-workshop-status"></div>
-            <div class="table-wrap" id="tbl-workshop-status"></div>
-            <div class="hint">Platform = <strong>BTL Marketing</strong> only. Landing pages containing "-D" → Devanshi, "-H" → Himanshi, "-S" → Shreya.</div>
+            <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:8px;align-items:center">
+              <div style="display:flex;align-items:center;gap:6px">
+                <label style="font-size:12px;color:var(--muted)">Employee</label>
+                <div id="b2b-type-employee-filter-wrap"></div>
+              </div>
+            </div>
+            <div class="table-wrap" id="tbl-b2b-type"></div>
+            <div class="hint" id="b2b-type-note"></div>
+          </div>
+
+          <div class="section bar-cyan" id="sec-b2b-employee">
+            <h2>By Employee
+              <button class="info-btn" data-info="b2b-employee" title="Table info">i</button>
+            </h2>
+            <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:8px;align-items:center">
+              <div style="display:flex;align-items:center;gap:6px">
+                <label style="font-size:12px;color:var(--muted)">Lead Type</label>
+                <div id="b2b-employee-type-filter-wrap"></div>
+              </div>
+              <div style="display:flex;align-items:center;gap:6px">
+                <label style="font-size:12px;color:var(--muted)">Company</label>
+                <div id="b2b-employee-company-filter-wrap"></div>
+              </div>
+            </div>
+            <div class="table-wrap" id="tbl-b2b-employee"></div>
+          </div>
+
+          <div class="section bar-pink" id="sec-b2b-company">
+            <h2>By Company
+              <button class="info-btn" data-info="b2b-company" title="Table info">i</button>
+            </h2>
+            <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:8px;align-items:center">
+              <div style="display:flex;align-items:center;gap:6px">
+                <label style="font-size:12px;color:var(--muted)">Employee</label>
+                <div id="b2b-company-employee-filter-wrap"></div>
+              </div>
+              <div style="display:flex;align-items:center;gap:6px">
+                <label style="font-size:12px;color:var(--muted)">Company</label>
+                <div id="b2b-company-company-filter-wrap"></div>
+              </div>
+            </div>
+            <div class="table-wrap" id="tbl-b2b-company"></div>
           </div>
         </div>
 
@@ -2458,7 +2500,7 @@ table.data.editable td input:focus{outline:2px solid var(--orange);background:va
     // Nothing below is requested until sign-in succeeds.
     MISAuth.ready(function(){
       var t = Date.now();
-      ['snapshot.js','categorized_leads_data.js','app-config.js','app-dateutils.js','app-state.js','app-dataload.js','app-filters.js','app-aggregators.js','app-rmperf.js','app-bd2.js','app-bd2-health.js','ld_leads_snapshot.js','app-ld.js','app-categorized.js','app-tables.js','app-insights.js','app-activity.js','app-source.js','app-renderers.js','app-ui.js','app-health.js','app-bootstrap.js'].forEach(function(src){
+      ['snapshot.js','categorized_leads_data.js','app-config.js','app-dateutils.js','app-state.js','app-dataload.js','app-filters.js','app-aggregators.js','app-rmperf.js','app-b2b.js','app-b2b-view.js','app-bd2.js','app-bd2-health.js','ld_leads_snapshot.js','app-ld.js','app-categorized.js','app-tables.js','app-insights.js','app-activity.js','app-source.js','app-renderers.js','app-ui.js','app-health.js','app-bootstrap.js'].forEach(function(src){
         var s = document.createElement('script');
         s.src = src + '?t=' + t;
         s.async = false;

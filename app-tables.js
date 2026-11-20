@@ -105,6 +105,11 @@ function downloadRowsAsXlsx(headers, rows, sheetName, fileName){
 // in the order currently sorted, under the filters currently applied. That is
 // the point — someone asking for "this table in Excel" means the thing they
 // are looking at, not the unfiltered dataset behind it.
+//
+// The one exception is a table that passes `opts.download = {headers, rows,
+// name}`: its button exports THOSE rows instead — the client-level records
+// the summary was counted from (B2B Corporate Leads) — under the same filters
+// the table is showing. The title and tooltip say so.
 
 /** Excel forbids []:*?/\ in a sheet name and truncates past 31 characters. */
 const xlsxSheetName = name => (String(name || 'Sheet').replace(/[[\]:*?\/\\]/g, ' ')
@@ -253,11 +258,15 @@ function attachTableDownload(hostEl, headers, rows, opts){
     return d;
   })();
   const link = bar.querySelector('.tbl-dl');
-  const title = tableTitleFor(hostEl);
-  link.title = 'Download these ' + fmtIN(data.length) + ' row(s) as shown — same columns, same sort, same filters';
+  const clients = opts && opts.download;
+  const title = (clients && clients.name) || tableTitleFor(hostEl);
+  link.title = clients
+    ? 'Download the ' + fmtIN(clients.rows.length) + ' client(s) behind this table, one row each — same filters'
+    : 'Download these ' + fmtIN(data.length) + ' row(s) as shown — same columns, same sort, same filters';
   link.onclick = e => {
     e.preventDefault();
-    downloadTableAsXlsx(headers, data, title,
+    const out = clients || { headers, rows: data };
+    downloadTableAsXlsx(out.headers, out.rows, title,
       xlsxSlug(title) + '_' + new Date().toISOString().slice(0, 10) + '.xlsx');
   };
 }
