@@ -11,7 +11,10 @@
 # normalised email rather than the email itself, so the file carries no client emails or names.
 #
 #   python build_ld_snapshot.py --leads "<all-time FIN export>.xlsx" --ld "<L&D workbook>.xlsx"
-#                               [--categories B2C.xlsx]
+#                               [--categories B2C.xlsx] [--as-of YYYY-MM-DD]
+#
+# The file records the date of the export it was built from (`asOf`, read from the export's file name
+# unless --as-of is given): that, not the day this script ran, is how old every status in it is.
 import argparse
 import hashlib
 import json
@@ -43,6 +46,16 @@ def norm_key(v):
 
 def hash_key(key):
     return hashlib.sha256(key.encode('utf-8')).hexdigest()[:16]
+
+
+def export_date(path, override=''):
+    """YYYY-MM-DD the lead export was taken: --as-of, else the date in its file name, else ''."""
+    if override:
+        if not re.fullmatch(r'\d{4}-\d{2}-\d{2}', override):
+            raise SystemExit(f'--as-of must look like 2026-08-07, got {override!r}')
+        return override
+    found = re.search(r'\d{4}-\d{2}-\d{2}', os.path.basename(path))
+    return found.group(0) if found else ''
 
 
 def s(v):
@@ -78,6 +91,7 @@ def main():
     ap.add_argument('--leads', required=True, help='all-time FIN lead export (.xlsx, sheet "Data")')
     ap.add_argument('--ld', required=True, help='L&D Financial Planning Tickets Summary workbook (.xlsx)')
     ap.add_argument('--categories', help='B2C export carrying clientCategory (Alpha/Beta/Gamma...)')
+    ap.add_argument('--as-of', default='', help='date the lead export was taken (default: from its file name)')
     ap.add_argument('--out', default=os.path.join(os.path.dirname(os.path.abspath(__file__)), 'ld_leads_snapshot.js'))
     args = ap.parse_args()
 
@@ -117,6 +131,7 @@ def main():
     payload = {
         'generated': datetime.now().strftime('%d %b %Y, %I:%M %p'),
         'leadFile': os.path.basename(args.leads),
+        'asOf': export_date(args.leads, args.as_of),
         'fields': ['leadStatus', 'createdDate', 'convertedDate', 'currentRmName', 'clientCategory',
                    'platformName', 'landingPage'],
         'rows': rows,

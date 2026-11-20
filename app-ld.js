@@ -12,7 +12,9 @@
 //                     The live B2C record always wins; regenerate with build_ld_snapshot.py.
 // Rules carried over unchanged:
 //   - clients are de-duplicated on a normalised email (ldNormKey) across every L&D tab;
-//   - only clients found in the lead data count in any analysis; the rest are listed as Unmapped;
+//   - only clients found in the lead data count in any analysis; the rest are listed as Unmapped
+//     (a near-match email is offered as a hint, never joined);
+//   - a lead's status follows the dashboard-wide converted-date rule (app-ld-lead.js: ldStatusOf);
 //   - month filters mean "active in that month", and ticket subjects / plan approvals are
 //     month-scoped too, so activity in one month never makes a client count in another.
 // Everything lives inside the LD closure so its many small names cannot collide with the other
@@ -128,7 +130,9 @@ const LD = (() => {
   // ---------- lead data ----------
   // email key -> Workpoint record: the daily B2C row first (Primary lead head wins on a repeat, as
   // in buildB2CEmailIndex), else the hard-coded snapshot. Team follows the dashboard-wide rule
-  // (the current RM's team, SV when unknown) so team names match every other tab.
+  // (the current RM's team, SV when unknown) so team names match every other tab. Status follows the
+  // dashboard-wide converted-date rule (ldStatusOf): a lead with a converted date is CONVERTED, whatever
+  // its written status; convertedByDate counts the clients that rule moved.
   async function leadLookup(keys){
     const live = new Map();
     for(const r of STATE.raw || []){
@@ -139,12 +143,17 @@ const LD = (() => {
     }
     const snap = (window.LD_LEAD_SNAPSHOT && window.LD_LEAD_SNAPSHOT.rows) || {};
     const out = new Map();
-    let fromLive = 0, fromSnap = 0;
+    let fromLive = 0, fromSnap = 0, convertedByDate = 0;
+    const settle = (written, hasConvertedDate) => {
+      const status = ldStatusOf(written, hasConvertedDate);
+      if(status !== (written || 'BLANK')) convertedByDate++;
+      return status;
+    };
     for(const k of keys){
       const r = live.get(k);
       if(r){
         const cat = clientTier(r.clientCategory);
-        out.set(k, { status: r.leadStatus || 'BLANK', rm: r.currentRmName || '', team: r.Team || 'SV',
+        out.set(k, { status: settle(r.leadStatus, isConvertedLead(r)), rm: r.currentRmName || '', team: r.Team || 'SV',
           created: String(r.createdDate || '').slice(0, 10), converted: String(r.convertedDate || '').slice(0, 10),
           landing: r.landingPage || '', platform: r.platformName || '',
           tier: cat && cat.toLowerCase() !== 'other' ? cat : '', via: 'B2C' });
@@ -154,12 +163,12 @@ const LD = (() => {
       const v = snap[await sha16(k)];
       if(v){
         const [status, created, converted, rm, cat, platform, landing] = v;
-        out.set(k, { status: status || 'BLANK', rm: rm || '', team: teamForRmName(rm) || 'SV', created,
+        out.set(k, { status: settle(status, !!converted), rm: rm || '', team: teamForRmName(rm) || 'SV', created,
           converted, landing: landing || '', platform: platform || '', tier: clientTier(cat), via: 'Snapshot' });
         fromSnap++;
       }
     }
-    return { map: out, fromLive, fromSnap };
+    return { map: out, liveKeys: new Set(live.keys()), fromLive, fromSnap, convertedByDate };
   }
 
   // ---------- build: L&D rows -> tickets -> de-duplicated clients ----------
@@ -251,23 +260,18 @@ const LD = (() => {
       }
     }
 
+    const repeatedPlans = zeroRepeatedPlans(tickets);
     const clients = buildClients(tickets);
     const byKey = new Map(clients.map(c => [c.key, c]));
     for(const t of tickets){
       const c = byKey.get(t.key);
       t.tier = c.tier; t.tenure = c.tenure; t.subjKey = c.subjKey; t.inPA = c.inPA; t.cid = c.cid;
     }
+    // An email with no lead stays unmatched; the nearest known address is only offered as a hint.
+    const hints = ldSuggestEmails(clients.filter(c => !c.matched).map(c => c.key), leads.liveKeys);
+    clients.forEach(c => { c.suggest = hints.get(c.key) || ''; });
 
-    // Leads created inside the FY, by month and team — the top of the L&D Flow. Counted as B2C rows,
-    // the same way every other tab counts leads.
-    const leadsCreated = {};
-    for(const r of STATE.raw || []){
-      const d = String(r.createdDate || '').slice(0, 10);
-      if(!inFY(d)) continue;
-      const byTeam = leadsCreated[d.slice(0, 7)] = leadsCreated[d.slice(0, 7)] || {};
-      const team = r.Team || 'SV';
-      byTeam[team] = (byTeam[team] || 0) + 1;
-    }
+    const created = countLeadsCreated(STATE.raw || []);
     const ldPeople = [...new Set(tickets.flatMap(t => [t.assigned, t.approvedBy]).filter(Boolean))].sort();
     const monthLabels = {};
     tickets.forEach(t => { monthLabels[t.mk] = t.m; });
@@ -278,9 +282,9 @@ const LD = (() => {
         tabs: cfgs.map(c => c.name), excludedMonths: ['April 2026'], noEmailRows: diag.noEmail,
         products: PRODUCTS, subjects: [...new Set(clients.flatMap(c => c.subjects))].sort(),
         monthLabels, blankLabel: BLANK, ldSubjects: LD_SUBJECTS, ldPeople, fyStart: FY_START, fyLabel: FY_LABEL,
-        leadsCreated, leadRows: (STATE.raw || []).length, ldRows: all.length,
-        leadsFromLive: leads.fromLive, leadsFromSnapshot: leads.fromSnap,
-        snapshotGenerated: snapMeta.generated || '', snapshotFile: snapMeta.leadFile || '',
+        leadsCreated: created.all, leadsCreatedPrimary: created.primary, leadRows: (STATE.raw || []).length, ldRows: all.length,
+        leadsFromLive: leads.fromLive, leadsFromSnapshot: leads.fromSnap, convertedByDate: leads.convertedByDate, repeatedPlans,
+        snapshotGenerated: snapMeta.generated || '', snapshotFile: snapMeta.leadFile || '', snapshotAsOf: ldSnapshotAsOf(snapMeta),
         dataGenerated: (STATE.dataSource && STATE.dataSource.generated) || '',
       },
       clients,
@@ -289,6 +293,40 @@ const LD = (() => {
       dateIssues: diag.dateIssues,
       noEmailRows: diag.noEmailRows,
     };
+  }
+
+  // Leads created inside the FY, by month and team: the top of the L&D Flow. Counted as B2C rows, every
+  // lead head together (the L&D clients include Secondary-head leads), plus the Primary share of them.
+  function countLeadsCreated(rows){
+    const all = {}, primary = {};
+    for(const r of rows){
+      const d = String(r.createdDate || '').slice(0, 10);
+      if(!inFY(d)) continue;
+      const month = d.slice(0, 7), team = r.Team || 'SV';
+      const bump = tally => { const byTeam = tally[month] = tally[month] || {}; byTeam[team] = (byTeam[team] || 0) + 1; };
+      bump(all);
+      if(r.leadHead === 'Primary') bump(primary);
+    }
+    return { all, primary };
+  }
+
+  // A Plan Approval row that repeats an earlier row for the same client with identical amounts is a double
+  // entry. Its amounts are zeroed so every total counts the plan once; the row itself stays (it is still an
+  // approval on the sheet). Returns the repeats, for the note under the amounts table.
+  function zeroRepeatedPlans(tickets){
+    const first = new Map(), repeats = [];
+    for(const t of tickets){
+      if(t.kind !== 'pa') continue;
+      const amounts = PRODUCTS.map(p => t.rev[p.k]);
+      const total = amounts.reduce((a, b) => a + b, 0);
+      if(!total) continue;
+      const signature = t.key + '|' + amounts.join('|');
+      const earlier = first.get(signature);
+      if(!earlier){ first.set(signature, t); continue; }
+      repeats.push({ sheet: t.sheet, row: t.row, ofSheet: earlier.sheet, ofRow: earlier.row, amount: total });
+      t.rev = Object.fromEntries(PRODUCTS.map(p => [p.k, 0]));
+    }
+    return repeats;
   }
 
   // One record per email: the de-duplicated union of every L&D tab. "months" (every month the
@@ -567,6 +605,29 @@ const LD = (() => {
         '<th class="num">Mapped total</th><th class="num muted-col">Unmapped</th></tr></thead>';
     }
 
+    // Plan Approval rows counted once because they repeat an earlier row (see zeroRepeatedPlans).
+    function repeatedPlansNote(){
+      const repeats = META.repeatedPlans || [];
+      if(!repeats.length) return '';
+      const quarterOf = name => { const m = /q(\d+)\s*$/i.exec(name); return m ? 'Q' + m[1] : name; };
+      const where = r => esc(quarterOf(r.sheet)) + ' row ' + r.row + ' repeats ' +
+        (r.sheet === r.ofSheet ? '' : esc(quarterOf(r.ofSheet)) + ' ') + 'row ' + r.ofRow;
+      return '<div class="filter-note"><b>' + nf(repeats.length) + '</b> Plan Approval rows repeat an earlier row for the same client with ' +
+        'identical amounts, so their amounts (' + moneyFull(repeats.reduce((a, r) => a + r.amount, 0)) + ') are counted once: ' +
+        repeats.slice(0, 8).map(where).join('; ') + (repeats.length > 8 ? '; and ' + (repeats.length - 8) + ' more' : '') + '. Delete the repeat on the sheet.</div>';
+    }
+
+    // Where the status figures come from, and the two things that qualify them.
+    function statusSourceNote(mapped){
+      const fromSnapshot = mapped.filter(c => c.leadSrc === 'Snapshot').length;
+      const asOf = ldFriendlyDate(META.snapshotAsOf);
+      const parts = ['A lead with a converted date counts as <b>Converted</b>, whatever its written status, as on every other tab (' +
+        nf(META.convertedByDate || 0) + ' clients on this tab).'];
+      if(fromSnapshot) parts.push('<b>' + nf(fromSnapshot) + '</b> of these clients rest on the hard-coded export' +
+        (asOf ? ' of <b>' + esc(asOf) + '</b>' : '') + ' (older leads the daily upload does not carry), so their status, RM and team may have moved since.');
+      return ' ' + parts.join(' ');
+    }
+
     // ---------- L&D Details ----------
     function renderDetails(){
       const sel = selected();
@@ -608,7 +669,7 @@ const LD = (() => {
         (fromPA ? '<div class="s-pa" style="flex:' + fromPA + '">Plan approval · ' + nf(fromPA) + '</div>' : '') +
         (fyOnly ? '<div class="s-fy" style="flex:' + fyOnly + '">FY tickets only · ' + nf(fyOnly) + '</div>' : '');
       const srcRows = [
-        { l: 'On a Plan Approval sheet', n: fromPA, note: 'carries revenue and approval dates' },
+        { l: 'On a Plan Approval sheet', n: fromPA, note: 'carries plan amounts and approval dates' },
         { l: '— of those, also on an FY sheet', n: bothCount, note: 'the de-duplicated overlap', indent: true },
         { l: 'FY sheets only', n: fyOnly, note: 'counted subject to the master filter' }
       ];
@@ -622,7 +683,8 @@ const LD = (() => {
         total: mapped.filter(r => r.status === x.k).length, dim: state.off.has(x.k) }))
         .filter(c => c.total > 0).sort((a, b) => b.total - a.total);
       $('distCap').innerHTML = 'Clients by Workpoint lead status, out of <b>' + nf(mapped.length) + '</b> mapped (' +
-        pct(mapped.length, sel.length) + ' of ' + nf(sel.length) + ' in view). Click a bar to exclude that status.';
+        pct(mapped.length, sel.length) + ' of ' + nf(sel.length) + ' in view). Click a bar to exclude that status.' +
+        statusSourceNote(mapped);
       drawBars($('statusChart'), $('statusAxis'), statusCols, { name: 'status' });
       $('nomatchNote').innerHTML = unmappedSel.length
         ? '<span class="nm-name"><i class="dot"></i>Not matched to lead data</span><span class="nm-val">' + nf(unmappedSel.length) +
@@ -723,13 +785,16 @@ const LD = (() => {
         '<tr class="totrow"><td>All tiers</td>' + present.map(x => '<td class="num">' + rows.filter(r => r.status === x.k).length + '</td>').join('') +
         '<td class="num">' + nf(total) + '</td><td class="num">' + nf(unmappedSel.length) + '</td></tr></tbody>';
 
-      // 10 revenue (plan approvals only)
+      // 10 plan amounts (plan approvals only). These are the amounts typed on the Plan Approval sheet for the
+      // plan, not revenue Fincart has earned, so the page never calls them revenue.
       const revCells = selectedTickets();
-      const prodLabel = state.product === 'all' ? 'All products (sum)' : (PRODUCTS.find(p => p.k === state.product) || {}).label;
+      const prodLabel = state.product === 'all' ? 'All columns (sum)' : (PRODUCTS.find(p => p.k === state.product) || {}).label;
       $('revCap').innerHTML = 'Showing <b>' + esc(prodLabel) + '</b> across <b>' + nf(revCells.length) + '</b> plan approvals. Grand total ' +
-        moneyFull(revCells.reduce((a, r) => a + revOf(r), 0)) + '.';
-      $('revWarn').innerHTML = fyOnly ? '<div class="filter-note">Revenue exists only on the Plan Approval sheets. The <b>' + nf(fyOnly) +
-        '</b> FY-only clients in view have no revenue figures, so this table covers the ' + nf(fromPA) + ' with an approved plan.</div>' : '';
+        moneyFull(revCells.reduce((a, r) => a + revOf(r), 0)) + '. <b>All columns</b> adds the ' + PRODUCTS.map(p => esc(p.label)).join(', ') +
+        ' columns as typed on the Plan Approval sheet: the plan\'s own amounts, not revenue Fincart has earned.';
+      $('revWarn').innerHTML = (fyOnly ? '<div class="filter-note">Plan amounts exist only on the Plan Approval sheets. The <b>' + nf(fyOnly) +
+        '</b> FY-only clients in view have no amounts, so this table covers the ' + nf(fromPA) + ' with an approved plan.</div>' : '') +
+        repeatedPlansNote();
       const revSum = arr => arr.reduce((a, r) => a + revOf(r), 0);
       const mcell = v => '<td class="num" title="' + moneyFull(v) + '">' + money(v) + '</td>';
       $('revTbl').innerHTML = crossHead(present, 'Tier') + '<tbody>' +
@@ -782,6 +847,7 @@ const LD = (() => {
     }
     const UCOLS = [{ k: 'date', t: 'Date' }, { k: 'ticket', t: 'Ticket ID' }, { k: 'tier', t: 'Tier' }, { k: 'tenure', t: 'Tenure' },
       { k: 'name', t: 'Client name', wrap: 1 }, { k: 'email', t: 'Client mail ID' }, { k: 'advisor', t: 'Advisor / RM' },
+      { k: 'suggest', t: 'Probable lead email (check first; not joined)', wrap: 1 },
       { k: 'subjects', t: 'Ticket subjects', wrap: 1 }, { k: 'locations', t: 'Sheet / Row', wrap: 1 }];
     const DCOLS = [{ k: 'sheet', t: 'Sheet' }, { k: 'row', t: 'Row' }, { k: 'column', t: 'Column' }, { k: 'raw', t: 'Value as typed' },
       { k: 'ticket', t: 'Ticket' }, { k: 'name', t: 'Client name', wrap: 1 }, { k: 'email', t: 'Client mail ID' },
@@ -792,7 +858,9 @@ const LD = (() => {
       const un = unmappedFiltered();
       $('unmappedBadge').textContent = nf(un.length);
       $('unmappedCap').innerHTML = 'Showing <b>' + nf(un.length) + '</b> client' + (un.length === 1 ? '' : 's') + ' whose email has no ' +
-        'match in the lead data (the daily B2C upload, or the hard-coded values for older leads). Create or correct their lead record. ' +
+        'match in the lead data (the daily B2C upload, or the hard-coded values for older leads). Create or correct their lead record; ' +
+        'the <i>Probable lead email</i> column offers the nearest address in the lead data (or flags a cell that is not an email) so the sheet can be ' +
+        'corrected. Nothing is joined on that hint. ' +
         'The month, tier, tenure, advisor and ticket-subject filters under L&amp;D Details apply here.';
       listTable('unmappedTbl', UCOLS, un, 'Every client in this selection mapped to a lead record.');
       const di = (DATA.dateIssues || []).filter(subjOk);
@@ -820,6 +888,7 @@ const LD = (() => {
     const LD_DEFAULT_SUBJECTS = (META.ldSubjects || []).filter(x => SUBJECTS_SET.has(x));
     const LD_PEOPLE = META.ldPeople || [];
     const LEADS_CREATED = META.leadsCreated || {};
+    const LEADS_CREATED_PRIMARY = META.leadsCreatedPrimary || {};
     const flowState = { month: '', team: '', emp: '', subjects: new Set(LD_DEFAULT_SUBJECTS) };
     const subjOn = x => flowState.subjects.has(x);
     const FLOW_MONTHS = [...new Set(Object.keys(LEADS_CREATED).concat(MONTHS.map(m => m.mk)))].filter(mk => /^\d{4}-\d{2}$/.test(mk)).sort();
@@ -877,10 +946,11 @@ const LD = (() => {
     function renderFlow(){
       const mk = flowState.month, team = flowState.team, emp = flowState.emp;
       const windowLabel = mk ? monthLabel(mk) : FY_LABEL;
-      const created = (mk ? [mk] : Object.keys(LEADS_CREATED)).reduce((a, m) => {
-        const byTeam = LEADS_CREATED[m] || {};
+      const countCreated = tally => (mk ? [mk] : Object.keys(tally)).reduce((a, m) => {
+        const byTeam = tally[m] || {};
         return a + (team ? (byTeam[team] || 0) : Object.values(byTeam).reduce((x, y) => x + y, 0));
       }, 0);
+      const created = countCreated(LEADS_CREATED), createdPrimary = countCreated(LEADS_CREATED_PRIMARY);
       const touched = flowTouched().filter(c => c.matched);
       const unmapped = flowUnmapped();
       const n = touched.length;
@@ -896,7 +966,7 @@ const LD = (() => {
         (mk ? ', in that month' : '') + '. A lead that has any FY ticket is counted <i>via ticket subject</i>, even when it is on a ' +
         'Plan Approval sheet too' + (emp ? ' — counting only plans ' + esc(emp) + ' approved, and tickets assigned to ' + esc(emp) +
           '. <i>Total leads created</i> is not split by L&amp;D employee, since L&amp;D does not own leads' : '') +
-        '. Lead status is the current status in Workpoint.' +
+        '. Lead status is the current status in Workpoint; a lead with a converted date counts as Converted, as on every other tab.' +
         (mk && !MONTHS.some(m => m.mk === mk) ? ' <b>No ticket rows are loaded for this month</b> (' + esc(META.excludedMonths.join(', ')) +
           ' is excluded by request).' : '');
 
@@ -910,6 +980,7 @@ const LD = (() => {
         (extra || '') + '</div>';
       $('flow').innerHTML =
         '<div class="ld-row">' + node('var(--ld-ink)', created, 'Total leads created', 'created in ' + esc(windowLabel) +
+          ' · <b>' + nf(createdPrimary) + '</b> Primary + <b>' + nf(created - createdPrimary) + '</b> Secondary lead head' +
           (emp ? ' (all leads, not split by L&amp;D employee)' : '')) + '</div>' +
         '<div class="ld-stem" aria-hidden="true"></div>' +
         '<div class="ld-row">' + node('var(--orange)', n, 'Leads touched by L&amp;D', '<b>' + nf(inWindow) + '</b> of them were created in ' +
@@ -921,7 +992,8 @@ const LD = (() => {
           '<div class="ld-cell">' + node('var(--s-converted)', group.converted || 0, 'Converted', '<b>' + pct(group.converted || 0, n) + '</b> of touched leads') + '</div>' +
         '</div></div>' +
         '<p class="ld-caption">The other <b>' + nf(group.other || 0) + '</b> touched leads are in other statuses (on hold, re-assigned, follow up…) — ' +
-          'broken down by tier below.' + (unmapped.length ? ' <b>' + nf(unmapped.length) + '</b> more clients L&amp;D worked with' + (team ? ' (any team)' : '') +
+          'broken down by tier below. <b>Total leads created</b> counts the Primary and Secondary lead heads together, because L&amp;D ' +
+          'clients come from both; touched leads created before ' + esc(FY_LABEL) + ' are not part of it.' + (unmapped.length ? ' <b>' + nf(unmapped.length) + '</b> more clients L&amp;D worked with' + (team ? ' (any team)' : '') +
           ' are not in the lead data and are left out — see the Unmapped clients flag above.' : '') + '</p>';
 
       // status by client tier
@@ -1012,8 +1084,10 @@ const LD = (() => {
         META.tabs.map(t => '<code>' + esc(t) + '</code>').join(' + ') + '), de-duplicated on client email. Workpoint lead status, RM, ' +
         'team, created date and tier: the daily B2C upload (' + nf(META.leadRows) + ' leads; ' + nf(META.leadsFromLive) + ' L&amp;D clients ' +
         'found there) and, for older leads it does not carry, hard-coded values from <code>' + esc(META.snapshotFile || 'ld_leads_snapshot.js') +
-        '</code>' + (META.snapshotGenerated ? ' (generated ' + esc(META.snapshotGenerated) + ')' : '') + ' — ' + nf(META.leadsFromSnapshot) +
-        ' clients.<br><b>Excluded.</b> ' + esc(META.excludedMonths.join(', ')) + ' by request' + (META.noEmailRows ? '; a further ' +
+        '</code>' + (META.snapshotAsOf ? ' — <b>lead data as of ' + esc(ldFriendlyDate(META.snapshotAsOf)) + '</b>' : '') +
+        (META.snapshotGenerated ? ' (file generated ' + esc(META.snapshotGenerated) + ')' : '') + ' — ' + nf(META.leadsFromSnapshot) +
+        ' clients. A converted date makes a lead Converted, whatever its written status (' + nf(META.convertedByDate || 0) + ' clients).' +
+        '<br><b>Excluded.</b> ' + esc(META.excludedMonths.join(', ')) + ' by request' + (META.noEmailRows ? '; a further ' +
         nf(META.noEmailRows) + ' rows carry a client name but no email, so they cannot be matched or de-duplicated' : '') + '.';
     }
 
@@ -1031,7 +1105,7 @@ const LD = (() => {
     const csvHandlers = {
       clientCsvBtn: () => {
         const head = CLIENT_HEAD.concat(['Matched to Lead Data', 'On Plan Approval Sheet', '# Plan Approvals', '# FY Tickets', '# Tickets Total',
-          'Ticket Subjects'], PRODUCTS.map(p => p.label), ['Total Revenue (all products)']);
+          'Ticket Subjects'], PRODUCTS.map(p => p.label), ['Total Plan Amount (all columns)']);
         downloadCsv('ld-financial-planning-client-details.csv', head, selected().filter(statusVisible).map(r => CLIENT_COLS.map(c => r[c]).concat(
           [r.matched ? 'Yes' : 'No', r.inPA ? 'Yes' : 'No', r.nPA, r.nFY, r.nTickets, r.subjects.join('; ')],
           PRODUCTS.map(p => r.rev[p.k] || 0), [PRODUCTS.reduce((a, p) => a + (r.rev[p.k] || 0), 0)])));
@@ -1112,7 +1186,7 @@ const LD = (() => {
     fill('fFlowMonth', FLOW_MONTHS, FLOW_MONTHS.map(monthLabel));
     fill('fFlowEmp', LD_PEOPLE);
     fill('fFlowTeam', [...new Set(Object.values(LEADS_CREATED).flatMap(Object.keys).concat(CLIENTS.filter(c => c.matched).map(c => c.team)))].filter(Boolean).sort());
-    $('fProduct').innerHTML = '<option value="all">All products (sum)</option>' + PRODUCTS.map(p => '<option value="' + esc(p.k) + '">' + esc(p.label) + '</option>').join('');
+    $('fProduct').innerHTML = '<option value="all">All columns (sum)</option>' + PRODUCTS.map(p => '<option value="' + esc(p.k) + '">' + esc(p.label) + '</option>').join('');
 
     Object.keys(FILTER_IDS).forEach(id => on(id, 'change', e => { state[FILTER_IDS[id]] = e.target.value; renderDetails(); }));
     on('fProduct', 'change', e => { state.product = e.target.value; renderDetails(); });

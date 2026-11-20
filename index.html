@@ -2208,8 +2208,8 @@ table.data.editable td input:focus{outline:2px solid var(--orange);background:va
           </div>
 
           <div class="section bar-amber">
-            <h2>10 — Revenue Distribution: Tier × Lead Status
-              <span class="ld-h2-ctl"><label>Product <select id="ld-fProduct"></select></label></span></h2>
+            <h2>10 — Plan Amounts: Tier × Lead Status
+              <span class="ld-h2-ctl"><label>Amount <select id="ld-fProduct"></select></label></span></h2>
             <div id="ld-revWarn"></div>
             <div class="table-wrap"><table class="data" id="ld-revTbl"></table></div>
             <div class="hint" id="ld-revCap"></div>
@@ -2500,7 +2500,7 @@ table.data.editable td input:focus{outline:2px solid var(--orange);background:va
     // Nothing below is requested until sign-in succeeds.
     MISAuth.ready(function(){
       var t = Date.now();
-      ['snapshot.js','categorized_leads_data.js','app-config.js','app-dateutils.js','app-state.js','app-dataload.js','app-filters.js','app-aggregators.js','app-rmperf.js','app-b2b.js','app-b2b-view.js','app-bd2.js','app-bd2-health.js','ld_leads_snapshot.js','app-ld.js','app-categorized.js','app-tables.js','app-insights.js','app-activity.js','app-source.js','app-renderers.js','app-ui.js','app-health.js','app-bootstrap.js'].forEach(function(src){
+      ['snapshot.js','categorized_leads_data.js','app-config.js','app-dateutils.js','app-state.js','app-dataload.js','app-filters.js','app-aggregators.js','app-rmperf.js','app-b2b.js','app-b2b-view.js','app-bd2.js','app-bd2-health.js','ld_leads_snapshot.js','app-ld-lead.js','app-ld.js','app-categorized.js','app-tables.js','app-insights.js','app-activity.js','app-source.js','app-renderers.js','app-ui.js','app-health.js','app-bootstrap.js'].forEach(function(src){
         var s = document.createElement('script');
         s.src = src + '?t=' + t;
         s.async = false;

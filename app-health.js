@@ -10,8 +10,25 @@
 
 const HEALTH_LEVEL_RANK = { error: 0, warn: 1, info: 2 };
 const HEALTH_STALE_DATA_DAYS = 3;
+const HEALTH_LD_SNAPSHOT_STALE_DAYS = 30;
 const HEALTH_SAMPLE = 6;
 const DAY_MS = 86400000;
+
+/**
+ * The L&D Dashboard falls back to ld_leads_snapshot.js for leads the daily upload does not carry, and every
+ * status in it is as old as the export it was built from. Null while it is recent, or when the tab has no data.
+ */
+function ldSnapshotIssueReport(){
+  const asOf = ldSnapshotAsOf(window.LD_LEAD_SNAPSHOT);
+  if(!asOf || !(STATE.ldRows && STATE.ldRows.length)) return null;
+  const ageDays = Math.floor((Date.now() - new Date(asOf + 'T00:00:00').getTime()) / DAY_MS);
+  if(ageDays <= HEALTH_LD_SNAPSHOT_STALE_DAYS) return null;
+  return {
+    headline: `L&D lead snapshot is ${ageDays} days old`,
+    detail: `L&D clients whose lead is older than this financial year take status, RM and team from the export of ${ldFriendlyDate(asOf)}; they may have moved since.`,
+    fix: 'Regenerate it: python build_ld_snapshot.py --leads "<all-time FIN export>.xlsx" --ld "<L&D workbook>.xlsx"'
+  };
+}
 
 const sampleList = (pairs, fmt) => {
   const shown = pairs.slice(0, HEALTH_SAMPLE).map(fmt).join(', ');
@@ -231,6 +248,8 @@ function dataHealthChecks(){
   const rev = rmRevenueIssueReport();
   if(rev) add('warn', 'revenue', rev.headline, rev.detail, rev.fix);
   for(const rep of b2bIssueReports()) add(rep.level, rep.id, rep.headline, rep.detail, rep.fix);
+  const ldSnapshot = ldSnapshotIssueReport();
+  if(ldSnapshot) add('warn', 'ld-snapshot', ldSnapshot.headline, ldSnapshot.detail, ldSnapshot.fix);
   if(STATE.filesLoaded.bd){
     const bd = bd2HealthSummary();
     if(bd) add(bd.level, 'bd-tracker', bd.title, bd.detail, bd.fix);
