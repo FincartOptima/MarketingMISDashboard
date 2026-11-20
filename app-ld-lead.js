@@ -64,7 +64,7 @@ function ldIndexKnownEmails(knownKeys){
   return { byLocal, byDotless, byLength };
 }
 
-/** The one known address that is `key` with something pasted after it ("a@x.comb@y.com"), or []. */
+/** The known addresses `key` starts with, for a cell where a second address was pasted straight after the first. */
 function ldPastedPrefix(key, knownKeys){
   return [...knownKeys].filter(k => k.length >= 8 && key.length > k.length && key.startsWith(k));
 }
