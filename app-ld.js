@@ -153,7 +153,7 @@ const LD = (() => {
       const r = live.get(k);
       if(r){
         const cat = clientTier(r.clientCategory);
-        out.set(k, { status: settle(r.leadStatus, isConvertedLead(r)), rm: r.currentRmName || '', team: r.Team || 'SV',
+        out.set(k, { status: settle(r.leadStatus, isConvertedLead(r)), rm: r.currentRmName || '', firstRm: r.firstRmName || '', team: r.Team || 'SV',
           created: String(r.createdDate || '').slice(0, 10), converted: String(r.convertedDate || '').slice(0, 10),
           landing: r.landingPage || '', platform: r.platformName || '',
           tier: cat && cat.toLowerCase() !== 'other' ? cat : '', via: 'B2C' });
@@ -162,8 +162,8 @@ const LD = (() => {
       }
       const v = snap[await sha16(k)];
       if(v){
-        const [status, created, converted, rm, cat, platform, landing] = v;
-        out.set(k, { status: settle(status, !!converted), rm: rm || '', team: teamForRmName(rm) || 'SV', created,
+        const [status, created, converted, rm, cat, platform, landing, firstRm] = v;
+        out.set(k, { status: settle(status, !!converted), rm: rm || '', firstRm: firstRm || '', team: teamForRmName(rm) || 'SV', created,
           converted, landing: landing || '', platform: platform || '', tier: clientTier(cat), via: 'Snapshot' });
         fromSnap++;
       }
@@ -236,14 +236,16 @@ const LD = (() => {
           continue;
         }
         const lead = leads.map.get(key);
+        const advisor = scrub(g(r, 'Advisor', 'RM Name')), sheetRm = advisor ? mapRM(advisor) : '';
         const rec = {
           kind: cfg.kind, sheet: cfg.name, row: r._row, q: cfg.q, mk, m: mlabel, date: fyDt || '',
           key, email, name, subject, ticket, assigned, approvedBy,
           tierRaw: cfg.kind === 'fy' ? clientTier(g(r, 'Client Type')) : '',
           tenureRaw: cfg.kind === 'pa' ? clientTenure(g(r, 'Client Type')) : '',
-          advisor: scrub(g(r, 'Advisor', 'RM Name')), appr: g(r, 'Approved By'),
+          advisor, appr: g(r, 'Approved By'),
           status: lead ? lead.status : 'NOT IN LEAD DATA', matched: !!lead, lead,
-          rm: scrub(lead ? lead.rm : ''), team: lead ? lead.team : NO_LEAD_TEAM,
+          rm: lead ? scrub(lead.rm) : sheetRm, firstRm: lead ? lead.firstRm : '', rmSrc: lead ? 'Lead' : (sheetRm ? 'L&D sheet' : ''),
+          team: lead ? lead.team : (teamForRmName(sheetRm) || NO_LEAD_TEAM),
           platform: lead ? lead.platform : '',
           src: scrub(lead && lead.landing ? lead.landing : g(r, 'Lead Source')),
           created: lead ? lead.created : '', converted: lead ? lead.converted : '',
@@ -271,7 +273,7 @@ const LD = (() => {
     const hints = ldSuggestEmails(clients.filter(c => !c.matched).map(c => c.key), leads.liveKeys);
     clients.forEach(c => { c.suggest = hints.get(c.key) || ''; });
 
-    const created = countLeadsCreated(STATE.raw || []);
+    const createdLeads = listLeadsCreated(STATE.raw || []);
     const ldPeople = [...new Set(tickets.flatMap(t => [t.assigned, t.approvedBy]).filter(Boolean))].sort();
     const monthLabels = {};
     tickets.forEach(t => { monthLabels[t.mk] = t.m; });
@@ -282,7 +284,7 @@ const LD = (() => {
         tabs: cfgs.map(c => c.name), excludedMonths: ['April 2026'], noEmailRows: diag.noEmail,
         products: PRODUCTS, subjects: [...new Set(clients.flatMap(c => c.subjects))].sort(),
         monthLabels, blankLabel: BLANK, ldSubjects: LD_SUBJECTS, ldPeople, fyStart: FY_START, fyLabel: FY_LABEL,
-        leadsCreated: created.all, leadsCreatedPrimary: created.primary, leadRows: (STATE.raw || []).length, ldRows: all.length,
+        createdLeads, leadRows: (STATE.raw || []).length, ldRows: all.length,
         leadsFromLive: leads.fromLive, leadsFromSnapshot: leads.fromSnap, convertedByDate: leads.convertedByDate, repeatedPlans,
         snapshotGenerated: snapMeta.generated || '', snapshotFile: snapMeta.leadFile || '', snapshotAsOf: ldSnapshotAsOf(snapMeta),
         dataGenerated: (STATE.dataSource && STATE.dataSource.generated) || '',
@@ -295,19 +297,15 @@ const LD = (() => {
     };
   }
 
-  // Leads created inside the FY, by month and team: the top of the L&D Flow. Counted as B2C rows, every
-  // lead head together (the L&D clients include Secondary-head leads), plus the Primary share of them.
-  function countLeadsCreated(rows){
-    const all = {}, primary = {};
+  // Leads created inside the FY, one [month, team, current RM, first RM, is Primary] per B2C row: the top of the L&D
+  // Flow. Every lead head counts (the L&D clients include Secondary-head leads); the Primary flag gives the split.
+  function listLeadsCreated(rows){
+    const out = [];
     for(const r of rows){
       const d = String(r.createdDate || '').slice(0, 10);
-      if(!inFY(d)) continue;
-      const month = d.slice(0, 7), team = r.Team || 'SV';
-      const bump = tally => { const byTeam = tally[month] = tally[month] || {}; byTeam[team] = (byTeam[team] || 0) + 1; };
-      bump(all);
-      if(r.leadHead === 'Primary') bump(primary);
+      if(inFY(d)) out.push([d.slice(0, 7), r.Team || 'SV', r.currentRmName || '', r.firstRmName || '', r.leadHead === 'Primary']);
     }
-    return { all, primary };
+    return out;
   }
 
   // A Plan Approval row that repeats an earlier row for the same client with identical amounts is a double
@@ -343,7 +341,7 @@ const LD = (() => {
         c = { key: t.key, email: t.email, name: t.name, mk: t.mk, m: t.m, q: t.q, months: new Set(), paMonths: new Set(), fyMonths: new Set(),
           ldTouches: [], inPA: false, subjects: new Set(), monthSubjects: {}, tier: '', tenure: '',
           rev: Object.fromEntries(PRODUCTS.map(p => [p.k, 0])), nTickets: 0, nPA: 0, nFY: 0,
-          advisor: '', appr: '', ticket: '', status: t.status, matched: t.matched, lead: t.lead, rm: t.rm,
+          advisor: '', appr: '', ticket: '', status: t.status, matched: t.matched, lead: t.lead, rm: t.rm, firstRm: t.firstRm, rmSrc: t.rmSrc,
           team: t.team, platform: t.platform, src: t.src, created: t.created, converted: t.converted,
           date: t.date, locations: [] };
         by.set(t.key, c);
@@ -540,7 +538,7 @@ const LD = (() => {
 
     const state = {
       subjects: new Set(SUBJECTS),
-      month: '', tier: '', tenure: '', team: '', platform: '', advisor: '', source: '', q: '',
+      month: '', tier: '', tenure: '', team: '', curRm: '', firstRm: '', platform: '', advisor: '', source: '', q: '',
       off: new Set(), product: 'all', sort: { key: 'mk', dir: 1 }
     };
 
@@ -569,7 +567,8 @@ const LD = (() => {
     function passesFilters(r){
       return (!state.month || (r.months ? r.months.includes(state.month) : r.mk === state.month)) &&
              (!state.tier || r.tier === state.tier) && (!state.tenure || r.tenure === state.tenure) &&
-             (!state.team || r.team === state.team) && (!state.platform || r.platform === state.platform) &&
+             (!state.team || r.team === state.team) && (!state.curRm || r.rm === state.curRm) && (!state.firstRm || r.firstRm === state.firstRm) &&
+             (!state.platform || r.platform === state.platform) &&
              (!state.advisor || r.advisor === state.advisor) && (!state.source || r.src === state.source);
     }
     function searchOk(r){
@@ -610,22 +609,14 @@ const LD = (() => {
       const repeats = META.repeatedPlans || [];
       if(!repeats.length) return '';
       const quarterOf = name => { const m = /q(\d+)\s*$/i.exec(name); return m ? 'Q' + m[1] : name; };
-      const where = r => esc(quarterOf(r.sheet)) + ' row ' + r.row + ' repeats ' +
-        (r.sheet === r.ofSheet ? '' : esc(quarterOf(r.ofSheet)) + ' ') + 'row ' + r.ofRow;
-      return '<div class="filter-note"><b>' + nf(repeats.length) + '</b> Plan Approval rows repeat an earlier row for the same client with ' +
-        'identical amounts, so their amounts (' + moneyFull(repeats.reduce((a, r) => a + r.amount, 0)) + ') are counted once: ' +
-        repeats.slice(0, 8).map(where).join('; ') + (repeats.length > 8 ? '; and ' + (repeats.length - 8) + ' more' : '') + '. Delete the repeat on the sheet.</div>';
+      const rows = repeats.slice(0, 6).map(r => esc(quarterOf(r.sheet)) + ' row ' + r.row).join(', ') + (repeats.length > 6 ? ' …' : '');
+      return '<div class="filter-note"><b>' + nf(repeats.length) + '</b> repeated plan rows counted once: ' + rows + '.</div>';
     }
 
-    // Where the status figures come from, and the two things that qualify them.
-    function statusSourceNote(mapped){
-      const fromSnapshot = mapped.filter(c => c.leadSrc === 'Snapshot').length;
-      const asOf = ldFriendlyDate(META.snapshotAsOf);
-      const parts = ['A lead with a converted date counts as <b>Converted</b>, whatever its written status, as on every other tab (' +
-        nf(META.convertedByDate || 0) + ' clients on this tab).'];
-      if(fromSnapshot) parts.push('<b>' + nf(fromSnapshot) + '</b> of these clients rest on the hard-coded export' +
-        (asOf ? ' of <b>' + esc(asOf) + '</b>' : '') + ' (older leads the daily upload does not carry), so their status, RM and team may have moved since.');
-      return ' ' + parts.join(' ');
+    // How many mapped clients take their lead data from the hard-coded snapshot, and its date.
+    function snapshotNote(mapped){
+      const used = mapped.filter(c => c.leadSrc === 'Snapshot').length, asOf = ldFriendlyDate(META.snapshotAsOf);
+      return used ? ' <b>' + nf(used) + '</b> use the hard-coded snapshot' + (asOf ? ' of <b>' + esc(asOf) + '</b>' : '') + '.' : '';
     }
 
     // ---------- L&D Details ----------
@@ -684,7 +675,7 @@ const LD = (() => {
         .filter(c => c.total > 0).sort((a, b) => b.total - a.total);
       $('distCap').innerHTML = 'Clients by Workpoint lead status, out of <b>' + nf(mapped.length) + '</b> mapped (' +
         pct(mapped.length, sel.length) + ' of ' + nf(sel.length) + ' in view). Click a bar to exclude that status.' +
-        statusSourceNote(mapped);
+        snapshotNote(mapped);
       drawBars($('statusChart'), $('statusAxis'), statusCols, { name: 'status' });
       $('nomatchNote').innerHTML = unmappedSel.length
         ? '<span class="nm-name"><i class="dot"></i>Not matched to lead data</span><span class="nm-val">' + nf(unmappedSel.length) +
@@ -694,18 +685,22 @@ const LD = (() => {
 
       // 03 team / RM
       const teamDim = state.team ? 'rm' : 'team';
-      const teamGroups = [...new Set(rows.map(r => r[teamDim]))].map(t => ({ t, n: rows.filter(r => r[teamDim] === t).length }))
-        .sort((a, b) => b.n - a.n).map(x => x.t);
+      const teamGroups = [...new Set(rows.concat(unmappedSel).map(r => r[teamDim]))]
+        .map(t => ({ t, n: sel.filter(r => r[teamDim] === t).length })).sort((a, b) => b.n - a.n).map(x => x.t);
+      const unmappedIn = t => unmappedSel.filter(r => r[teamDim] === t).length;
+      const unmappedHead = '<th class="num muted-col">Not in lead data</th>';
+      const unmappedCell = n => '<td class="num muted-col">' + (n || '–') + '</td>';
       $('teamTblTitle').textContent = state.team ? 'RM-wise status' : 'Team-wise status';
       $('teamTblCap').innerHTML = (state.team ? 'Mapped clients per RM within <b>' + esc(state.team) + '</b>, by lead status.'
         : 'Mapped clients per team, by lead status. Team is the current RM\'s team, as on every other tab.') + ' Sorted by client count.';
       $('teamTbl').innerHTML = '<thead><tr><th>' + (state.team ? 'RM' : 'Team') + '</th>' +
-        present.map(x => '<th class="num">' + esc(x.label) + '</th>').join('') + '<th class="num">Total</th></tr></thead><tbody>' +
+        present.map(x => '<th class="num">' + esc(x.label) + '</th>').join('') + '<th class="num">Mapped total</th>' + unmappedHead + '</tr></thead><tbody>' +
         teamGroups.map(t => { const tr = rows.filter(r => r[teamDim] === t);
           return '<tr><td>' + esc(t || '(No RM)') + '</td>' + present.map(x => '<td class="num">' +
-            (tr.filter(r => r.status === x.k).length || '–') + '</td>').join('') + '<td class="num">' + tr.length + '</td></tr>'; }).join('') +
+            (tr.filter(r => r.status === x.k).length || '–') + '</td>').join('') + '<td class="num">' + tr.length + '</td>' + unmappedCell(unmappedIn(t)) + '</tr>'; }).join('') +
         '<tr class="totrow"><td>All ' + (state.team ? 'RMs' : 'teams') + '</td>' +
-        present.map(x => '<td class="num">' + rows.filter(r => r.status === x.k).length + '</td>').join('') + '<td class="num">' + total + '</td></tr></tbody>';
+        present.map(x => '<td class="num">' + rows.filter(r => r.status === x.k).length + '</td>').join('') + '<td class="num">' + total + '</td>' +
+        '<td class="num muted-col">' + nf(unmappedSel.length) + '</td></tr></tbody>';
 
       // 04 team x tier
       const tierColsPresent = TIERS.filter(v => rows.some(r => r.tier === v));
@@ -713,12 +708,13 @@ const LD = (() => {
       $('teamTierCap').innerHTML = state.team ? 'Mapped clients per RM within <b>' + esc(state.team) + '</b>, by client tier.'
         : 'Mapped clients per team, by client tier.';
       $('teamTierTbl').innerHTML = '<thead><tr><th>' + (state.team ? 'RM' : 'Team') + '</th>' +
-        tierColsPresent.map(v => '<th class="num">' + esc(v) + '</th>').join('') + '<th class="num">Total</th></tr></thead><tbody>' +
+        tierColsPresent.map(v => '<th class="num">' + esc(v) + '</th>').join('') + '<th class="num">Mapped total</th>' + unmappedHead + '</tr></thead><tbody>' +
         teamGroups.map(t => { const tr = rows.filter(r => r[teamDim] === t);
           return '<tr><td>' + esc(t || '(No RM)') + '</td>' + tierColsPresent.map(v => '<td class="num">' +
-            (tr.filter(r => r.tier === v).length || '–') + '</td>').join('') + '<td class="num">' + tr.length + '</td></tr>'; }).join('') +
+            (tr.filter(r => r.tier === v).length || '–') + '</td>').join('') + '<td class="num">' + tr.length + '</td>' + unmappedCell(unmappedIn(t)) + '</tr>'; }).join('') +
         '<tr class="totrow"><td>All ' + (state.team ? 'RMs' : 'teams') + '</td>' +
-        tierColsPresent.map(v => '<td class="num">' + rows.filter(r => r.tier === v).length + '</td>').join('') + '<td class="num">' + total + '</td></tr></tbody>';
+        tierColsPresent.map(v => '<td class="num">' + rows.filter(r => r.tier === v).length + '</td>').join('') + '<td class="num">' + total + '</td>' +
+        '<td class="num muted-col">' + nf(unmappedSel.length) + '</td></tr></tbody>';
 
       // 05 month x status — a client counts in every month it is active, so cells can exceed Total.
       const months = MONTHS.filter(m => !state.month || m.mk === state.month);
@@ -785,15 +781,13 @@ const LD = (() => {
         '<tr class="totrow"><td>All tiers</td>' + present.map(x => '<td class="num">' + rows.filter(r => r.status === x.k).length + '</td>').join('') +
         '<td class="num">' + nf(total) + '</td><td class="num">' + nf(unmappedSel.length) + '</td></tr></tbody>';
 
-      // 10 plan amounts (plan approvals only). These are the amounts typed on the Plan Approval sheet for the
-      // plan, not revenue Fincart has earned, so the page never calls them revenue.
+      // 10 plan amounts (plan approvals only): the amounts typed on the sheet for the plan, not revenue.
       const revCells = selectedTickets();
       const prodLabel = state.product === 'all' ? 'All columns (sum)' : (PRODUCTS.find(p => p.k === state.product) || {}).label;
       $('revCap').innerHTML = 'Showing <b>' + esc(prodLabel) + '</b> across <b>' + nf(revCells.length) + '</b> plan approvals. Grand total ' +
-        moneyFull(revCells.reduce((a, r) => a + revOf(r), 0)) + '. <b>All columns</b> adds the ' + PRODUCTS.map(p => esc(p.label)).join(', ') +
-        ' columns as typed on the Plan Approval sheet: the plan\'s own amounts, not revenue Fincart has earned.';
+        moneyFull(revCells.reduce((a, r) => a + revOf(r), 0)) + '.';
       $('revWarn').innerHTML = (fyOnly ? '<div class="filter-note">Plan amounts exist only on the Plan Approval sheets. The <b>' + nf(fyOnly) +
-        '</b> FY-only clients in view have no amounts, so this table covers the ' + nf(fromPA) + ' with an approved plan.</div>' : '') +
+        '</b> FY-only clients in view have none, so this covers the ' + nf(fromPA) + ' with an approved plan.</div>' : '') +
         repeatedPlansNote();
       const revSum = arr => arr.reduce((a, r) => a + revOf(r), 0);
       const mcell = v => '<td class="num" title="' + moneyFull(v) + '">' + money(v) + '</td>';
@@ -807,7 +801,7 @@ const LD = (() => {
       // 11 client list
       const cols = [{ k: 'm', t: 'Month' }, { k: 'name', t: 'Client' }, { k: 'email', t: 'Email id' }, { k: 'status', t: 'Lead status' },
         { k: 'tier', t: 'Tier' }, { k: 'tenure', t: 'Tenure' }, { k: 'team', t: 'Team' }, { k: 'rm', t: 'RM' },
-        { k: 'advisor', t: 'Advisor' }, { k: 'platform', t: 'Platform' }, { k: 'src', t: 'Lead source' }];
+        { k: 'firstRm', t: 'First RM' }, { k: 'advisor', t: 'Advisor' }, { k: 'platform', t: 'Platform' }, { k: 'src', t: 'Lead source' }];
       const listRows = sel.filter(statusVisible).slice().sort((a, b) => {
         const k = state.sort.key, d = state.sort.dir;
         const av = String(a[k] == null ? '' : a[k]).toLowerCase(), bv = String(b[k] == null ? '' : b[k]).toLowerCase();
@@ -837,6 +831,7 @@ const LD = (() => {
     const unmappedFiltered = () => (DATA.unmapped || []).filter(r =>
       (!state.month || r.months.includes(state.month)) && (!state.tier || r.tier === state.tier) &&
       (!state.tenure || r.tenure === state.tenure) && (!state.advisor || r.advisor === state.advisor) &&
+      (!state.team || r.team === state.team) && (!state.curRm || r.rm === state.curRm) && (!state.firstRm || r.firstRm === state.firstRm) &&
       (r.inPA || subjectsInScope(r).some(x => state.subjects.has(x))));
     function listTable(id, cols, rows, emptyText){
       $(id).innerHTML = '<thead><tr>' + cols.map(c => '<th>' + c.t + '</th>').join('') + '</tr></thead><tbody>' +
@@ -847,7 +842,7 @@ const LD = (() => {
     }
     const UCOLS = [{ k: 'date', t: 'Date' }, { k: 'ticket', t: 'Ticket ID' }, { k: 'tier', t: 'Tier' }, { k: 'tenure', t: 'Tenure' },
       { k: 'name', t: 'Client name', wrap: 1 }, { k: 'email', t: 'Client mail ID' }, { k: 'advisor', t: 'Advisor / RM' },
-      { k: 'suggest', t: 'Probable lead email (check first; not joined)', wrap: 1 },
+      { k: 'suggest', t: 'Probable lead email', wrap: 1 },
       { k: 'subjects', t: 'Ticket subjects', wrap: 1 }, { k: 'locations', t: 'Sheet / Row', wrap: 1 }];
     const DCOLS = [{ k: 'sheet', t: 'Sheet' }, { k: 'row', t: 'Row' }, { k: 'column', t: 'Column' }, { k: 'raw', t: 'Value as typed' },
       { k: 'ticket', t: 'Ticket' }, { k: 'name', t: 'Client name', wrap: 1 }, { k: 'email', t: 'Client mail ID' },
@@ -858,9 +853,7 @@ const LD = (() => {
       const un = unmappedFiltered();
       $('unmappedBadge').textContent = nf(un.length);
       $('unmappedCap').innerHTML = 'Showing <b>' + nf(un.length) + '</b> client' + (un.length === 1 ? '' : 's') + ' whose email has no ' +
-        'match in the lead data (the daily B2C upload, or the hard-coded values for older leads). Create or correct their lead record; ' +
-        'the <i>Probable lead email</i> column offers the nearest address in the lead data (or flags a cell that is not an email) so the sheet can be ' +
-        'corrected. Nothing is joined on that hint. ' +
+        'match in the lead data (the daily B2C upload, or the hard-coded values for older leads). Create or correct their lead record. ' +
         'The month, tier, tenure, advisor and ticket-subject filters under L&amp;D Details apply here.';
       listTable('unmappedTbl', UCOLS, un, 'Every client in this selection mapped to a lead record.');
       const di = (DATA.dateIssues || []).filter(subjOk);
@@ -887,11 +880,10 @@ const LD = (() => {
     // on a Plan Approval sheet too; "via plan approval only" is the rest.
     const LD_DEFAULT_SUBJECTS = (META.ldSubjects || []).filter(x => SUBJECTS_SET.has(x));
     const LD_PEOPLE = META.ldPeople || [];
-    const LEADS_CREATED = META.leadsCreated || {};
-    const LEADS_CREATED_PRIMARY = META.leadsCreatedPrimary || {};
-    const flowState = { month: '', team: '', emp: '', subjects: new Set(LD_DEFAULT_SUBJECTS) };
+    const CREATED_LEADS = META.createdLeads || [];
+    const flowState = { month: '', team: '', curRm: '', firstRm: '', emp: '', subjects: new Set(LD_DEFAULT_SUBJECTS) };
     const subjOn = x => flowState.subjects.has(x);
-    const FLOW_MONTHS = [...new Set(Object.keys(LEADS_CREATED).concat(MONTHS.map(m => m.mk)))].filter(mk => /^\d{4}-\d{2}$/.test(mk)).sort();
+    const FLOW_MONTHS = [...new Set(CREATED_LEADS.map(c => c[0]).concat(MONTHS.map(m => m.mk)))].filter(mk => /^\d{4}-\d{2}$/.test(mk)).sort();
     const monthLabel = mk => MONTH_LABELS[mk] || (MONTHS_3[+mk.slice(5, 7) - 1] + ' ' + mk.slice(0, 4));
     // An employee's own work: plans they approved, and tickets assigned to them under a ticked subject.
     const empTouch = t => t[2] === 'approved' || (t[2] === 'created' && subjOn(t[3]));
@@ -909,9 +901,11 @@ const LD = (() => {
       }
       return (pa || sub) ? { pa, sub, via: anyTicket ? 'ticket' : 'pa' } : null;
     }
-    const flowTouched = () => CLIENTS.filter(c => (!flowState.team || c.team === flowState.team) && ldTouch(c, flowState.month));
-    // Team cannot apply to an unmapped client (team comes from the lead's RM).
-    const flowUnmapped = () => CLIENTS.filter(c => !c.matched && ldTouch(c, flowState.month));
+    // The Flow's Team and RM filters (an unmapped client carries the RM and team named on its sheet row).
+    const inFlowScope = c => (!flowState.team || c.team === flowState.team) && (!flowState.curRm || c.rm === flowState.curRm) &&
+      (!flowState.firstRm || c.firstRm === flowState.firstRm);
+    const flowTouched = () => CLIENTS.filter(c => inFlowScope(c) && ldTouch(c, flowState.month));
+    const flowUnmapped = () => CLIENTS.filter(c => !c.matched && inFlowScope(c) && ldTouch(c, flowState.month));
     const flagRowInView = r => (r.pa || subjOn(r.subject)) && (!flowState.month || r.mk === flowState.month) &&
       (!flowState.emp || (r.emps || []).includes(flowState.emp));
     const ldPeopleOf = (c, mk) => [...new Set(c.ldTouches.filter(t => (!mk || t[0] === mk) && LD_PEOPLE.includes(t[1]) && empTouch(t))
@@ -946,11 +940,9 @@ const LD = (() => {
     function renderFlow(){
       const mk = flowState.month, team = flowState.team, emp = flowState.emp;
       const windowLabel = mk ? monthLabel(mk) : FY_LABEL;
-      const countCreated = tally => (mk ? [mk] : Object.keys(tally)).reduce((a, m) => {
-        const byTeam = tally[m] || {};
-        return a + (team ? (byTeam[team] || 0) : Object.values(byTeam).reduce((x, y) => x + y, 0));
-      }, 0);
-      const created = countCreated(LEADS_CREATED), createdPrimary = countCreated(LEADS_CREATED_PRIMARY);
+      const madeIn = CREATED_LEADS.filter(c => (!mk || c[0] === mk) && (!team || c[1] === team) &&
+        (!flowState.curRm || c[2] === flowState.curRm) && (!flowState.firstRm || c[3] === flowState.firstRm));
+      const created = madeIn.length, createdPrimary = madeIn.filter(c => c[4]).length;
       const touched = flowTouched().filter(c => c.matched);
       const unmapped = flowUnmapped();
       const n = touched.length;
@@ -961,12 +953,14 @@ const LD = (() => {
 
       renderFlowSubjects();
       $('flowCap').innerHTML = (mk ? 'Showing <b>' + esc(windowLabel) + '</b>' : 'Showing the whole of <b>' + esc(FY_LABEL) + '</b>') +
-        (team ? ' for <b>' + esc(team) + '</b>' : ' across all teams') + (emp ? ', handled by <b>' + esc(emp) + '</b>' : '') +
+        (team ? ' for <b>' + esc(team) + '</b>' : ' across all teams') +
+        (flowState.curRm ? ', current RM <b>' + esc(flowState.curRm) + '</b>' : '') +
+        (flowState.firstRm ? ', first RM <b>' + esc(flowState.firstRm) + '</b>' : '') + (emp ? ', handled by <b>' + esc(emp) + '</b>' : '') +
         '. A lead is <b>touched by L&amp;D</b> if it has a Plan Approval row, or an FY ticket under ' + esc(subjectsLabel(false)) +
         (mk ? ', in that month' : '') + '. A lead that has any FY ticket is counted <i>via ticket subject</i>, even when it is on a ' +
         'Plan Approval sheet too' + (emp ? ' — counting only plans ' + esc(emp) + ' approved, and tickets assigned to ' + esc(emp) +
           '. <i>Total leads created</i> is not split by L&amp;D employee, since L&amp;D does not own leads' : '') +
-        '. Lead status is the current status in Workpoint; a lead with a converted date counts as Converted, as on every other tab.' +
+        '. Lead status is the current status in Workpoint.' +
         (mk && !MONTHS.some(m => m.mk === mk) ? ' <b>No ticket rows are loaded for this month</b> (' + esc(META.excludedMonths.join(', ')) +
           ' is excluded by request).' : '');
 
@@ -992,8 +986,7 @@ const LD = (() => {
           '<div class="ld-cell">' + node('var(--s-converted)', group.converted || 0, 'Converted', '<b>' + pct(group.converted || 0, n) + '</b> of touched leads') + '</div>' +
         '</div></div>' +
         '<p class="ld-caption">The other <b>' + nf(group.other || 0) + '</b> touched leads are in other statuses (on hold, re-assigned, follow up…) — ' +
-          'broken down by tier below. <b>Total leads created</b> counts the Primary and Secondary lead heads together, because L&amp;D ' +
-          'clients come from both; touched leads created before ' + esc(FY_LABEL) + ' are not part of it.' + (unmapped.length ? ' <b>' + nf(unmapped.length) + '</b> more clients L&amp;D worked with' + (team ? ' (any team)' : '') +
+          'broken down by tier below.' + (unmapped.length ? ' <b>' + nf(unmapped.length) + '</b> more clients L&amp;D worked with' +
           ' are not in the lead data and are left out — see the Unmapped clients flag above.' : '') + '</p>';
 
       // status by client tier
@@ -1040,8 +1033,8 @@ const LD = (() => {
 
     // Plans per source row; clients once per employee (so the Total row counts distinct clients).
     function empRows(){
-      const mk = flowState.month, team = flowState.team;
-      const pool = CLIENTS.filter(c => !team || c.team === team);
+      const mk = flowState.month;
+      const pool = CLIENTS.filter(inFlowScope);
       return LD_PEOPLE.map(p => {
         const cnt = { created: 0, approved: 0 }, cl = [];
         pool.forEach(c => {
@@ -1084,10 +1077,9 @@ const LD = (() => {
         META.tabs.map(t => '<code>' + esc(t) + '</code>').join(' + ') + '), de-duplicated on client email. Workpoint lead status, RM, ' +
         'team, created date and tier: the daily B2C upload (' + nf(META.leadRows) + ' leads; ' + nf(META.leadsFromLive) + ' L&amp;D clients ' +
         'found there) and, for older leads it does not carry, hard-coded values from <code>' + esc(META.snapshotFile || 'ld_leads_snapshot.js') +
-        '</code>' + (META.snapshotAsOf ? ' — <b>lead data as of ' + esc(ldFriendlyDate(META.snapshotAsOf)) + '</b>' : '') +
-        (META.snapshotGenerated ? ' (file generated ' + esc(META.snapshotGenerated) + ')' : '') + ' — ' + nf(META.leadsFromSnapshot) +
-        ' clients. A converted date makes a lead Converted, whatever its written status (' + nf(META.convertedByDate || 0) + ' clients).' +
-        '<br><b>Excluded.</b> ' + esc(META.excludedMonths.join(', ')) + ' by request' + (META.noEmailRows ? '; a further ' +
+        '</code>' + (META.snapshotAsOf ? ' (data as of ' + esc(ldFriendlyDate(META.snapshotAsOf)) + ')'
+          : META.snapshotGenerated ? ' (generated ' + esc(META.snapshotGenerated) + ')' : '') + ' — ' + nf(META.leadsFromSnapshot) +
+        ' clients.<br><b>Excluded.</b> ' + esc(META.excludedMonths.join(', ')) + ' by request' + (META.noEmailRows ? '; a further ' +
         nf(META.noEmailRows) + ' rows carry a client name but no email, so they cannot be matched or de-duplicated' : '') + '.';
     }
 
@@ -1098,10 +1090,10 @@ const LD = (() => {
       a.href = URL.createObjectURL(new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' }));
       a.download = filename; a.click(); URL.revokeObjectURL(a.href);
     }
-    const CLIENT_COLS = ['m', 'name', 'email', 'ticket', 'status', 'tier', 'tierSrc', 'tenure', 'team', 'rm', 'advisor', 'appr',
+    const CLIENT_COLS = ['m', 'name', 'email', 'ticket', 'status', 'tier', 'tierSrc', 'tenure', 'team', 'rm', 'firstRm', 'rmSrc', 'advisor', 'appr',
                          'platform', 'src', 'leadSrc', 'created', 'converted', 'locations'];
     const CLIENT_HEAD = ['Month', 'Client Name', 'Email Id', 'Ticket ID', 'Lead Status', 'Tier', 'Tier Source', 'Tenure', 'Team', 'RM',
-                         'Advisor', 'Approved By', 'Platform', 'Lead Source', 'Lead Data From', 'Lead Created', 'Converted On', 'Sheet / Row'];
+                         'First RM', 'RM From', 'Advisor', 'Approved By', 'Platform', 'Lead Source', 'Lead Data From', 'Lead Created', 'Converted On', 'Sheet / Row'];
     const csvHandlers = {
       clientCsvBtn: () => {
         const head = CLIENT_HEAD.concat(['Matched to Lead Data', 'On Plan Approval Sheet', '# Plan Approvals', '# FY Tickets', '# Tickets Total',
@@ -1174,18 +1166,21 @@ const LD = (() => {
       b.addEventListener('click', () => activateSub(b.dataset.ldsub), { signal: wiring.signal }));
     const on = (id, ev, fn) => $(id).addEventListener(ev, fn, { signal: wiring.signal });
 
-    const FILTER_IDS = { fMonth: 'month', fTier: 'tier', fTenure: 'tenure', fTeam: 'team', fPlatform: 'platform', fAdvisor: 'advisor', fSource: 'source' };
+    const FILTER_IDS = { fMonth: 'month', fTier: 'tier', fTenure: 'tenure', fTeam: 'team', fCurRm: 'curRm', fFirstRm: 'firstRm', fPlatform: 'platform', fAdvisor: 'advisor', fSource: 'source' };
     const fill = (id, values, labels) => { $(id).innerHTML = $(id).options[0].outerHTML +
       values.map((v, i) => '<option value="' + esc(v) + '">' + esc(labels ? labels[i] : v) + '</option>').join(''); };
     fill('fMonth', MONTHS.map(m => m.mk), MONTHS.map(m => m.m));
     fill('fTier', TIERS); fill('fTenure', TENURES);
+    const rmOptions = field => [...new Set(CLIENTS.map(c => c[field]).filter(Boolean))].sort();
     fill('fTeam', [...new Set(CLIENTS.map(c => c.team).filter(Boolean))].sort());
+    fill('fCurRm', rmOptions('rm')); fill('fFirstRm', rmOptions('firstRm'));
     fill('fPlatform', [...new Set(CLIENTS.map(c => c.platform).filter(Boolean))].sort());
     fill('fAdvisor', [...new Set(CLIENTS.map(c => c.advisor).filter(Boolean))].sort());
     fill('fSource', [...new Set(CLIENTS.map(c => c.src).filter(Boolean))].sort());
     fill('fFlowMonth', FLOW_MONTHS, FLOW_MONTHS.map(monthLabel));
     fill('fFlowEmp', LD_PEOPLE);
-    fill('fFlowTeam', [...new Set(Object.values(LEADS_CREATED).flatMap(Object.keys).concat(CLIENTS.filter(c => c.matched).map(c => c.team)))].filter(Boolean).sort());
+    fill('fFlowTeam', [...new Set(CREATED_LEADS.map(c => c[1]).concat(CLIENTS.filter(c => c.matched).map(c => c.team)))].filter(Boolean).sort());
+    fill('fFlowCurRm', rmOptions('rm')); fill('fFlowFirstRm', rmOptions('firstRm'));
     $('fProduct').innerHTML = '<option value="all">All columns (sum)</option>' + PRODUCTS.map(p => '<option value="' + esc(p.k) + '">' + esc(p.label) + '</option>').join('');
 
     Object.keys(FILTER_IDS).forEach(id => on(id, 'change', e => { state[FILTER_IDS[id]] = e.target.value; renderDetails(); }));
@@ -1206,7 +1201,7 @@ const LD = (() => {
     on('clientTbl', 'click', e => { const th = e.target.closest('th[data-key]'); if(!th) return;
       const k = th.dataset.key; state.sort = { key: k, dir: state.sort.key === k ? -state.sort.dir : 1 }; renderDetails(); });
     on('resetBtn', 'click', () => {
-      Object.assign(state, { month: '', tier: '', tenure: '', team: '', platform: '', advisor: '', source: '', q: '' });
+      Object.assign(state, { month: '', tier: '', tenure: '', team: '', curRm: '', firstRm: '', platform: '', advisor: '', source: '', q: '' });
       state.off.clear(); state.subjects = new Set(SUBJECTS);
       Object.keys(FILTER_IDS).forEach(id => { $(id).value = ''; }); $('fSearch').value = '';
       renderDetails();
@@ -1240,10 +1235,12 @@ const LD = (() => {
 
     on('fFlowMonth', 'change', e => { flowState.month = e.target.value; renderFlow(); });
     on('fFlowTeam', 'change', e => { flowState.team = e.target.value; renderFlow(); });
+    on('fFlowCurRm', 'change', e => { flowState.curRm = e.target.value; renderFlow(); });
+    on('fFlowFirstRm', 'change', e => { flowState.firstRm = e.target.value; renderFlow(); });
     on('fFlowEmp', 'change', e => { flowState.emp = e.target.value; renderFlow(); });
-    on('flowResetBtn', 'click', () => { flowState.month = flowState.team = flowState.emp = '';
+    on('flowResetBtn', 'click', () => { flowState.month = flowState.team = flowState.curRm = flowState.firstRm = flowState.emp = '';
       flowState.subjects = new Set(LD_DEFAULT_SUBJECTS);
-      $('fFlowMonth').value = $('fFlowTeam').value = $('fFlowEmp').value = ''; renderFlow(); });
+      ['fFlowMonth', 'fFlowTeam', 'fFlowCurRm', 'fFlowFirstRm', 'fFlowEmp'].forEach(id => { $(id).value = ''; }); renderFlow(); });
     on('flowEmpTbl', 'click', e => { const tr = e.target.closest('tr[data-emp]'); if(!tr) return;
       flowState.emp = flowState.emp === tr.dataset.emp ? '' : tr.dataset.emp; $('fFlowEmp').value = flowState.emp; renderFlow(); });
     on('flowFlags', 'click', e => { const f = e.target.closest('.ld-flag'); if(!f) return; activateSub(f.dataset.tab);

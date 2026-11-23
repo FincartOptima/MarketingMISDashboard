@@ -8,20 +8,21 @@ const nodeCrypto = require('node:crypto');
 const { loadScripts } = require('./load-model');
 
 const sha16 = key => nodeCrypto.createHash('sha256').update(key).digest('hex').slice(0, 16);
-const TEAMS = { Asha: 'Team A', Bhanu: 'Team B' };
+const TEAMS = { Asha: 'Team A', Bhanu: 'Team B', 'Ravi Sharma': 'Team R' };
+const RM_ALIASES = { 'R. Sharma': 'Ravi Sharma' };
 
 /** A context with the four scripts loaded, the given B2C rows, L&D rows and (optional) snapshot. */
 function world({ raw = [], ldRows = [], snapshot = null } = {}){
   const run = loadScripts(['app-config.js', 'app-dateutils.js', 'app-ld-lead.js', 'app-ld.js'], {
     STATE: { raw, ldRows }, window: { LD_LEAD_SNAPSHOT: snapshot }, crypto: nodeCrypto.webcrypto, TextEncoder,
-    teamForRmName: name => TEAMS[name] || '',
+    teamForRmName: name => TEAMS[name] || '', mapRM: name => RM_ALIASES[name] || name,
   });
   const build = async () => JSON.parse(JSON.stringify(await run('LD.build()')));
   return { run, build };
 }
 
 const lead = (email, extra = {}) => ({
-  userId: email, leadStatus: 'IN PROCESS', CM: 'N/A', convertedDate: '', createdDate: '2026-05-04', currentRmName: 'Asha',
+  userId: email, leadStatus: 'IN PROCESS', CM: 'N/A', convertedDate: '', createdDate: '2026-05-04', currentRmName: 'Asha', firstRmName: 'Bhanu',
   Team: 'Team A', leadHead: 'Primary', clientCategory: 'Alpha', platformName: 'Google', landingPage: 'LP-1', ...extra,
 });
 const plan = (email, extra = {}) => ({
@@ -32,7 +33,7 @@ const ticket = (email, extra = {}) => ({
   _sheet: 'FY 2026-2027 Q1', _row: 2, 'Client Mail ID': email, 'Client Name': 'Client', Month: 'June', 'Tkt Recd Date': '2026-06-02',
   'Ticket Subject': 'FP Creation', 'Assigned to': 'srinivas', 'Client Type': 'Alpha', ...extra,
 });
-const snapRow = (status, converted = '') => [status, '2025-12-01', converted, 'Asha', '', 'Google', 'LP-OLD'];
+const snapRow = (status, converted = '') => [status, '2025-12-01', converted, 'Asha', '', 'Google', 'LP-OLD', 'Bhanu'];
 const snapshotOf = (rows, extra = {}) => ({ generated: '29 Oct 2026, 02:00 PM', leadFile: 'FIN_2026-08-07 15_11_42.xlsx', rows, ...extra });
 const byEmail = (model, email) => model.clients.find(c => c.key === email);
 
@@ -218,13 +219,53 @@ test('rows with no amounts are never "repeats", and the same amounts for two cli
 
 // ---- the top of the flow -------------------------------------------------------------------------
 
-test('leads created are counted by month and team across every lead head, with the Primary share', async () => {
+test('leads created are listed per lead with month, team, both RMs and the Primary flag', async () => {
   const { build } = world({
-    raw: [lead('a@x.com'), lead('b@x.com', { leadHead: 'Secondary' }), lead('c@x.com', { Team: 'Team B', createdDate: '2026-06-01' }),
+    raw: [lead('a@x.com'), lead('b@x.com', { leadHead: 'Secondary', Team: 'Team B', currentRmName: 'Bhanu', firstRmName: 'Asha' }),
           lead('old@x.com', { createdDate: '2026-03-31' }), lead('d@x.com', { Team: '' })],
     ldRows: [plan('a@x.com')],
   });
-  const { leadsCreated, leadsCreatedPrimary } = (await build()).meta;
-  assert.deepEqual(leadsCreated, { '2026-05': { 'Team A': 2, SV: 1 }, '2026-06': { 'Team B': 1 } });
-  assert.deepEqual(leadsCreatedPrimary, { '2026-05': { 'Team A': 1, SV: 1 }, '2026-06': { 'Team B': 1 } });
+  const { createdLeads } = (await build()).meta;
+  assert.deepEqual(createdLeads, [['2026-05', 'Team A', 'Asha', 'Bhanu', true], ['2026-05', 'Team B', 'Bhanu', 'Asha', false],
+    ['2026-05', 'SV', 'Asha', 'Bhanu', true]]);
+});
+
+// ---- RMs ---------------------------------------------------------------------------------------------
+
+test('a lead gives the client its current and first RM, from the live row or from the snapshot', async () => {
+  const snapshot = snapshotOf({ [sha16('old@x.com')]: snapRow('IN PROCESS') });
+  const { build } = world({ raw: [lead('a@x.com', { currentRmName: 'Bhanu', firstRmName: 'Asha' })], ldRows: [plan('a@x.com'), plan('old@x.com', { _row: 3 })], snapshot });
+  const model = await build();
+  assert.deepEqual([byEmail(model, 'a@x.com').rm, byEmail(model, 'a@x.com').firstRm, byEmail(model, 'a@x.com').rmSrc], ['Bhanu', 'Asha', 'Lead']);
+  assert.deepEqual([byEmail(model, 'old@x.com').rm, byEmail(model, 'old@x.com').firstRm], ['Asha', 'Bhanu']);
+});
+
+test('a snapshot written before First RM was kept still loads, with no first RM', async () => {
+  const snapshot = snapshotOf({ [sha16('old@x.com')]: snapRow('IN PROCESS').slice(0, 7) });
+  const { build } = world({ ldRows: [plan('old@x.com')], snapshot });
+  assert.equal(byEmail(await build(), 'old@x.com').firstRm, '');
+});
+
+test('a client with no lead is attributed to the RM named on its sheet row, through the RM name mapping', async () => {
+  const { build } = world({ ldRows: [plan('ghost@x.com', { Advisor: 'R. Sharma' }), ticket('ghost2@x.com', { 'RM Name': 'Ravi Sharma' })] });
+  const model = await build();
+  for(const email of ['ghost@x.com', 'ghost2@x.com']){
+    const client = byEmail(model, email);
+    assert.equal(client.matched, false);
+    assert.deepEqual([client.rm, client.team, client.rmSrc, client.firstRm], ['Ravi Sharma', 'Team R', 'L&D sheet', '']);
+    assert.equal(client.status, 'NOT IN LEAD DATA');
+  }
+});
+
+test('a sheet RM the team map does not know keeps its name but no team; no RM at all stays blank', async () => {
+  const { build } = world({ ldRows: [plan('a@x.com', { Advisor: 'Unknown Person' }), plan('b@x.com', { _row: 3 })] });
+  const model = await build();
+  assert.deepEqual([byEmail(model, 'a@x.com').rm, byEmail(model, 'a@x.com').team], ['Unknown Person', 'No lead record']);
+  assert.deepEqual([byEmail(model, 'b@x.com').rm, byEmail(model, 'b@x.com').rmSrc, byEmail(model, 'b@x.com').team], ['', '', 'No lead record']);
+});
+
+test('where a lead exists its RM wins over the sheet RM', async () => {
+  const { build } = world({ raw: [lead('a@x.com', { currentRmName: 'Bhanu', Team: 'Team B' })], ldRows: [plan('a@x.com', { Advisor: 'Ravi Sharma' })] });
+  const client = byEmail(await build(), 'a@x.com');
+  assert.deepEqual([client.rm, client.team, client.rmSrc, client.advisor], ['Bhanu', 'Team B', 'Lead', 'Ravi Sharma']);
 });
